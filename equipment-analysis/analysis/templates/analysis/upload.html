@@ -1,0 +1,136 @@
+{% extends 'analysis/base.html' %}
+
+{% block title %}Загрузка отчёта — Анализ техники{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-8">
+        <div class="d-flex align-items-center mb-4">
+            <a href="{% url 'index' %}" class="btn btn-sm btn-outline-secondary me-3">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <h4 class="mb-0 fw-bold"><i class="bi bi-upload me-2"></i>Загрузить отчёт</h4>
+        </div>
+
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+
+            <div class="card mb-4">
+                <div class="card-header fw-semibold bg-white border-bottom">
+                    <i class="bi bi-file-earmark-excel me-2 text-success"></i>Файл и название
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">{{ form.name.label }}</label>
+                        {{ form.name }}
+                        {% if form.name.errors %}
+                        <div class="text-danger small mt-1">{{ form.name.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label fw-semibold">{{ form.file.label }}</label>
+                        {{ form.file }}
+                        {% if form.file.errors %}
+                        <div class="text-danger small mt-1">{{ form.file.errors.0 }}</div>
+                        {% endif %}
+                        <div class="form-text">Файл формата .xlsx (Ежемесячный отчёт Омником)</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header fw-semibold bg-white border-bottom">
+                    <i class="bi bi-sliders me-2 text-primary"></i>Нормативные показатели
+                    <span class="text-muted fw-normal ms-2 small">— используются для расчёта эффективности</span>
+                </div>
+                <div class="card-body">
+
+                    <div class="mb-4 p-3 bg-light rounded">
+                        <label class="form-label fw-semibold">{{ form.daily_norm_hours.label }}</label>
+                        <div class="row align-items-center">
+                            <div class="col-md-4">{{ form.daily_norm_hours }}</div>
+                            <div class="col-md-8">
+                                <div class="form-text">{{ form.daily_norm_hours.help_text }}</div>
+                            </div>
+                        </div>
+                        {% if form.daily_norm_hours.errors %}
+                        <div class="text-danger small mt-1">{{ form.daily_norm_hours.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-4 p-3 bg-light rounded">
+                        <div class="fw-semibold mb-1 small text-uppercase text-muted">
+                            <i class="bi bi-truck me-1"></i>Бульдозеры / Погрузчики
+                        </div>
+                        <label class="form-label">{{ form.bulldozer_idle_norm_pct.label }}</label>
+                        <div class="row align-items-center">
+                            <div class="col-md-4">
+                                <div class="input-group">
+                                    {{ form.bulldozer_idle_norm_pct }}
+                                    <span class="input-group-text">%</span>
+                                </div>
+                            </div>
+                            <div class="col-md-8">
+                                <div class="form-text">{{ form.bulldozer_idle_norm_pct.help_text }}</div>
+                            </div>
+                        </div>
+                        {% if form.bulldozer_idle_norm_pct.errors %}
+                        <div class="text-danger small mt-1">{{ form.bulldozer_idle_norm_pct.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-4 p-3 bg-light rounded">
+                        <div class="fw-semibold mb-1 small text-uppercase text-muted">
+                            <i class="bi bi-layers me-1"></i>Экскаваторы
+                        </div>
+                        <label class="form-label">{{ form.excavator_downtime_norm_pct.label }}</label>
+                        <div class="row align-items-center">
+                            <div class="col-md-4">
+                                <div class="input-group">
+                                    {{ form.excavator_downtime_norm_pct }}
+                                    <span class="input-group-text">%</span>
+                                </div>
+                            </div>
+                            <div class="col-md-8">
+                                <div class="form-text">{{ form.excavator_downtime_norm_pct.help_text }}</div>
+                            </div>
+                        </div>
+                        {% if form.excavator_downtime_norm_pct.errors %}
+                        <div class="text-danger small mt-1">{{ form.excavator_downtime_norm_pct.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-0 p-3 bg-light rounded">
+                        <div class="fw-semibold mb-1 small text-uppercase text-muted">
+                            <i class="bi bi-truck-front me-1"></i>Самосвалы
+                        </div>
+                        <label class="form-label">{{ form.dumptruck_nomove_norm_pct.label }}</label>
+                        <div class="row align-items-center">
+                            <div class="col-md-4">
+                                <div class="input-group">
+                                    {{ form.dumptruck_nomove_norm_pct }}
+                                    <span class="input-group-text">%</span>
+                                </div>
+                            </div>
+                            <div class="col-md-8">
+                                <div class="form-text">{{ form.dumptruck_nomove_norm_pct.help_text }}</div>
+                            </div>
+                        </div>
+                        {% if form.dumptruck_nomove_norm_pct.errors %}
+                        <div class="text-danger small mt-1">{{ form.dumptruck_nomove_norm_pct.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary px-4">
+                    <i class="bi bi-upload me-1"></i>Обработать файл
+                </button>
+                <a href="{% url 'index' %}" class="btn btn-outline-secondary">Отмена</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

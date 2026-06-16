@@ -1,36 +1,52 @@
-# [Project name]
+# Анализ эффективности техники
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Django-приложение для загрузки и анализа Excel-отчётов по работе техники (формат Омником).
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- `cd equipment-analysis && python3 manage.py runserver 0.0.0.0:8000` — запуск Django-сервера
+- `cd equipment-analysis && python3 manage.py migrate` — применить миграции БД
+- `cd equipment-analysis && python3 manage.py makemigrations analysis` — создать миграции после изменений моделей
 
 ## Stack
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Python 3.11 + Django 5.x
+- SQLite (база данных)
+- openpyxl (чтение Excel)
+- Bootstrap 5 (UI)
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `equipment-analysis/` — Django-проект
+- `equipment-analysis/analysis/` — основное приложение
+- `equipment-analysis/analysis/utils.py` — парсинг Excel, обнаружение аномалий, расчёт метрик
+- `equipment-analysis/analysis/models.py` — модели Report и VehicleRecord
+- `equipment-analysis/analysis/templates/analysis/` — HTML-шаблоны
+- `equipment-analysis/db.sqlite3` — база данных
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Нормативы хранятся в модели Report (отдельно для каждого отчёта), не глобально
+- Колонки "% от периода отчета" пропускаются при парсинге (F, H, J, N)
+- Аномалии фиксируются, но не исключаются из расчётов (выводятся с пометкой)
+- Расчёт эффективности типа зависит от группы ТС
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Загрузка Excel-файла (формат Ежемесячный отчёт Омником)
+- Настройка нормативных показателей (часы/сутки, % холостого хода, % простоя, % без движения)
+- Автоматическое обнаружение аномалий (отрицательный расход, работа без топлива и т.д.)
+- Расчёт метрик: расход к норме, выход техники, эффективность по типу
+- Сводная таблица по группам техники
+- Фильтрация по группе и наличию аномалий
+
+## Формулы расчёта
+
+1. **Расход к норме** = фактический расход ÷ время работы (ч) ÷ норму расхода × 100%
+2. **Выход техники** = время работы (ч) ÷ норму/сутки × 100%
+3. **Эффективность бульдозеры/погрузчики** = % холостого хода ÷ норму % × 100%
+4. **Эффективность экскаваторы** = % времени простоя стрелы ÷ норму % × 100%
+5. **Эффективность самосвалы** = % без движения ÷ норму % × 100%
 
 ## User preferences
 
@@ -38,8 +54,6 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
-
-## Pointers
-
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- При парсинге времена приходят как datetime.timedelta (уже разобранные openpyxl) или как строки "чч:мм:сс" — оба формата обрабатываются
+- Значение '-' в полях времени или расхода = данные отсутствуют
+- Норма расхода (л/ч) уже есть в файле (колонка K); норма выхода — настраивается пользователем
