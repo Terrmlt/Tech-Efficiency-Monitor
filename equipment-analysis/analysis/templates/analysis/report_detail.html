@@ -22,10 +22,10 @@
 <div class="card mb-4">
     <div class="card-body py-2">
         <div class="d-flex flex-wrap gap-3 align-items-center small text-muted">
-            <span><i class="bi bi-clock me-1"></i><strong>Норма/сутки:</strong> {{ report.daily_norm_hours }} ч</span>
-            <span><i class="bi bi-truck me-1"></i><strong>Холостой ход (бульдозеры):</strong> {{ report.bulldozer_idle_norm_pct }}%</span>
-            <span><i class="bi bi-layers me-1"></i><strong>Простой стрелы (экскаваторы):</strong> {{ report.excavator_downtime_norm_pct }}%</span>
-            <span><i class="bi bi-truck-front me-1"></i><strong>Без движения (самосвалы):</strong> {{ report.dumptruck_nomove_norm_pct }}%</span>
+            <span><i class="bi bi-clock me-1"></i><strong>Норма/сутки:</strong> {{ report.daily_norm_str }}</span>
+            <span><i class="bi bi-truck me-1"></i><strong>Хол.ход (бульдозеры):</strong> {{ report.bulldozer_norm_str }}</span>
+            <span><i class="bi bi-layers me-1"></i><strong>Простой стрелы (экскаваторы):</strong> {{ report.excavator_norm_str }}</span>
+            <span><i class="bi bi-truck-front me-1"></i><strong>Без движения (самосвалы):</strong> {{ report.dumptruck_norm_str }}</span>
         </div>
     </div>
 </div>
@@ -91,13 +91,13 @@
     {% endfor %}
 </div>
 
-<!-- Легенда значений -->
+<!-- Легенда -->
 <div class="card mb-3">
     <div class="card-body py-2">
         <div class="small text-muted d-flex flex-wrap gap-3">
-            <span><strong>Расход к норме:</strong> факт. расход ÷ время работы ÷ норму расхода × 100%. <100% — экономия, >100% — перерасход</span>
-            <span><strong>Выход техники:</strong> время работы ÷ норму/сутки × 100%. Выше = больше отработано</span>
-            <span><strong>Эффективность:</strong> фактический % ÷ нормативный % × 100%. <100% — лучше нормы, >100% — хуже нормы</span>
+            <span><strong>Расход к норме:</strong> факт. расход ÷ (норма л/ч × время работы ч) × 100%. &lt;100% — экономия, >100% — перерасход</span>
+            <span><strong>Выход техники:</strong> время работы ÷ норму/сутки × 100%</span>
+            <span><strong>Эффективность:</strong> фактическое время ÷ нормативное время × 100%. &lt;100% — лучше нормы, >100% — хуже нормы</span>
         </div>
     </div>
 </div>
@@ -125,7 +125,7 @@
     </div>
 </div>
 
-<!-- Статистика фильтрации -->
+<!-- Счётчики -->
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div class="small text-muted">
         Показано: <strong>{{ records|length }}</strong> из {{ total_count }}
@@ -147,10 +147,10 @@
                         <th>Группа</th>
                         <th>Дата</th>
                         <th>Время работы<br><small class="fw-normal text-muted">чч:мм:сс</small></th>
-                        <th>Фактический<br>расход, л</th>
+                        <th>Факт. расход, л<br><small class="fw-normal text-muted">норма л/ч</small></th>
                         <th>Расход<br>к норме</th>
                         <th>Выход<br>техники</th>
-                        <th>Эффективность<br><small class="fw-normal text-muted">(к норме)</small></th>
+                        <th>Эффективность<br><small class="fw-normal text-muted">факт / норма</small></th>
                         <th>Аномалии</th>
                     </tr>
                 </thead>
@@ -158,9 +158,7 @@
                     {% for rec in records %}
                     <tr class="{% if rec.has_anomaly %}anomaly-row{% endif %}">
                         <td class="ps-3 text-muted">{{ rec.row_number }}</td>
-                        <td>
-                            <div class="fw-semibold">{{ rec.name }}</div>
-                        </td>
+                        <td><div class="fw-semibold">{{ rec.name }}</div></td>
                         <td>
                             {% if rec.group == 'Бульдозеры' %}
                             <span class="badge bg-warning text-dark group-badge">{{ rec.group }}</span>
@@ -176,15 +174,15 @@
                         </td>
                         <td class="text-muted small">{{ rec.date }}</td>
                         <td>
-                            {{ rec.engine_time_str }}
+                            <div class="fw-semibold">{{ rec.engine_time_str }}</div>
                             {% if rec.is_excavator and rec.downtime_sec is not None %}
-                            <div class="text-muted small">Прост: {{ rec.downtime_str }}</div>
+                            <div class="text-muted small">Прост.стрелы: {{ rec.downtime_str }}</div>
                             {% endif %}
                             {% if rec.is_bulldozer_or_loader %}
-                            <div class="text-muted small">Хол: {{ rec.engine_idle_str }}</div>
+                            <div class="text-muted small">Хол.ход: {{ rec.engine_idle_str }}</div>
                             {% endif %}
                             {% if rec.is_dumptruck %}
-                            <div class="text-muted small">Без дв: {{ rec.engine_no_move_str }}</div>
+                            <div class="text-muted small">Без движения: {{ rec.engine_no_move_str }}</div>
                             {% endif %}
                         </td>
                         <td>
@@ -192,11 +190,12 @@
                                 {% if rec.fuel_actual < 0 %}
                                 <span class="text-danger fw-bold">{{ rec.fuel_actual }}</span>
                                 {% else %}
-                                {{ rec.fuel_actual }}
+                                <span class="fw-semibold">{{ rec.fuel_actual }}</span>
                                 {% endif %}
                             {% else %}
                             <span class="text-muted">—</span>
                             {% endif %}
+                            <div class="text-muted small">норма {{ rec.fuel_norm }} л/ч</div>
                         </td>
                         <td>
                             {% with pct=rec.fuel_efficiency_pct %}
@@ -204,7 +203,6 @@
                                 <span class="{% if pct <= 100 %}efficiency-good{% elif pct <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">
                                     {{ pct }}%
                                 </span>
-                                <div class="text-muted small">норма {{ rec.fuel_norm }} л/ч</div>
                             {% else %}
                             <span class="text-muted">—</span>
                             {% endif %}
@@ -261,5 +259,4 @@
         </div>
     </div>
 </div>
-
 {% endblock %}

@@ -4,7 +4,7 @@ from .models import Report, VehicleRecord
 
 @admin.register(Report)
 class ReportAdmin(admin.ModelAdmin):
-    list_display = ['name', 'period', 'uploaded_at', 'daily_norm_hours']
+    list_display = ['name', 'period', 'uploaded_at', 'daily_norm_sec']
     list_filter = ['uploaded_at']
     search_fields = ['name', 'period']
 

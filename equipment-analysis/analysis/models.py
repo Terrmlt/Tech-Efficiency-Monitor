@@ -1,5 +1,14 @@
 from django.db import models
-import json
+
+
+def secs_to_hhmmss(secs):
+    if secs is None:
+        return '—'
+    secs = int(secs)
+    h = secs // 3600
+    m = (secs % 3600) // 60
+    s = secs % 60
+    return f'{h:02d}:{m:02d}:{s:02d}'
 
 
 class Report(models.Model):
@@ -9,10 +18,10 @@ class Report(models.Model):
     period = models.CharField(max_length=300, blank=True, verbose_name='Период')
     vehicles_list = models.TextField(blank=True, verbose_name='Список ТС')
 
-    daily_norm_hours = models.FloatField(default=8.0, verbose_name='Норма работы в сутки (час)')
-    bulldozer_idle_norm_pct = models.FloatField(default=30.0, verbose_name='Норма холостого хода бульдозеров/погрузчиков (% от времени работы)')
-    excavator_downtime_norm_pct = models.FloatField(default=30.0, verbose_name='Норма времени простоя стрелы экскаваторов (% от времени работы)')
-    dumptruck_nomove_norm_pct = models.FloatField(default=40.0, verbose_name='Норма времени без движения самосвалов (% от времени работы)')
+    daily_norm_sec = models.IntegerField(default=28800, verbose_name='Норма работы в сутки (сек)')
+    bulldozer_norm_sec = models.IntegerField(default=7200, verbose_name='Норма холостого хода бульдозеров/погрузчиков (сек)')
+    excavator_norm_sec = models.IntegerField(default=7200, verbose_name='Норма времени простоя стрелы экскаваторов (сек)')
+    dumptruck_norm_sec = models.IntegerField(default=10800, verbose_name='Норма времени без движения самосвалов (сек)')
 
     class Meta:
         verbose_name = 'Отчёт'
@@ -27,6 +36,18 @@ class Report(models.Model):
 
     def get_total_count(self):
         return self.vehiclerecord_set.count()
+
+    def daily_norm_str(self):
+        return secs_to_hhmmss(self.daily_norm_sec)
+
+    def bulldozer_norm_str(self):
+        return secs_to_hhmmss(self.bulldozer_norm_sec)
+
+    def excavator_norm_str(self):
+        return secs_to_hhmmss(self.excavator_norm_sec)
+
+    def dumptruck_norm_str(self):
+        return secs_to_hhmmss(self.dumptruck_norm_sec)
 
 
 class VehicleRecord(models.Model):
@@ -46,7 +67,7 @@ class VehicleRecord(models.Model):
     engine_idle_sec = models.FloatField(verbose_name='Время холостого хода (сек)')
     fuel_norm = models.FloatField(verbose_name='Норма расхода (л/ч)')
     fuel_actual = models.FloatField(null=True, blank=True, verbose_name='Фактический расход (л)')
-    downtime_sec = models.FloatField(null=True, blank=True, verbose_name='Время простоя (сек)')
+    downtime_sec = models.FloatField(null=True, blank=True, verbose_name='Время простоя стрелы (сек)')
 
     has_anomaly = models.BooleanField(default=False, verbose_name='Есть аномалия')
     anomaly_details = models.JSONField(default=list, verbose_name='Описание аномалий')
@@ -63,27 +84,8 @@ class VehicleRecord(models.Model):
     def __str__(self):
         return f'{self.name} ({self.date})'
 
-    def engine_time_hours(self):
-        return self.engine_time_sec / 3600
-
-    def engine_no_move_hours(self):
-        return self.engine_no_move_sec / 3600
-
-    def engine_idle_hours(self):
-        return self.engine_idle_sec / 3600
-
-    def downtime_hours(self):
-        if self.downtime_sec is not None:
-            return self.downtime_sec / 3600
-        return None
-
     def format_duration(self, seconds):
-        if seconds is None:
-            return '—'
-        h = int(seconds // 3600)
-        m = int((seconds % 3600) // 60)
-        s = int(seconds % 60)
-        return f'{h:02d}:{m:02d}:{s:02d}'
+        return secs_to_hhmmss(seconds)
 
     def engine_time_str(self):
         return self.format_duration(self.engine_time_sec)
@@ -109,7 +111,7 @@ class VehicleRecord(models.Model):
 
     def type_efficiency_pct(self):
         if self.type_efficiency is not None:
-            return round(self.type_efficiency, 1)
+            return round(self.type_efficiency * 100, 1)
         return None
 
     def is_bulldozer_or_loader(self):

@@ -1,17 +1,54 @@
+import re
 from django import forms
 from .models import Report
 
 
+def parse_hhmmss(value):
+    """Parse HH:MM:SS string to seconds. Returns int or raises ValidationError."""
+    value = (value or '').strip()
+    m = re.fullmatch(r'(\d{1,3}):([0-5]\d):([0-5]\d)', value)
+    if not m:
+        raise forms.ValidationError('Введите время в формате ЧЧ:ММ:СС (например 08:00:00)')
+    h, mn, s = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    return h * 3600 + mn * 60 + s
+
+
+TIME_INPUT_ATTRS = {
+    'class': 'form-control',
+    'placeholder': 'ЧЧ:ММ:СС',
+    'pattern': r'\d{1,3}:[0-5]\d:[0-5]\d',
+}
+
+
 class ReportUploadForm(forms.ModelForm):
+    daily_norm = forms.CharField(
+        initial='08:00:00',
+        label='Норма работы в сутки',
+        help_text='Плановое время работы двигателя за сутки',
+        widget=forms.TextInput(attrs=TIME_INPUT_ATTRS),
+    )
+    bulldozer_norm = forms.CharField(
+        initial='02:00:00',
+        label='Норма холостого хода — Бульдозеры/Погрузчики',
+        help_text='Допустимое время работы двигателя на холостом ходу',
+        widget=forms.TextInput(attrs=TIME_INPUT_ATTRS),
+    )
+    excavator_norm = forms.CharField(
+        initial='02:00:00',
+        label='Норма простоя стрелы — Экскаваторы',
+        help_text='Допустимое время простоя стрелы (колонка «Время простоя»)',
+        widget=forms.TextInput(attrs=TIME_INPUT_ATTRS),
+    )
+    dumptruck_norm = forms.CharField(
+        initial='03:00:00',
+        label='Норма без движения — Самосвалы',
+        help_text='Допустимое время работы двигателя без движения',
+        widget=forms.TextInput(attrs=TIME_INPUT_ATTRS),
+    )
+
     class Meta:
         model = Report
-        fields = [
-            'name', 'file',
-            'daily_norm_hours',
-            'bulldozer_idle_norm_pct',
-            'excavator_downtime_norm_pct',
-            'dumptruck_nomove_norm_pct',
-        ]
+        fields = ['name', 'file']
         widgets = {
             'name': forms.TextInput(attrs={
                 'class': 'form-control',
@@ -21,45 +58,23 @@ class ReportUploadForm(forms.ModelForm):
                 'class': 'form-control',
                 'accept': '.xlsx,.xls',
             }),
-            'daily_norm_hours': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'step': '0.5',
-                'min': '1',
-                'max': '24',
-            }),
-            'bulldozer_idle_norm_pct': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'step': '1',
-                'min': '0',
-                'max': '100',
-            }),
-            'excavator_downtime_norm_pct': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'step': '1',
-                'min': '0',
-                'max': '100',
-            }),
-            'dumptruck_nomove_norm_pct': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'step': '1',
-                'min': '0',
-                'max': '100',
-            }),
         }
         labels = {
             'name': 'Название отчёта',
             'file': 'Файл Excel (.xlsx)',
-            'daily_norm_hours': 'Норма работы в сутки (часов)',
-            'bulldozer_idle_norm_pct': 'Норма холостого хода — Бульдозеры/Погрузчики (% от времени работы)',
-            'excavator_downtime_norm_pct': 'Норма простоя стрелы — Экскаваторы (% от времени работы)',
-            'dumptruck_nomove_norm_pct': 'Норма без движения — Самосвалы (% от времени работы)',
         }
-        help_texts = {
-            'daily_norm_hours': 'Сколько часов в день должна работать техника по плану',
-            'bulldozer_idle_norm_pct': 'Допустимый % времени на холостом ходу',
-            'excavator_downtime_norm_pct': 'Допустимый % времени простоя стрелы',
-            'dumptruck_nomove_norm_pct': 'Допустимый % времени работы двигателя без движения',
-        }
+
+    def clean_daily_norm(self):
+        return parse_hhmmss(self.cleaned_data['daily_norm'])
+
+    def clean_bulldozer_norm(self):
+        return parse_hhmmss(self.cleaned_data['bulldozer_norm'])
+
+    def clean_excavator_norm(self):
+        return parse_hhmmss(self.cleaned_data['excavator_norm'])
+
+    def clean_dumptruck_norm(self):
+        return parse_hhmmss(self.cleaned_data['dumptruck_norm'])
 
     def clean_file(self):
         f = self.cleaned_data.get('file')
@@ -68,3 +83,13 @@ class ReportUploadForm(forms.ModelForm):
             if not (name.endswith('.xlsx') or name.endswith('.xls')):
                 raise forms.ValidationError('Поддерживаются только файлы .xlsx и .xls')
         return f
+
+    def save(self, commit=True):
+        report = super().save(commit=False)
+        report.daily_norm_sec = self.cleaned_data['daily_norm']
+        report.bulldozer_norm_sec = self.cleaned_data['bulldozer_norm']
+        report.excavator_norm_sec = self.cleaned_data['excavator_norm']
+        report.dumptruck_norm_sec = self.cleaned_data['dumptruck_norm']
+        if commit:
+            report.save()
+        return report

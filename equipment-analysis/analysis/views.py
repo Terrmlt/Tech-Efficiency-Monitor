@@ -181,10 +181,10 @@ def export_excel(request, pk):
 
     # Строка 3 — нормативы
     ws.append([
-        'Норма/сутки (ч):', report.daily_norm_hours,
-        'Хол.ход бульдозеры (%):', report.bulldozer_idle_norm_pct,
-        'Простой стрелы экскаваторы (%):', report.excavator_downtime_norm_pct,
-        'Без движения самосвалы (%):', report.dumptruck_nomove_norm_pct,
+        'Норма/сутки:', report.daily_norm_str(),
+        'Хол.ход бульдозеры:', report.bulldozer_norm_str(),
+        'Простой стрелы экскаваторы:', report.excavator_norm_str(),
+        'Без движения самосвалы:', report.dumptruck_norm_str(),
         None, None, None, None,
     ])
     for col in range(1, NCOLS + 1):
