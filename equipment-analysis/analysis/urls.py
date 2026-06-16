@@ -6,4 +6,5 @@ urlpatterns = [
     path('upload/', views.upload, name='upload'),
     path('report/<int:pk>/', views.report_detail, name='report_detail'),
     path('report/<int:pk>/delete/', views.delete_report, name='delete_report'),
+    path('report/<int:pk>/export/', views.export_excel, name='export_excel'),
 ]
