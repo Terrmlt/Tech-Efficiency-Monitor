@@ -110,253 +110,379 @@ def delete_report(request, pk):
 
 def export_excel(request, pk):
     import openpyxl
-    from openpyxl.styles import (
-        Font, PatternFill, Alignment, Border, Side, numbers
-    )
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
+    from collections import defaultdict
 
     report = get_object_or_404(Report, pk=pk)
-    all_records = report.vehiclerecord_set.all()
+    all_records = list(report.vehiclerecord_set.all().order_by('group', 'row_number'))
     summary = build_summary(all_records, report)
 
     wb = openpyxl.Workbook()
 
-    # ── Стили ──────────────────────────────────────────────────────────
+    # ── Цвета ──────────────────────────────────────────────────────────
     DARK_BLUE  = '1F3864'
     MID_BLUE   = '2E75B6'
-    LIGHT_BLUE = 'DEEAF1'
     YELLOW_BG  = 'FFF2CC'
     ORANGE_BG  = 'FCE4D6'
     GREEN_BG   = 'E2EFDA'
     RED_BG     = 'FFE0E0'
     GREY_BG    = 'F2F2F2'
+    GROUP_BG   = 'D6E4F0'
+    TOTAL_BG   = 'BDD7EE'
+    GRAND_BG   = '1F3864'
 
-    def hdr(text, bg=DARK_BLUE, fg='FFFFFF', bold=True, size=11, wrap=True, halign='center'):
-        cell_font  = Font(bold=bold, color=fg, size=size, name='Calibri')
-        cell_fill  = PatternFill('solid', fgColor=bg)
-        cell_align = Alignment(horizontal=halign, vertical='center',
-                               wrap_text=wrap)
-        return cell_font, cell_fill, cell_align
+    def make_font(bold=False, color='000000', size=10, name='Calibri'):
+        return Font(bold=bold, color=color, size=size, name=name)
+
+    def make_fill(color):
+        return PatternFill('solid', fgColor=color)
+
+    def make_align(h='center', v='center', wrap=False):
+        return Alignment(horizontal=h, vertical=v, wrap_text=wrap)
 
     def thin_border():
         s = Side(style='thin', color='BFBFBF')
         return Border(left=s, right=s, top=s, bottom=s)
 
-    def pct_color(val, good_max, warn_max, invert=False):
-        """Return fill color based on value vs thresholds."""
+    def pct_fill(val, good_max, warn_max, invert=False):
         if val is None:
             return None
-        if invert:
-            if val >= good_max:   return PatternFill('solid', fgColor=GREEN_BG)
-            if val >= warn_max:   return PatternFill('solid', fgColor=YELLOW_BG)
-            return PatternFill('solid', fgColor=ORANGE_BG)
-        else:
-            if val <= good_max:   return PatternFill('solid', fgColor=GREEN_BG)
-            if val <= warn_max:   return PatternFill('solid', fgColor=YELLOW_BG)
-            return PatternFill('solid', fgColor=ORANGE_BG)
+        ok  = val <= good_max if not invert else val >= good_max
+        mid = val <= warn_max if not invert else val >= warn_max
+        if ok:   return make_fill(GREEN_BG)
+        if mid:  return make_fill(YELLOW_BG)
+        return make_fill(ORANGE_BG)
 
-    # ── Лист 1: Сводка ────────────────────────────────────────────────
-    ws_sum = wb.active
-    ws_sum.title = 'Сводка'
+    NCOLS = 12
 
-    ws_sum.merge_cells('A1:H1')
-    c = ws_sum['A1']
-    c.value = f'Анализ эффективности техники — {report.name}'
-    c.font, c.fill, c.alignment = hdr(c.value, DARK_BLUE, size=13)
+    # ══════════════════════════════════════════════════════════════════
+    # Лист 1 — Детализация + итоги
+    # ══════════════════════════════════════════════════════════════════
+    ws = wb.active
+    ws.title = 'Отчёт'
 
-    ws_sum.merge_cells('A2:H2')
-    c = ws_sum['A2']
-    c.value = f'Период: {report.period}' if report.period else ''
-    c.font = Font(italic=True, color='595959', name='Calibri')
-    c.alignment = Alignment(horizontal='center', vertical='center')
+    def write_merged(row_num, text, bg, fg='FFFFFF', bold=True, size=11):
+        ws.merge_cells(f'A{row_num}:{get_column_letter(NCOLS)}{row_num}')
+        c = ws.cell(row=row_num, column=1)
+        c.value = text
+        c.font = Font(bold=bold, color=fg, size=size, name='Calibri')
+        c.fill = make_fill(bg)
+        c.alignment = make_align('center')
+        ws.row_dimensions[row_num].height = 22
 
-    ws_sum.append([])
+    # Строка 1 — заголовок отчёта
+    write_merged(1, f'Анализ эффективности техники — {report.name}', DARK_BLUE, size=13)
+    ws.row_dimensions[1].height = 28
 
-    norm_row = [
-        'Норма работы/сутки (ч):', report.daily_norm_hours,
+    # Строка 2 — период
+    period_text = f'Период: {report.period}' if report.period else ''
+    write_merged(2, period_text, 'E8F0FB', '595959', bold=False, size=10)
+
+    # Строка 3 — нормативы
+    ws.append([
+        'Норма/сутки (ч):', report.daily_norm_hours,
         'Хол.ход бульдозеры (%):', report.bulldozer_idle_norm_pct,
         'Простой стрелы экскаваторы (%):', report.excavator_downtime_norm_pct,
         'Без движения самосвалы (%):', report.dumptruck_nomove_norm_pct,
-    ]
-    ws_sum.append(norm_row)
-    for col in range(1, 9):
-        c = ws_sum.cell(row=4, column=col)
-        c.font = Font(bold=(col % 2 == 1), size=9, name='Calibri')
-        c.fill = PatternFill('solid', fgColor=GREY_BG)
-        c.alignment = Alignment(horizontal='center', vertical='center')
+        None, None, None, None,
+    ])
+    for col in range(1, NCOLS + 1):
+        c = ws.cell(row=3, column=col)
+        c.font = Font(bold=(col % 2 == 1), size=9, name='Calibri', color='444444')
+        c.fill = make_fill(GREY_BG)
+        c.alignment = make_align('center')
 
-    ws_sum.append([])
+    ws.append([])  # пустая строка 4
 
-    sum_headers = [
-        'Группа ТС', 'Кол-во', 'Аномалий',
-        'Всего часов', 'Расход топлива (л)',
-        'Расход к норме (%)', 'Выход техники (%)', 'Эффективность (%)',
-    ]
-    ws_sum.append(sum_headers)
-    for col, _ in enumerate(sum_headers, 1):
-        c = ws_sum.cell(row=6, column=col)
-        c.font, c.fill, c.alignment = hdr(c.value, MID_BLUE)
-        c.border = thin_border()
-
-    for s in summary:
-        row = [
-            s['group'], s['count'], s['anomaly_count'],
-            s['total_engine_hours'], s['total_fuel_actual'],
-            s['avg_fuel_eff'], s['avg_output'], s['avg_type_eff'],
-        ]
-        ws_sum.append(row)
-        r = ws_sum.max_row
-        for col in range(1, 9):
-            c = ws_sum.cell(row=r, column=col)
-            c.alignment = Alignment(horizontal='center', vertical='center')
-            c.border = thin_border()
-            c.font = Font(name='Calibri', size=10)
-        ws_sum.cell(row=r, column=1).alignment = Alignment(horizontal='left', vertical='center')
-
-        fill = pct_color(s['avg_fuel_eff'], 100, 115)
-        if fill: ws_sum.cell(row=r, column=6).fill = fill
-        fill = pct_color(s['avg_output'], 90, 70, invert=True)
-        if fill: ws_sum.cell(row=r, column=7).fill = fill
-        fill = pct_color(s['avg_type_eff'], 100, 130)
-        if fill: ws_sum.cell(row=r, column=8).fill = fill
-
-        anom_c = ws_sum.cell(row=r, column=3)
-        if s['anomaly_count'] > 0:
-            anom_c.fill = PatternFill('solid', fgColor=ORANGE_BG)
-
-    ws_sum.column_dimensions['A'].width = 20
-    for col in range(2, 9):
-        ws_sum.column_dimensions[get_column_letter(col)].width = 17
-    ws_sum.row_dimensions[1].height = 28
-    ws_sum.row_dimensions[6].height = 32
-
-    # ── Лист 2: Детализация ───────────────────────────────────────────
-    ws = wb.create_sheet('Детализация')
-
-    ws.merge_cells('A1:L1')
-    c = ws['A1']
-    c.value = f'{report.name}'
-    c.font, c.fill, c.alignment = hdr(c.value, DARK_BLUE, size=12)
-    ws.row_dimensions[1].height = 24
-
-    detail_headers = [
+    # Строка 5 — заголовки колонок
+    COL_HEADERS = [
         '№', 'Техника', 'Группа', 'Дата',
         'Время работы\n(чч:мм:сс)',
-        'Расход факт (л)',
+        'Расход\nфакт (л)',
         'Норма расхода\n(л/ч)',
         'Расход\nк норме (%)',
         'Выход\nтехники (%)',
         'Эффективность\n(%)',
-        'Тип эффективности',
+        'Тип\nэффективности',
         'Аномалии',
     ]
-    ws.append(detail_headers)
-    for col, _ in enumerate(detail_headers, 1):
-        c = ws.cell(row=2, column=col)
-        c.font, c.fill, c.alignment = hdr(c.value, MID_BLUE)
+    ws.append(COL_HEADERS)
+    HDR_ROW = 5
+    for col in range(1, NCOLS + 1):
+        c = ws.cell(row=HDR_ROW, column=col)
+        c.font = Font(bold=True, color='FFFFFF', size=10, name='Calibri')
+        c.fill = make_fill(MID_BLUE)
+        c.alignment = make_align('center', wrap=True)
         c.border = thin_border()
-    ws.row_dimensions[2].height = 36
+    ws.row_dimensions[HDR_ROW].height = 36
 
+    ws.freeze_panes = f'A{HDR_ROW + 1}'
+
+    # ── Данные по каждой единице техники ──────────────────────────────
+    # Группируем: сначала все строки по группе
+    records_by_group = defaultdict(list)
     for rec in all_records:
-        fuel_eff_pct  = round(rec.fuel_efficiency * 100, 1) if rec.fuel_efficiency is not None else None
-        output_pct    = round(rec.equipment_output * 100, 1) if rec.equipment_output is not None else None
-        type_eff_pct  = round(rec.type_efficiency * 100, 1) if rec.type_efficiency is not None else None
+        records_by_group[rec.group].append(rec)
 
-        type_label = ''
-        if rec.group in ('Бульдозеры', 'Погрузчики'):
-            type_label = 'Холостой ход'
-        elif rec.group == 'Экскаваторы':
-            type_label = 'Простой стрелы'
-        elif rec.group == 'Самосвалы':
-            type_label = 'Без движения'
+    # Для группового итога накапливаем значения
+    for group_name in sorted(records_by_group.keys()):
+        group_records = records_by_group[group_name]
 
-        anomaly_text = '; '.join(rec.anomaly_details) if rec.has_anomaly else ''
+        # Заголовок группы
+        ws.append([])
+        gr = ws.max_row
+        ws.merge_cells(f'A{gr}:{get_column_letter(NCOLS)}{gr}')
+        gc = ws.cell(row=gr, column=1)
+        gc.value = f'  {group_name.upper()}  ({len(group_records)} ед.)'
+        gc.font = Font(bold=True, color=DARK_BLUE, size=10, name='Calibri')
+        gc.fill = make_fill(GROUP_BG)
+        gc.alignment = make_align('left')
+        ws.row_dimensions[gr].height = 18
 
-        row_data = [
-            rec.row_number,
-            rec.name,
-            rec.group,
-            rec.date,
-            rec.engine_time_str(),
-            rec.fuel_actual,
-            rec.fuel_norm,
-            fuel_eff_pct,
-            output_pct,
-            type_eff_pct,
-            type_label,
-            anomaly_text,
-        ]
-        ws.append(row_data)
-        r = ws.max_row
+        # Накопители для итога группы
+        g_fuel_actual_sum = 0.0
+        g_engine_h_sum    = 0.0
+        g_fuel_eff_vals   = []
+        g_output_vals     = []
+        g_type_eff_vals   = []
+        g_anomaly_count   = 0
 
-        row_fill = PatternFill('solid', fgColor=YELLOW_BG) if rec.has_anomaly else None
+        for rec in group_records:
+            fuel_eff_pct = round(rec.fuel_efficiency * 100, 1) if rec.fuel_efficiency is not None else None
+            output_pct   = round(rec.equipment_output * 100, 1) if rec.equipment_output is not None else None
+            type_eff_pct = round(rec.type_efficiency * 100, 1) if rec.type_efficiency is not None else None
 
-        for col in range(1, 13):
-            c = ws.cell(row=r, column=col)
-            c.font = Font(name='Calibri', size=10)
-            c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=False)
+            type_label = {
+                'Бульдозеры': 'Холостой ход',
+                'Погрузчики': 'Холостой ход',
+                'Экскаваторы': 'Простой стрелы',
+                'Самосвалы': 'Без движения',
+            }.get(rec.group, '')
+
+            anomaly_text = '; '.join(rec.anomaly_details) if rec.has_anomaly else ''
+
+            ws.append([
+                rec.row_number,
+                rec.name,
+                rec.group,
+                rec.date,
+                rec.engine_time_str(),
+                rec.fuel_actual,
+                rec.fuel_norm,
+                fuel_eff_pct,
+                output_pct,
+                type_eff_pct,
+                type_label,
+                anomaly_text,
+            ])
+            r = ws.max_row
+            row_fill = make_fill(YELLOW_BG) if rec.has_anomaly else None
+
+            for col in range(1, NCOLS + 1):
+                c = ws.cell(row=r, column=col)
+                c.font = make_font()
+                c.alignment = make_align()
+                c.border = thin_border()
+                if row_fill and col not in (8, 9, 10):
+                    c.fill = row_fill
+
+            ws.cell(row=r, column=2).alignment = make_align('left')
+            ws.cell(row=r, column=12).alignment = make_align('left', wrap=True)
+
+            f = pct_fill(fuel_eff_pct, 100, 115)
+            if f: ws.cell(row=r, column=8).fill = f
+            f = pct_fill(output_pct, 90, 70, invert=True)
+            if f: ws.cell(row=r, column=9).fill = f
+            f = pct_fill(type_eff_pct, 100, 130)
+            if f: ws.cell(row=r, column=10).fill = f
+
+            if rec.fuel_actual is not None and rec.fuel_actual < 0:
+                ws.cell(row=r, column=6).fill = make_fill('FFB3B3')
+                ws.cell(row=r, column=6).font = Font(bold=True, color='C00000', name='Calibri', size=10)
+
+            # Накопление
+            if rec.fuel_actual and rec.fuel_actual > 0:
+                g_fuel_actual_sum += rec.fuel_actual
+            g_engine_h_sum += rec.engine_time_sec / 3600
+            if fuel_eff_pct is not None: g_fuel_eff_vals.append(fuel_eff_pct)
+            if output_pct   is not None: g_output_vals.append(output_pct)
+            if type_eff_pct is not None: g_type_eff_vals.append(type_eff_pct)
+            if rec.has_anomaly: g_anomaly_count += 1
+
+        # Итог по группе
+        g_avg_fuel = round(sum(g_fuel_eff_vals) / len(g_fuel_eff_vals), 1) if g_fuel_eff_vals else None
+        g_avg_out  = round(sum(g_output_vals)   / len(g_output_vals),   1) if g_output_vals  else None
+        g_avg_type = round(sum(g_type_eff_vals) / len(g_type_eff_vals), 1) if g_type_eff_vals else None
+
+        ws.append([
+            '', f'ИТОГО {group_name}',
+            '', '',
+            f'{round(g_engine_h_sum, 1)} ч',
+            round(g_fuel_actual_sum, 1),
+            '',
+            g_avg_fuel,
+            g_avg_out,
+            g_avg_type,
+            '',
+            f'Аномалий: {g_anomaly_count}' if g_anomaly_count else '',
+        ])
+        tr = ws.max_row
+        for col in range(1, NCOLS + 1):
+            c = ws.cell(row=tr, column=col)
+            c.font = Font(bold=True, size=10, name='Calibri', color=DARK_BLUE)
+            c.fill = make_fill(TOTAL_BG)
+            c.alignment = make_align('center')
             c.border = thin_border()
-            if row_fill and col not in (8, 9, 10):
-                c.fill = row_fill
+        ws.cell(row=tr, column=2).alignment = make_align('left')
+        ws.row_dimensions[tr].height = 18
 
-        ws.cell(row=r, column=2).alignment = Alignment(horizontal='left', vertical='center')
-        ws.cell(row=r, column=12).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        f = pct_fill(g_avg_fuel, 100, 115)
+        if f: ws.cell(row=tr, column=8).fill = f
+        f = pct_fill(g_avg_out, 90, 70, invert=True)
+        if f: ws.cell(row=tr, column=9).fill = f
+        f = pct_fill(g_avg_type, 100, 130)
+        if f: ws.cell(row=tr, column=10).fill = f
 
-        fill = pct_color(fuel_eff_pct, 100, 115)
-        if fill: ws.cell(row=r, column=8).fill = fill
-        fill = pct_color(output_pct, 90, 70, invert=True)
-        if fill: ws.cell(row=r, column=9).fill = fill
-        fill = pct_color(type_eff_pct, 100, 130)
-        if fill: ws.cell(row=r, column=10).fill = fill
+        if g_anomaly_count:
+            ws.cell(row=tr, column=12).fill = make_fill(ORANGE_BG)
 
-        if rec.fuel_actual is not None and rec.fuel_actual < 0:
-            ws.cell(row=r, column=6).fill = PatternFill('solid', fgColor='FFB3B3')
-            ws.cell(row=r, column=6).font = Font(bold=True, color='C00000', name='Calibri', size=10)
+    # ── Общий итог ────────────────────────────────────────────────────
+    ws.append([])
 
-    col_widths = [5, 28, 14, 12, 16, 14, 14, 12, 12, 14, 16, 40]
+    # Заголовок «ОБЩИЙ ИТОГ»
+    oi_hdr_row = ws.max_row + 1
+    ws.append([])
+    ws.merge_cells(f'A{oi_hdr_row}:{get_column_letter(NCOLS)}{oi_hdr_row}')
+    c = ws.cell(row=oi_hdr_row, column=1)
+    c.value = 'ОБЩИЙ ИТОГ ПО ВСЕМ ГРУППАМ'
+    c.font = Font(bold=True, color='FFFFFF', size=11, name='Calibri')
+    c.fill = make_fill(GRAND_BG)
+    c.alignment = make_align('center')
+    ws.row_dimensions[oi_hdr_row].height = 22
+
+    # Заголовки сводной таблицы
+    summary_col_headers = [
+        'Группа ТС', 'Кол-во ед.', 'Аномалий',
+        'Всего часов', 'Расход (л)',
+        'Расход к норме (%)', 'Выход техники (%)', 'Эффективность (%)',
+        'Тип эффективности', None, None, None,
+    ]
+    ws.append(summary_col_headers)
+    sh_row = ws.max_row
+    for col in range(1, 10):
+        c = ws.cell(row=sh_row, column=col)
+        c.font = Font(bold=True, color='FFFFFF', size=10, name='Calibri')
+        c.fill = make_fill(MID_BLUE)
+        c.alignment = make_align('center', wrap=True)
+        c.border = thin_border()
+    ws.row_dimensions[sh_row].height = 30
+
+    total_units = 0
+    total_anomalies = 0
+    total_engine_h = 0.0
+    total_fuel = 0.0
+
+    for s in summary:
+        ws.append([
+            s['group'],
+            s['count'],
+            s['anomaly_count'],
+            s['total_engine_hours'],
+            s['total_fuel_actual'],
+            s['avg_fuel_eff'],
+            s['avg_output'],
+            s['avg_type_eff'],
+            s['type_eff_label'],
+            None, None, None,
+        ])
+        sr = ws.max_row
+        for col in range(1, 10):
+            c = ws.cell(row=sr, column=col)
+            c.font = make_font(size=10)
+            c.alignment = make_align('center')
+            c.border = thin_border()
+        ws.cell(row=sr, column=1).alignment = make_align('left')
+        ws.cell(row=sr, column=9).alignment = make_align('left')
+
+        if s['anomaly_count']:
+            ws.cell(row=sr, column=3).fill = make_fill(ORANGE_BG)
+
+        f = pct_fill(s['avg_fuel_eff'], 100, 115)
+        if f: ws.cell(row=sr, column=6).fill = f
+        f = pct_fill(s['avg_output'], 90, 70, invert=True)
+        if f: ws.cell(row=sr, column=7).fill = f
+        f = pct_fill(s['avg_type_eff'], 100, 130)
+        if f: ws.cell(row=sr, column=8).fill = f
+
+        total_units     += s['count']
+        total_anomalies += s['anomaly_count']
+        total_engine_h  += s['total_engine_hours']
+        total_fuel      += s['total_fuel_actual']
+
+    # Строка «Всего»
+    ws.append([
+        'ВСЕГО',
+        total_units,
+        total_anomalies,
+        round(total_engine_h, 1),
+        round(total_fuel, 1),
+        None, None, None, None, None, None, None,
+    ])
+    grand_row = ws.max_row
+    for col in range(1, 10):
+        c = ws.cell(row=grand_row, column=col)
+        c.font = Font(bold=True, color='FFFFFF', size=10, name='Calibri')
+        c.fill = make_fill(DARK_BLUE)
+        c.alignment = make_align('center')
+        c.border = thin_border()
+    ws.cell(row=grand_row, column=1).alignment = make_align('left')
+    ws.row_dimensions[grand_row].height = 20
+
+    # ── Ширины колонок ────────────────────────────────────────────────
+    col_widths = [5, 30, 14, 12, 16, 14, 13, 13, 13, 14, 16, 45]
     for i, w in enumerate(col_widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
-    ws.freeze_panes = 'A3'
+    # ══════════════════════════════════════════════════════════════════
+    # Лист 2 — Аномалии (если есть)
+    # ══════════════════════════════════════════════════════════════════
+    anomaly_records = [r for r in all_records if r.has_anomaly]
+    if anomaly_records:
+        ws_a = wb.create_sheet('Аномалии')
 
-    # ── Лист 3: Аномалии ──────────────────────────────────────────────
-    anomaly_records = all_records.filter(has_anomaly=True)
-    if anomaly_records.exists():
-        ws_anom = wb.create_sheet('Аномалии')
-
-        ws_anom.merge_cells('A1:E1')
-        c = ws_anom['A1']
+        ws_a.merge_cells(f'A1:E1')
+        c = ws_a['A1']
         c.value = f'Аномальные записи — {report.name}'
-        c.font, c.fill, c.alignment = hdr(c.value, 'C00000', size=12)
-        ws_anom.row_dimensions[1].height = 24
+        c.font = Font(bold=True, color='FFFFFF', size=12, name='Calibri')
+        c.fill = make_fill('C00000')
+        c.alignment = make_align('center')
+        ws_a.row_dimensions[1].height = 24
 
-        anom_headers = ['№', 'Техника', 'Группа', 'Дата', 'Описание аномалии']
-        ws_anom.append(anom_headers)
-        for col, _ in enumerate(anom_headers, 1):
-            c = ws_anom.cell(row=2, column=col)
-            c.font, c.fill, c.alignment = hdr(c.value, '9B2335')
+        for col, txt in enumerate(['№', 'Техника', 'Группа', 'Дата', 'Описание аномалии'], 1):
+            c = ws_a.cell(row=2, column=col)
+            c.value = txt
+            c.font = Font(bold=True, color='FFFFFF', size=10, name='Calibri')
+            c.fill = make_fill('9B2335')
+            c.alignment = make_align('center')
             c.border = thin_border()
-        ws_anom.row_dimensions[2].height = 28
+        ws_a.row_dimensions[2].height = 24
 
         for rec in anomaly_records:
             for anomaly_text in rec.anomaly_details:
-                ws_anom.append([
-                    rec.row_number, rec.name, rec.group,
-                    rec.date, anomaly_text,
-                ])
-                r = ws_anom.max_row
+                ws_a.append([rec.row_number, rec.name, rec.group, rec.date, anomaly_text])
+                r = ws_a.max_row
                 for col in range(1, 6):
-                    c = ws_anom.cell(row=r, column=col)
-                    c.font = Font(name='Calibri', size=10)
-                    c.alignment = Alignment(horizontal='center', vertical='center')
+                    c = ws_a.cell(row=r, column=col)
+                    c.font = make_font()
+                    c.alignment = make_align()
                     c.border = thin_border()
-                    c.fill = PatternFill('solid', fgColor=RED_BG)
-                ws_anom.cell(row=r, column=2).alignment = Alignment(horizontal='left', vertical='center')
-                ws_anom.cell(row=r, column=5).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+                    c.fill = make_fill(RED_BG)
+                ws_a.cell(row=r, column=2).alignment = make_align('left')
+                ws_a.cell(row=r, column=5).alignment = make_align('left', wrap=True)
 
-        anom_col_widths = [5, 28, 14, 12, 55]
-        for i, w in enumerate(anom_col_widths, 1):
-            ws_anom.column_dimensions[get_column_letter(i)].width = w
+        for i, w in enumerate([5, 30, 14, 12, 60], 1):
+            ws_a.column_dimensions[get_column_letter(i)].width = w
 
     # ── Отдаём файл ───────────────────────────────────────────────────
     buf = io.BytesIO()
