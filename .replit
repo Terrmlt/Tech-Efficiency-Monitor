@@ -24,16 +24,16 @@ args = "Start application"
 name = "Start application"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd equipment-analysis && python3 manage.py runserver 0.0.0.0:8000"
-waitForPort = 8000
-
 [workflows.workflow.metadata]
 outputType = "webview"
 
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd equipment-analysis && python manage.py runserver 0.0.0.0:5000"
+waitForPort = 5000
+
 [agent]
-stack = "PNPM_WORKSPACE"
+stack = "BEST_EFFORT_FALLBACK"
 expertMode = true
 
 [postMerge]
@@ -43,6 +43,10 @@ timeoutMs = 20000
 [nix]
 channel = "stable-25_05"
 packages = ["glibcLocales"]
+
+[[ports]]
+localPort = 5000
+externalPort = 80
 
 [[ports]]
 localPort = 8000
