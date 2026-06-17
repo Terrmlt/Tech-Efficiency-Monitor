@@ -9,6 +9,8 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
+_replit_domain = os.environ.get('REPLIT_DEV_DOMAIN', '')
+
 CSRF_TRUSTED_ORIGINS = [
     'https://*.replit.dev',
     'https://*.replit.app',
@@ -16,6 +18,12 @@ CSRF_TRUSTED_ORIGINS = [
     'http://localhost',
     'http://localhost:8000',
 ]
+
+if _replit_domain:
+    CSRF_TRUSTED_ORIGINS += [
+        f'https://{_replit_domain}',
+        f'https://*.{_replit_domain}',
+    ]
 
 INSTALLED_APPS = [
     'django.contrib.admin',
