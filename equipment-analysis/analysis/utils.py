@@ -4,7 +4,6 @@ from .models import secs_to_hhmmss
 
 
 def parse_timedelta_to_seconds(value):
-    """Convert timedelta, string HH:MM:SS, or '-' to seconds."""
     if value is None or value == '-' or value == '':
         return None
     if isinstance(value, datetime.timedelta):
@@ -26,7 +25,6 @@ def parse_timedelta_to_seconds(value):
 
 
 def parse_float(value):
-    """Parse a numeric value, return None for '-' or None."""
     if value is None or value == '-' or value == '':
         return None
     try:
@@ -35,11 +33,33 @@ def parse_float(value):
         return None
 
 
+def parse_date_string(value):
+    """Parse day.month string to (day, month) tuple."""
+    if not value:
+        return None, None
+    s = str(value).strip()
+    for sep in ('.', '/', '-'):
+        if sep in s:
+            parts = s.split(sep)
+            try:
+                return int(parts[0]), int(parts[1])
+            except (ValueError, IndexError):
+                pass
+    return None, None
+
+
+def build_record_date(date_str, year):
+    """Build a full date from 'DD.MM' string and year integer."""
+    day, month = parse_date_string(date_str)
+    if day and month and year:
+        try:
+            return datetime.date(year, month, day)
+        except ValueError:
+            pass
+    return None
+
+
 def detect_anomalies(record):
-    """
-    Detect anomalies in a vehicle record.
-    Returns (has_anomaly, list_of_anomaly_descriptions).
-    """
     anomalies = []
 
     engine_time_sec = record.get('engine_time_sec', 0) or 0
@@ -47,6 +67,7 @@ def detect_anomalies(record):
     engine_idle_sec = record.get('engine_idle_sec', 0) or 0
     fuel_actual = record.get('fuel_actual')
     fuel_norm = record.get('fuel_norm', 0) or 0
+    mileage = record.get('mileage')
     engine_time_hours = engine_time_sec / 3600
 
     if fuel_actual is not None and fuel_actual < 0:
@@ -83,21 +104,35 @@ def detect_anomalies(record):
             f'Зафиксирован расход топлива ({fuel_actual} л) при нулевом времени работы двигателя'
         )
 
+    # Mileage-based anomalies
+    if mileage is not None:
+        if mileage > 10 and fuel_actual is not None and fuel_actual == 0:
+            anomalies.append(
+                f'Пробег {mileage:.1f} км при нулевом расходе топлива'
+            )
+        if mileage > 10 and engine_time_sec == 0:
+            anomalies.append(
+                f'Пробег {mileage:.1f} км при нулевом времени работы двигателя'
+            )
+        if mileage == 0 and engine_time_sec > 3600 and fuel_actual is not None and fuel_actual > 0:
+            anomalies.append(
+                f'Нулевой пробег при работе двигателя {engine_time_hours:.1f} ч и расходе {fuel_actual} л'
+            )
+
     return len(anomalies) > 0, anomalies
 
 
 def calculate_metrics(record_data, report):
     """
-    Calculate efficiency metrics for a vehicle record.
-
     Formulas:
-    1. fuel_efficiency  = fuel_actual / (fuel_norm * engine_time_hours)
-       ratio to norm: 1.0 = exactly on norm, <1 = below norm, >1 = above norm
+    1. fuel_efficiency  = fuel_actual / (fuel_norm * daily_norm_hours)
+       where daily_norm_hours = daily_norm_sec / 3600
+       ratio to norm: 1.0 = exactly on norm, <1 = below (economy), >1 = above (overrun)
     2. equipment_output = engine_time_sec / daily_norm_sec
-    3. type_efficiency  = actual_time_sec / norm_time_sec  (group-specific)
-       Бульдозеры/Погрузчики : engine_idle_sec  / bulldozer_norm_sec
-       Экскаваторы           : downtime_sec      / excavator_norm_sec
-       Самосвалы             : engine_no_move_sec / dumptruck_norm_sec
+    3. type_efficiency  (group-specific):
+       Бульдозеры/Погрузчики : engine_idle_sec    / bulldozer_norm_sec
+       Экскаваторы           : downtime_sec        / excavator_norm_sec
+       Самосвалы             : engine_no_move_sec  / dumptruck_norm_sec
     """
     engine_time_sec = record_data.get('engine_time_sec', 0) or 0
     engine_no_move_sec = record_data.get('engine_no_move_sec', 0) or 0
@@ -107,17 +142,19 @@ def calculate_metrics(record_data, report):
     downtime_sec = record_data.get('downtime_sec')
     group = record_data.get('group', '')
 
-    engine_time_hours = engine_time_sec / 3600
+    daily_norm_hours = report.daily_norm_sec / 3600 if report.daily_norm_sec > 0 else 0
 
-    # 1. Расход к норме
+    # 1. Расход к норме: факт / (норма л/ч × норма смены ч)
     fuel_efficiency = None
-    if (fuel_actual is not None and fuel_actual > 0
-            and engine_time_hours > 0 and fuel_norm > 0):
-        fuel_efficiency = fuel_actual / (fuel_norm * engine_time_hours)
+    if (fuel_actual is not None and fuel_actual >= 0
+            and daily_norm_hours > 0 and fuel_norm > 0):
+        denominator = fuel_norm * daily_norm_hours
+        if denominator > 0:
+            fuel_efficiency = fuel_actual / denominator
 
     # 2. Выход техники
     equipment_output = None
-    if engine_time_sec > 0 and report.daily_norm_sec > 0:
+    if report.daily_norm_sec > 0:
         equipment_output = engine_time_sec / report.daily_norm_sec
 
     # 3. Эффективность по типу
@@ -142,59 +179,123 @@ def calculate_metrics(record_data, report):
     }
 
 
+def _find_column_indices(header_row):
+    """
+    Try to find column indices by header name.
+    Returns dict mapping field name -> column index (0-based).
+    Falls back to default positions if headers not found.
+    """
+    defaults = {
+        'row_number': 0,
+        'name': 1,
+        'group': 2,
+        'date': 3,
+        'engine_time': 4,
+        'engine_no_move': 6,
+        'engine_idle': 8,
+        'fuel_norm': 10,
+        'fuel_actual': 11,
+        'downtime': 12,
+        'mileage': None,
+        'refueling': None,
+    }
+
+    if not header_row or all(c is None for c in header_row):
+        return defaults
+
+    header_lower = [str(c).lower().strip() if c else '' for c in header_row]
+
+    keywords = {
+        'mileage': ['пробег', 'km', 'км'],
+        'refueling': ['заправк', 'топливо заправ', 'объём заправ', 'объем заправ'],
+        'downtime': ['простой', 'простоя', 'простоя стрелы', 'время простоя'],
+        'fuel_actual': ['фактический расход', 'расход факт', 'факт. расход'],
+    }
+
+    for field, kws in keywords.items():
+        for i, h in enumerate(header_lower):
+            for kw in kws:
+                if kw in h:
+                    defaults[field] = i
+                    break
+
+    return defaults
+
+
 def parse_excel_file(file_path):
-    """
-    Parse the Excel report file.
-    Returns metadata dict and list of vehicle record dicts.
-    """
     wb = openpyxl.load_workbook(file_path, data_only=True)
     ws = wb.active
 
     metadata = {'period': '', 'vehicles_list': '', 'report_name': ''}
     records = []
 
+    # Read metadata from first rows
     for row in ws.iter_rows(min_row=1, max_row=9, values_only=True):
-        if row[0] == 'Отчет:' and row[1]:
+        if row[0] == 'Отчет:' and len(row) > 1 and row[1]:
             metadata['report_name'] = str(row[1]).strip()
-        elif row[0] == 'Период:' and row[1]:
+        elif row[0] == 'Период:' and len(row) > 1 and row[1]:
             metadata['period'] = str(row[1]).strip()
-        elif row[0] == 'Транспортные средства:' and row[1]:
+        elif row[0] == 'Транспортные средства:' and len(row) > 1 and row[1]:
             metadata['vehicles_list'] = str(row[1]).strip()
+
+    # Try to detect column layout from first data-ish row
+    cols = None
+    for row in ws.iter_rows(min_row=7, max_row=11, values_only=True):
+        if row[0] is not None:
+            cols = _find_column_indices(row)
+            break
+
+    if cols is None:
+        cols = _find_column_indices([])
 
     for row in ws.iter_rows(min_row=10, values_only=True):
         if row[0] is None:
             continue
 
-        engine_time_sec    = parse_timedelta_to_seconds(row[4]) or 0
-        engine_no_move_sec = parse_timedelta_to_seconds(row[6]) or 0
-        engine_idle_sec    = parse_timedelta_to_seconds(row[8]) or 0
-        fuel_norm          = parse_float(row[10]) or 0
-        fuel_actual        = parse_float(row[11])
-        downtime_sec       = parse_timedelta_to_seconds(row[12])
+        def get(idx):
+            if idx is None or idx >= len(row):
+                return None
+            return row[idx]
+
+        engine_time_sec    = parse_timedelta_to_seconds(get(cols['engine_time'])) or 0
+        engine_no_move_sec = parse_timedelta_to_seconds(get(cols['engine_no_move'])) or 0
+        engine_idle_sec    = parse_timedelta_to_seconds(get(cols['engine_idle'])) or 0
+        fuel_norm          = parse_float(get(cols['fuel_norm'])) or 0
+        fuel_actual        = parse_float(get(cols['fuel_actual']))
+        downtime_sec       = parse_timedelta_to_seconds(get(cols['downtime']))
+        mileage            = parse_float(get(cols['mileage']))
+        refueling          = parse_float(get(cols['refueling']))
 
         try:
-            row_num = int(str(row[0]).strip())
+            row_num = int(str(row[cols['row_number']]).strip())
         except (ValueError, TypeError):
             row_num = 0
 
+        date_val = get(cols['date'])
+        if isinstance(date_val, (datetime.date, datetime.datetime)):
+            date_str = date_val.strftime('%d.%m')
+        else:
+            date_str = str(date_val) if date_val else ''
+
         records.append({
             'row_number': row_num,
-            'name': str(row[1]) if row[1] else '',
-            'group': str(row[2]) if row[2] else '',
-            'date': str(row[3]) if row[3] else '',
+            'name': str(get(cols['name'])) if get(cols['name']) else '',
+            'group': str(get(cols['group'])) if get(cols['group']) else '',
+            'date': date_str,
             'engine_time_sec': engine_time_sec,
             'engine_no_move_sec': engine_no_move_sec,
             'engine_idle_sec': engine_idle_sec,
             'fuel_norm': fuel_norm,
             'fuel_actual': fuel_actual,
             'downtime_sec': downtime_sec,
+            'mileage': mileage,
+            'refueling': refueling,
         })
 
     return metadata, records
 
 
 def build_summary(vehicle_records, report):
-    """Build per-group summary statistics."""
     from collections import defaultdict
 
     groups = defaultdict(lambda: {

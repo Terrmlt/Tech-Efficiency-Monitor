@@ -1,4 +1,5 @@
 from django.db import models
+import datetime
 
 
 def secs_to_hhmmss(secs):
@@ -11,14 +12,37 @@ def secs_to_hhmmss(secs):
     return f'{h:02d}:{m:02d}:{s:02d}'
 
 
+class Section(models.Model):
+    name = models.CharField(max_length=200, verbose_name='Название участка')
+
+    class Meta:
+        verbose_name = 'Участок'
+        verbose_name_plural = 'Участки'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
 class Report(models.Model):
+    SHIFT_1 = 1
+    SHIFT_2 = 2
+    SHIFT_CHOICES = [(1, 'Смена 1'), (2, 'Смена 2')]
+
     name = models.CharField(max_length=300, verbose_name='Название отчёта')
     file = models.FileField(upload_to='reports/', verbose_name='Файл Excel')
     uploaded_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата загрузки')
     period = models.CharField(max_length=300, blank=True, verbose_name='Период')
     vehicles_list = models.TextField(blank=True, verbose_name='Список ТС')
 
-    daily_norm_sec = models.IntegerField(default=28800, verbose_name='Норма работы в сутки (сек)')
+    section = models.ForeignKey(
+        Section, null=True, blank=True, on_delete=models.SET_NULL,
+        verbose_name='Участок'
+    )
+    year = models.IntegerField(default=2026, verbose_name='Год')
+    shift = models.SmallIntegerField(default=1, choices=SHIFT_CHOICES, verbose_name='Смена')
+
+    daily_norm_sec = models.IntegerField(default=36000, verbose_name='Норма работы в смену (сек)')
     bulldozer_norm_sec = models.IntegerField(default=7200, verbose_name='Норма холостого хода бульдозеров/погрузчиков (сек)')
     excavator_norm_sec = models.IntegerField(default=7200, verbose_name='Норма времени простоя стрелы экскаваторов (сек)')
     dumptruck_norm_sec = models.IntegerField(default=10800, verbose_name='Норма времени без движения самосвалов (сек)')
@@ -49,6 +73,9 @@ class Report(models.Model):
     def dumptruck_norm_str(self):
         return secs_to_hhmmss(self.dumptruck_norm_sec)
 
+    def get_shift_display_short(self):
+        return f'Смена {self.shift}'
+
 
 class VehicleRecord(models.Model):
     GROUP_BULLDOZER = 'Бульдозеры'
@@ -60,14 +87,19 @@ class VehicleRecord(models.Model):
     row_number = models.IntegerField(default=0, verbose_name='№')
     name = models.CharField(max_length=200, verbose_name='Название ТС')
     group = models.CharField(max_length=100, verbose_name='Группа ТС')
-    date = models.CharField(max_length=50, verbose_name='Дата')
+    date = models.CharField(max_length=50, verbose_name='Дата (день.месяц)')
+    record_date = models.DateField(null=True, blank=True, verbose_name='Дата (полная)')
 
-    engine_time_sec = models.FloatField(verbose_name='Время работы двигателя (сек)')
-    engine_no_move_sec = models.FloatField(verbose_name='Время работы без движения (сек)')
-    engine_idle_sec = models.FloatField(verbose_name='Время холостого хода (сек)')
-    fuel_norm = models.FloatField(verbose_name='Норма расхода (л/ч)')
+    engine_time_sec = models.FloatField(default=0, verbose_name='Время работы двигателя (сек)')
+    engine_no_move_sec = models.FloatField(default=0, verbose_name='Время работы без движения (сек)')
+    engine_idle_sec = models.FloatField(default=0, verbose_name='Время холостого хода (сек)')
+    fuel_norm = models.FloatField(default=0, verbose_name='Норма расхода (л/ч)')
     fuel_actual = models.FloatField(null=True, blank=True, verbose_name='Фактический расход (л)')
     downtime_sec = models.FloatField(null=True, blank=True, verbose_name='Время простоя стрелы (сек)')
+
+    mileage = models.FloatField(null=True, blank=True, verbose_name='Пробег (км)')
+    refueling = models.FloatField(null=True, blank=True, verbose_name='Объём заправок (л)')
+    comment = models.TextField(blank=True, default='', verbose_name='Комментарий')
 
     has_anomaly = models.BooleanField(default=False, verbose_name='Есть аномалия')
     anomaly_details = models.JSONField(default=list, verbose_name='Описание аномалий')

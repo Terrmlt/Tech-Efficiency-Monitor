@@ -10,13 +10,13 @@
         body { background-color: #f4f6f9; }
         .navbar-brand { font-weight: 700; letter-spacing: -0.5px; }
         .card { border: none; box-shadow: 0 1px 4px rgba(0,0,0,.08); border-radius: 10px; }
-        .metric-card { border-radius: 10px; }
-        .badge-anomaly { background-color: #fff3cd; color: #856404; border: 1px solid #ffc107; font-size: .75rem; }
         .table th { font-size: .82rem; white-space: nowrap; background: #f8f9fa; }
         .table td { font-size: .85rem; vertical-align: middle; }
         .efficiency-good { color: #198754; font-weight: 600; }
         .efficiency-warn { color: #fd7e14; font-weight: 600; }
         .efficiency-bad  { color: #dc3545; font-weight: 600; }
+        .output-good { color: #198754; font-weight: 600; }
+        .output-bad  { color: #dc3545; font-weight: 600; }
         .anomaly-row { background-color: #fff8e1 !important; }
         .anomaly-badge { display: inline-block; background: #fff3cd; color: #856404;
                          border: 1px solid #ffc107; border-radius: 4px;
@@ -25,6 +25,11 @@
         .stat-label { font-size: .8rem; color: #6c757d; margin-top: 2px; }
         .group-badge { font-size: .78rem; padding: 3px 8px; border-radius: 20px; }
         footer { color: #adb5bd; font-size: .82rem; }
+        .comment-cell { min-width: 160px; }
+        .comment-input { font-size: .82rem; border: 1px solid #dee2e6; border-radius: 4px;
+                         padding: 3px 6px; width: 100%; background: #fff; }
+        .comment-input:focus { outline: none; border-color: #86b7fe; box-shadow: 0 0 0 2px rgba(13,110,253,.15); }
+        .nav-link.active { font-weight: 600; }
     </style>
 </head>
 <body>
@@ -33,7 +38,28 @@
         <a class="navbar-brand" href="{% url 'index' %}">
             <i class="bi bi-speedometer2 me-2"></i>Анализ техники
         </a>
-        <div class="ms-auto">
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMain">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navMain">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'index' %}active{% endif %}"
+                       href="{% url 'index' %}"><i class="bi bi-folder2 me-1"></i>Отчёты</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'records' %}active{% endif %}"
+                       href="{% url 'records' %}"><i class="bi bi-table me-1"></i>Все записи</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'analytics' %}active{% endif %}"
+                       href="{% url 'analytics' %}"><i class="bi bi-bar-chart-line me-1"></i>Аналитика</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'sections' %}active{% endif %}"
+                       href="{% url 'sections' %}"><i class="bi bi-geo-alt me-1"></i>Участки</a>
+                </li>
+            </ul>
             <a href="{% url 'upload' %}" class="btn btn-sm btn-outline-light">
                 <i class="bi bi-upload me-1"></i>Загрузить отчёт
             </a>

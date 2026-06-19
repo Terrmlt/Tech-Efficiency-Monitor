@@ -1,0 +1,295 @@
+{% extends 'analysis/base.html' %}
+
+{% block title %}Аналитика — Анализ техники{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0 fw-bold"><i class="bi bi-bar-chart-line me-2"></i>Аналитика</h4>
+</div>
+
+<!-- Фильтры -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold mb-1">Дата от</label>
+                <input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold mb-1">Дата до</label>
+                <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold mb-1">Участок</label>
+                <select name="section" class="form-select form-select-sm">
+                    <option value="">Все участки</option>
+                    {% for s in sections %}
+                    <option value="{{ s.pk }}" {% if section_id == s.pk|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button type="submit" class="btn btn-sm btn-primary flex-grow-1">
+                    <i class="bi bi-funnel me-1"></i>Применить
+                </button>
+                <a href="{% url 'analytics' %}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-x"></i>
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Итоговые карточки -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body py-3">
+                <div class="stat-value text-primary">{{ total_count }}</div>
+                <div class="stat-label">Всего записей</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body py-3">
+                <div class="stat-value text-success">{{ total_hours }} ч</div>
+                <div class="stat-label">Часов работы</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body py-3">
+                <div class="stat-value text-info">{{ total_fuel }} л</div>
+                <div class="stat-label">Расход топлива</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body py-3">
+                <div class="stat-value {% if total_anomalies > 0 %}text-warning{% else %}text-success{% endif %}">{{ total_anomalies }}</div>
+                <div class="stat-label">Аномалий</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if group_stats %}
+<!-- По группам -->
+<h5 class="fw-bold mb-3">По группам техники</h5>
+<div class="row g-3 mb-4">
+    {% for s in group_stats %}
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="fw-bold mb-3">{{ s.group }}
+                    <span class="badge bg-light text-dark ms-1">{{ s.count }} ед.</span>
+                </div>
+                <div class="row g-2 small">
+                    <div class="col-6">
+                        <div class="text-muted">Часов работы</div>
+                        <div class="fw-semibold">{{ s.total_hours }} ч</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-muted">Расход топлива</div>
+                        <div class="fw-semibold">{{ s.total_fuel }} л</div>
+                    </div>
+                    {% if s.anomaly_count > 0 %}
+                    <div class="col-6">
+                        <div class="text-muted">Аномалий</div>
+                        <div class="fw-semibold text-warning">{{ s.anomaly_count }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+                <hr class="my-2">
+                <div class="small">
+                    {% if s.avg_fuel_eff is not None %}
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-muted">Расход к норме:</span>
+                        <span class="{% if s.avg_fuel_eff <= 100 %}efficiency-good{% elif s.avg_fuel_eff <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s.avg_fuel_eff }}%</span>
+                    </div>
+                    {% endif %}
+                    {% if s.avg_output is not None %}
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-muted">Выход техники:</span>
+                        <span class="{% if s.avg_output >= 80 %}output-good{% else %}output-bad{% endif %}">{{ s.avg_output }}%</span>
+                    </div>
+                    {% endif %}
+                    {% if s.avg_type_eff is not None %}
+                    <div class="d-flex justify-content-between">
+                        <span class="text-muted">Эффективность:</span>
+                        <span class="{% if s.avg_type_eff <= 100 %}efficiency-good{% elif s.avg_type_eff <= 130 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s.avg_type_eff }}%</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if daily_labels != "[]" %}
+<!-- Графики -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-lg-8">
+        <div class="card">
+            <div class="card-header fw-semibold bg-white border-bottom">
+                <i class="bi bi-fuel-pump me-2 text-info"></i>Расход топлива по дням
+            </div>
+            <div class="card-body">
+                <canvas id="fuelChart" style="height:220px"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-lg-4">
+        <div class="card">
+            <div class="card-header fw-semibold bg-white border-bottom">
+                <i class="bi bi-exclamation-triangle me-2 text-warning"></i>Аномалии по дням
+            </div>
+            <div class="card-body">
+                <canvas id="anomalyChart" style="height:220px"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bar chart by group -->
+{% if group_stats %}
+<div class="row g-3 mb-4">
+    <div class="col-12 col-lg-6">
+        <div class="card">
+            <div class="card-header fw-semibold bg-white border-bottom">
+                <i class="bi bi-bar-chart me-2 text-primary"></i>Выход техники по группам, %
+            </div>
+            <div class="card-body">
+                <canvas id="outputChart" style="height:200px"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-lg-6">
+        <div class="card">
+            <div class="card-header fw-semibold bg-white border-bottom">
+                <i class="bi bi-droplet me-2 text-danger"></i>Расход к норме по группам, %
+            </div>
+            <div class="card-body">
+                <canvas id="fuelEffChart" style="height:200px"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-bar-chart display-4 text-muted d-block mb-3"></i>
+        <h5 class="text-muted">Нет данных для отображения</h5>
+        <p class="text-muted">Загрузите отчёты и, при необходимости, измените период фильтрации.</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if daily_labels != "[]" %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+var labels = {{ daily_labels|safe }};
+var dailyFuel = {{ daily_fuel|safe }};
+var dailyAnomalies = {{ daily_anomalies|safe }};
+
+new Chart(document.getElementById('fuelChart'), {
+    type: 'bar',
+    data: {
+        labels: labels,
+        datasets: [{
+            label: 'Расход топлива, л',
+            data: dailyFuel,
+            backgroundColor: 'rgba(13,110,253,0.65)',
+            borderColor: 'rgba(13,110,253,1)',
+            borderWidth: 1,
+            borderRadius: 4,
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+    }
+});
+
+new Chart(document.getElementById('anomalyChart'), {
+    type: 'bar',
+    data: {
+        labels: labels,
+        datasets: [{
+            label: 'Аномалий',
+            data: dailyAnomalies,
+            backgroundColor: 'rgba(255,193,7,0.75)',
+            borderColor: 'rgba(255,193,7,1)',
+            borderWidth: 1,
+            borderRadius: 4,
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+    }
+});
+
+{% if group_stats %}
+var groupLabels = [{% for s in group_stats %}'{{ s.group }}'{% if not forloop.last %},{% endif %}{% endfor %}];
+var outputData = [{% for s in group_stats %}{{ s.avg_output|default:"null" }}{% if not forloop.last %},{% endif %}{% endfor %}];
+var fuelEffData = [{% for s in group_stats %}{{ s.avg_fuel_eff|default:"null" }}{% if not forloop.last %},{% endif %}{% endfor %}];
+
+var outputColors = outputData.map(function(v) {
+    return v === null ? 'rgba(200,200,200,0.6)' : (v >= 80 ? 'rgba(25,135,84,0.7)' : 'rgba(220,53,69,0.7)');
+});
+
+new Chart(document.getElementById('outputChart'), {
+    type: 'bar',
+    data: {
+        labels: groupLabels,
+        datasets: [{
+            label: 'Выход техники, %',
+            data: outputData,
+            backgroundColor: outputColors,
+            borderRadius: 4,
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, max: 120 } }
+    }
+});
+
+new Chart(document.getElementById('fuelEffChart'), {
+    type: 'bar',
+    data: {
+        labels: groupLabels,
+        datasets: [{
+            label: 'Расход к норме, %',
+            data: fuelEffData,
+            backgroundColor: fuelEffData.map(function(v) {
+                return v === null ? 'rgba(200,200,200,0.6)'
+                    : (v <= 100 ? 'rgba(25,135,84,0.7)'
+                    : (v <= 115 ? 'rgba(253,126,20,0.7)'
+                    : 'rgba(220,53,69,0.7)'));
+            }),
+            borderRadius: 4,
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+    }
+});
+{% endif %}
+</script>
+{% endif %}
+{% endblock %}

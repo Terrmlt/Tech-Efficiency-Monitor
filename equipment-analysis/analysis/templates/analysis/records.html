@@ -1,0 +1,214 @@
+{% extends 'analysis/base.html' %}
+
+{% block title %}Все записи — Анализ техники{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0 fw-bold"><i class="bi bi-table me-2"></i>Все записи</h4>
+    <a href="{% url 'export_records_excel' %}?date_from={{ date_from }}&date_to={{ date_to }}&section={{ section_id }}&group={{ group_filter }}&anomaly={{ anomaly_filter }}&shift={{ shift_filter }}"
+       class="btn btn-success">
+        <i class="bi bi-file-earmark-excel me-1"></i>Скачать Excel
+    </a>
+</div>
+
+<!-- Фильтры -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold mb-1">Дата от</label>
+                <input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold mb-1">Дата до</label>
+                <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold mb-1">Участок</label>
+                <select name="section" class="form-select form-select-sm">
+                    <option value="">Все участки</option>
+                    {% for s in sections %}
+                    <option value="{{ s.pk }}" {% if section_id == s.pk|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold mb-1">Группа</label>
+                <select name="group" class="form-select form-select-sm">
+                    <option value="">Все группы</option>
+                    {% for g in groups %}
+                    <option value="{{ g }}" {% if group_filter == g %}selected{% endif %}>{{ g }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold mb-1">Смена</label>
+                <select name="shift" class="form-select form-select-sm">
+                    <option value="">Все смены</option>
+                    <option value="1" {% if shift_filter == '1' %}selected{% endif %}>Смена 1</option>
+                    <option value="2" {% if shift_filter == '2' %}selected{% endif %}>Смена 2</option>
+                </select>
+            </div>
+            <div class="col-md-1">
+                <label class="form-label small fw-semibold mb-1">Аномалии</label>
+                <select name="anomaly" class="form-select form-select-sm">
+                    <option value="">Все</option>
+                    <option value="yes" {% if anomaly_filter == 'yes' %}selected{% endif %}>Да</option>
+                    <option value="no" {% if anomaly_filter == 'no' %}selected{% endif %}>Нет</option>
+                </select>
+            </div>
+            <div class="col-md-1 d-flex gap-1">
+                <button type="submit" class="btn btn-sm btn-primary">
+                    <i class="bi bi-funnel"></i>
+                </button>
+                <a href="{% url 'records' %}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-x"></i>
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="small text-muted">
+        Показано: <strong>{{ total_count }}</strong> записей
+        {% if anomaly_count > 0 %}
+        · <span class="text-warning fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i>{{ anomaly_count }} аномалий</span>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-3">Дата</th>
+                        <th>Смена</th>
+                        <th>Участок</th>
+                        <th>Техника</th>
+                        <th>Группа</th>
+                        <th>Время работы</th>
+                        <th>Расход, л</th>
+                        <th>Расход<br>к норме</th>
+                        <th>Выход<br>техники</th>
+                        <th>Эффект-ть</th>
+                        <th>Пробег, км</th>
+                        <th>Заправка, л</th>
+                        <th>Аномалии</th>
+                        <th>Комментарий</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rec in records %}
+                    <tr class="{% if rec.has_anomaly %}anomaly-row{% endif %}">
+                        <td class="ps-3 small text-muted">
+                            {% if rec.record_date %}{{ rec.record_date|date:"d.m.Y" }}{% else %}{{ rec.date }}{% endif %}
+                        </td>
+                        <td class="small text-muted">Смена {{ rec.report.shift }}</td>
+                        <td class="small">{% if rec.report.section %}{{ rec.report.section.name }}{% else %}—{% endif %}</td>
+                        <td><div class="fw-semibold small">{{ rec.name }}</div></td>
+                        <td>
+                            {% if rec.group == 'Бульдозеры' %}
+                            <span class="badge bg-warning text-dark group-badge">{{ rec.group }}</span>
+                            {% elif rec.group == 'Экскаваторы' %}
+                            <span class="badge bg-info text-dark group-badge">{{ rec.group }}</span>
+                            {% elif rec.group == 'Самосвалы' %}
+                            <span class="badge bg-secondary group-badge">{{ rec.group }}</span>
+                            {% elif rec.group == 'Погрузчики' %}
+                            <span class="badge bg-success group-badge">{{ rec.group }}</span>
+                            {% else %}
+                            <span class="badge bg-light text-dark group-badge">{{ rec.group }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="small">{{ rec.engine_time_str }}</td>
+                        <td class="small">
+                            {% if rec.fuel_actual is not None %}
+                                {% if rec.fuel_actual < 0 %}
+                                <span class="text-danger fw-bold">{{ rec.fuel_actual }}</span>
+                                {% else %}
+                                {{ rec.fuel_actual }}
+                                {% endif %}
+                            {% else %}—{% endif %}
+                        </td>
+                        <td>
+                            {% with pct=rec.fuel_efficiency_pct %}
+                            {% if pct is not None %}
+                                <span class="{% if pct <= 100 %}efficiency-good{% elif pct <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ pct }}%</span>
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                            {% endwith %}
+                        </td>
+                        <td>
+                            {% with pct=rec.equipment_output_pct %}
+                            {% if pct is not None %}
+                                <span class="{% if pct >= 80 %}output-good{% else %}output-bad{% endif %}">{{ pct }}%</span>
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                            {% endwith %}
+                        </td>
+                        <td>
+                            {% with pct=rec.type_efficiency_pct %}
+                            {% if pct is not None %}
+                                <span class="{% if pct <= 100 %}efficiency-good{% elif pct <= 130 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ pct }}%</span>
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                            {% endwith %}
+                        </td>
+                        <td class="small text-muted">{% if rec.mileage is not None %}{{ rec.mileage }}{% else %}—{% endif %}</td>
+                        <td class="small text-muted">{% if rec.refueling is not None %}{{ rec.refueling }}{% else %}—{% endif %}</td>
+                        <td>
+                            {% if rec.has_anomaly %}
+                                {% for anomaly in rec.anomaly_details %}
+                                <div class="anomaly-badge"><i class="bi bi-exclamation-triangle-fill me-1"></i>{{ anomaly }}</div>
+                                {% endfor %}
+                            {% else %}
+                            <span class="text-success small"><i class="bi bi-check-circle me-1"></i>Норма</span>
+                            {% endif %}
+                        </td>
+                        <td class="comment-cell">
+                            <input type="text" class="comment-input"
+                                   data-rec-id="{{ rec.pk }}"
+                                   value="{{ rec.comment }}"
+                                   placeholder="Комментарий…">
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="14" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox display-6 d-block mb-2"></i>
+                            Нет записей по выбранным фильтрам
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.comment-input').forEach(function(input) {
+    var timer;
+    input.addEventListener('input', function() {
+        clearTimeout(timer);
+        var recId = this.dataset.recId;
+        var comment = this.value;
+        var el = this;
+        timer = setTimeout(function() {
+            fetch('/records/' + recId + '/comment/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({comment: comment})
+            }).then(function(r) {
+                el.style.borderColor = r.ok ? '#198754' : '#dc3545';
+                setTimeout(function() { el.style.borderColor = ''; }, 1500);
+            });
+        }, 600);
+    });
+});
+</script>
+{% endblock %}

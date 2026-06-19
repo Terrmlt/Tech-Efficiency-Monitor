@@ -1,0 +1,55 @@
+{% extends 'analysis/base.html' %}
+
+{% block title %}Участки — Анализ техники{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0 fw-bold"><i class="bi bi-geo-alt me-2"></i>Участки</h4>
+    <a href="{% url 'section_create' %}" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>Добавить участок
+    </a>
+</div>
+
+{% if sections %}
+<div class="card">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th class="ps-4">Название участка</th>
+                    <th>Кол-во отчётов</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in sections %}
+                <tr>
+                    <td class="ps-4 fw-semibold">{{ s.name }}</td>
+                    <td class="text-muted">{{ s.report_count }}</td>
+                    <td class="text-end pe-3">
+                        <a href="{% url 'section_edit' s.pk %}" class="btn btn-sm btn-outline-secondary me-1">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        <a href="{% url 'section_delete' s.pk %}" class="btn btn-sm btn-outline-danger">
+                            <i class="bi bi-trash"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-geo-alt display-4 text-muted d-block mb-3"></i>
+        <h5 class="text-muted">Участки ещё не добавлены</h5>
+        <p class="text-muted mb-4">Создайте участки, чтобы привязывать к ним отчёты при загрузке.</p>
+        <a href="{% url 'section_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>Добавить первый участок
+        </a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

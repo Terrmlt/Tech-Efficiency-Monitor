@@ -36,6 +36,38 @@
 
             <div class="card mb-4">
                 <div class="card-header fw-semibold bg-white border-bottom">
+                    <i class="bi bi-calendar3 me-2 text-primary"></i>Период и смена
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">{{ form.year.label }}</label>
+                            {{ form.year }}
+                            {% if form.year.errors %}<div class="text-danger small mt-1">{{ form.year.errors.0 }}</div>{% endif %}
+                            <div class="form-text">{{ form.year.help_text }}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">{{ form.shift.label }}</label>
+                            {{ form.shift }}
+                            {% if form.shift.errors %}<div class="text-danger small mt-1">{{ form.shift.errors.0 }}</div>{% endif %}
+                            <div class="form-text">Одна смена — 10 часов</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">{{ form.section.label }}</label>
+                            {{ form.section }}
+                            {% if form.section.errors %}<div class="text-danger small mt-1">{{ form.section.errors.0 }}</div>{% endif %}
+                            <div class="form-text">
+                                <a href="{% url 'section_create' %}" target="_blank" class="text-primary">
+                                    <i class="bi bi-plus-circle me-1"></i>Добавить участок
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header fw-semibold bg-white border-bottom">
                     <i class="bi bi-sliders me-2 text-primary"></i>Нормативные показатели
                     <span class="text-muted fw-normal ms-2 small">— формат ЧЧ:ММ:СС</span>
                 </div>

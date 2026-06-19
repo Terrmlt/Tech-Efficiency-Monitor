@@ -1,0 +1,1 @@
+- [Django migration approach](django-migration-approach.md) — manage.py migrate hangs while dev server runs; apply DDL via standalone sqlite3 script instead.

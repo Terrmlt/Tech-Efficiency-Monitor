@@ -1,14 +1,14 @@
 import re
+import datetime
 from django import forms
-from .models import Report
+from .models import Report, Section
 
 
 def parse_hhmmss(value):
-    """Parse HH:MM:SS string to seconds. Returns int or raises ValidationError."""
     value = (value or '').strip()
     m = re.fullmatch(r'(\d{1,3}):([0-5]\d):([0-5]\d)', value)
     if not m:
-        raise forms.ValidationError('Введите время в формате ЧЧ:ММ:СС (например 08:00:00)')
+        raise forms.ValidationError('Введите время в формате ЧЧ:ММ:СС (например 10:00:00)')
     h, mn, s = int(m.group(1)), int(m.group(2)), int(m.group(3))
     return h * 3600 + mn * 60 + s
 
@@ -20,11 +20,47 @@ TIME_INPUT_ATTRS = {
 }
 
 
+class SectionForm(forms.ModelForm):
+    class Meta:
+        model = Section
+        fields = ['name']
+        widgets = {
+            'name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Название участка',
+            }),
+        }
+        labels = {'name': 'Название участка'}
+
+
 class ReportUploadForm(forms.ModelForm):
+    year = forms.IntegerField(
+        initial=datetime.date.today().year,
+        label='Год',
+        help_text='Год для дат в отчёте',
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'min': 2020,
+            'max': 2099,
+        }),
+    )
+    shift = forms.ChoiceField(
+        choices=Report.SHIFT_CHOICES,
+        initial=1,
+        label='Смена',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    section = forms.ModelChoiceField(
+        queryset=Section.objects.all(),
+        required=False,
+        empty_label='— Выберите участок —',
+        label='Участок',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
     daily_norm = forms.CharField(
-        initial='08:00:00',
-        label='Норма работы в сутки',
-        help_text='Плановое время работы двигателя за сутки',
+        initial='10:00:00',
+        label='Норма работы в смену',
+        help_text='Плановое время работы двигателя за смену (обычно 10:00:00)',
         widget=forms.TextInput(attrs=TIME_INPUT_ATTRS),
     )
     bulldozer_norm = forms.CharField(
@@ -52,7 +88,7 @@ class ReportUploadForm(forms.ModelForm):
         widgets = {
             'name': forms.TextInput(attrs={
                 'class': 'form-control',
-                'placeholder': 'Например: Отчёт за 15.06.2026',
+                'placeholder': 'Например: Отчёт 15.06.2026 Смена 1',
             }),
             'file': forms.FileInput(attrs={
                 'class': 'form-control',
@@ -90,6 +126,9 @@ class ReportUploadForm(forms.ModelForm):
         report.bulldozer_norm_sec = self.cleaned_data['bulldozer_norm']
         report.excavator_norm_sec = self.cleaned_data['excavator_norm']
         report.dumptruck_norm_sec = self.cleaned_data['dumptruck_norm']
+        report.year = self.cleaned_data['year']
+        report.shift = self.cleaned_data['shift']
+        report.section = self.cleaned_data.get('section')
         if commit:
             report.save()
         return report

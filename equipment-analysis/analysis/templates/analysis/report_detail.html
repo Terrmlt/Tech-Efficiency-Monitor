@@ -9,9 +9,11 @@
     </a>
     <div class="flex-grow-1">
         <h4 class="mb-0 fw-bold">{{ report.name }}</h4>
-        {% if report.period %}
-        <div class="text-muted small"><i class="bi bi-calendar3 me-1"></i>{{ report.period }}</div>
-        {% endif %}
+        <div class="text-muted small d-flex flex-wrap gap-3 mt-1">
+            {% if report.period %}<span><i class="bi bi-calendar3 me-1"></i>{{ report.period }}</span>{% endif %}
+            <span><i class="bi bi-clock me-1"></i>Смена {{ report.shift }}</span>
+            {% if report.section %}<span><i class="bi bi-geo-alt me-1"></i>{{ report.section.name }}</span>{% endif %}
+        </div>
     </div>
     <a href="{% url 'export_excel' report.pk %}" class="btn btn-success">
         <i class="bi bi-file-earmark-excel me-1"></i>Скачать Excel
@@ -22,7 +24,7 @@
 <div class="card mb-4">
     <div class="card-body py-2">
         <div class="d-flex flex-wrap gap-3 align-items-center small text-muted">
-            <span><i class="bi bi-clock me-1"></i><strong>Норма/сутки:</strong> {{ report.daily_norm_str }}</span>
+            <span><i class="bi bi-clock me-1"></i><strong>Норма/смену:</strong> {{ report.daily_norm_str }}</span>
             <span><i class="bi bi-truck me-1"></i><strong>Хол.ход (бульдозеры):</strong> {{ report.bulldozer_norm_str }}</span>
             <span><i class="bi bi-layers me-1"></i><strong>Простой стрелы (экскаваторы):</strong> {{ report.excavator_norm_str }}</span>
             <span><i class="bi bi-truck-front me-1"></i><strong>Без движения (самосвалы):</strong> {{ report.dumptruck_norm_str }}</span>
@@ -71,7 +73,7 @@
                     {% if s.avg_output is not None %}
                     <div class="d-flex justify-content-between mb-1">
                         <span class="text-muted">Выход техники:</span>
-                        <span class="{% if s.avg_output >= 90 %}efficiency-good{% elif s.avg_output >= 70 %}efficiency-warn{% else %}efficiency-bad{% endif %}">
+                        <span class="{% if s.avg_output >= 80 %}output-good{% else %}output-bad{% endif %}">
                             {{ s.avg_output }}%
                         </span>
                     </div>
@@ -95,9 +97,9 @@
 <div class="card mb-3">
     <div class="card-body py-2">
         <div class="small text-muted d-flex flex-wrap gap-3">
-            <span><strong>Расход к норме:</strong> факт. расход ÷ (норма л/ч × время работы ч) × 100%. &lt;100% — экономия, >100% — перерасход</span>
-            <span><strong>Выход техники:</strong> время работы ÷ норму/сутки × 100%</span>
-            <span><strong>Эффективность:</strong> фактическое время ÷ нормативное время × 100%. &lt;100% — лучше нормы, >100% — хуже нормы</span>
+            <span><strong>Расход к норме:</strong> факт. расход ÷ (норма л/ч × норма смены ч) × 100%</span>
+            <span><strong>Выход техники:</strong> время работы ÷ норму смены × 100%. <span class="output-good">≥80% — норма</span>, <span class="output-bad">&lt;80% — ниже нормы</span></span>
+            <span><strong>Эффективность:</strong> факт. время ÷ нормативное время × 100%</span>
         </div>
     </div>
 </div>
@@ -151,7 +153,10 @@
                         <th>Расход<br>к норме</th>
                         <th>Выход<br>техники</th>
                         <th>Эффективность<br><small class="fw-normal text-muted">факт / норма</small></th>
+                        <th>Пробег<br><small class="fw-normal text-muted">км</small></th>
+                        <th>Заправка<br><small class="fw-normal text-muted">л</small></th>
                         <th>Аномалии</th>
+                        <th>Комментарий</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -211,7 +216,7 @@
                         <td>
                             {% with pct=rec.equipment_output_pct %}
                             {% if pct is not None %}
-                                <span class="{% if pct >= 90 %}efficiency-good{% elif pct >= 70 %}efficiency-warn{% else %}efficiency-bad{% endif %}">
+                                <span class="{% if pct >= 80 %}output-good{% else %}output-bad{% endif %}">
                                     {{ pct }}%
                                 </span>
                             {% else %}
@@ -237,6 +242,12 @@
                             {% endif %}
                             {% endwith %}
                         </td>
+                        <td class="text-muted small">
+                            {% if rec.mileage is not None %}{{ rec.mileage }}{% else %}—{% endif %}
+                        </td>
+                        <td class="text-muted small">
+                            {% if rec.refueling is not None %}{{ rec.refueling }}{% else %}—{% endif %}
+                        </td>
                         <td>
                             {% if rec.has_anomaly %}
                                 {% for anomaly in rec.anomaly_details %}
@@ -248,10 +259,16 @@
                             <span class="text-success small"><i class="bi bi-check-circle me-1"></i>Норма</span>
                             {% endif %}
                         </td>
+                        <td class="comment-cell">
+                            <input type="text" class="comment-input"
+                                   data-rec-id="{{ rec.pk }}"
+                                   value="{{ rec.comment }}"
+                                   placeholder="Комментарий…">
+                        </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="10" class="text-center text-muted py-4">Нет записей по выбранным фильтрам</td>
+                        <td colspan="13" class="text-center text-muted py-4">Нет записей по выбранным фильтрам</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -259,4 +276,31 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.comment-input').forEach(function(input) {
+    var timer;
+    input.addEventListener('input', function() {
+        clearTimeout(timer);
+        var recId = this.dataset.recId;
+        var comment = this.value;
+        var el = this;
+        timer = setTimeout(function() {
+            fetch('/records/' + recId + '/comment/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({comment: comment})
+            }).then(function(r) {
+                el.style.borderColor = r.ok ? '#198754' : '#dc3545';
+                setTimeout(function() { el.style.borderColor = ''; }, 1500);
+            });
+        }, 600);
+    });
+});
+</script>
 {% endblock %}
