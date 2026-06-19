@@ -44,12 +44,6 @@ class ReportUploadForm(forms.ModelForm):
             'max': 2099,
         }),
     )
-    shift = forms.ChoiceField(
-        choices=Report.SHIFT_CHOICES,
-        initial=1,
-        label='Смена',
-        widget=forms.Select(attrs={'class': 'form-select'}),
-    )
     section = forms.ModelChoiceField(
         queryset=Section.objects.all(),
         required=False,
@@ -127,7 +121,6 @@ class ReportUploadForm(forms.ModelForm):
         report.excavator_norm_sec = self.cleaned_data['excavator_norm']
         report.dumptruck_norm_sec = self.cleaned_data['dumptruck_norm']
         report.year = self.cleaned_data['year']
-        report.shift = self.cleaned_data['shift']
         report.section = self.cleaned_data.get('section')
         if commit:
             report.save()

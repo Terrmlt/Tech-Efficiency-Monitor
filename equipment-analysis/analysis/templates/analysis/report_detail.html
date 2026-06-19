@@ -11,7 +11,6 @@
         <h4 class="mb-0 fw-bold">{{ report.name }}</h4>
         <div class="text-muted small d-flex flex-wrap gap-3 mt-1">
             {% if report.period %}<span><i class="bi bi-calendar3 me-1"></i>{{ report.period }}</span>{% endif %}
-            <span><i class="bi bi-clock me-1"></i>Смена {{ report.shift }}</span>
             {% if report.section %}<span><i class="bi bi-geo-alt me-1"></i>{{ report.section.name }}</span>{% endif %}
         </div>
     </div>
@@ -100,6 +99,7 @@
             <span><strong>Расход к норме:</strong> факт. расход ÷ (норма л/ч × норма смены ч) × 100%</span>
             <span><strong>Выход техники:</strong> время работы ÷ норму смены × 100%. <span class="output-good">≥80% — норма</span>, <span class="output-bad">&lt;80% — ниже нормы</span></span>
             <span><strong>Эффективность:</strong> факт. время ÷ нормативное время × 100%</span>
+            <span><i class="bi bi-table me-1"></i>Строки <strong>«День итого»</strong> — сумма смен 1+2 за день.</span>
         </div>
     </div>
 </div>
@@ -114,13 +114,18 @@
                 <option value="{{ g }}" {% if group_filter == g %}selected{% endif %}>{{ g }}</option>
                 {% endfor %}
             </select>
+            <select name="shift" class="form-select form-select-sm" style="width:auto">
+                <option value="">Все смены</option>
+                <option value="1" {% if shift_filter == '1' %}selected{% endif %}>Смена 1</option>
+                <option value="2" {% if shift_filter == '2' %}selected{% endif %}>Смена 2</option>
+            </select>
             <select name="anomaly" class="form-select form-select-sm" style="width:auto">
                 <option value="">Все записи</option>
                 <option value="yes" {% if anomaly_filter == 'yes' %}selected{% endif %}>Только аномалии</option>
                 <option value="no" {% if anomaly_filter == 'no' %}selected{% endif %}>Без аномалий</option>
             </select>
             <button type="submit" class="btn btn-sm btn-primary">Применить</button>
-            {% if group_filter or anomaly_filter %}
+            {% if group_filter or anomaly_filter or shift_filter %}
             <a href="{% url 'report_detail' report.pk %}" class="btn btn-sm btn-outline-secondary">Сбросить</a>
             {% endif %}
         </form>
@@ -130,7 +135,7 @@
 <!-- Счётчики -->
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div class="small text-muted">
-        Показано: <strong>{{ records|length }}</strong> из {{ total_count }}
+        Показано: <strong>{{ shown_count }}</strong> из {{ total_count }}
         {% if anomaly_count > 0 %}
         · <span class="text-warning fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i>{{ anomaly_count }} аномалий</span>
         {% endif %}
@@ -148,6 +153,7 @@
                         <th>Техника</th>
                         <th>Группа</th>
                         <th>Дата</th>
+                        <th>Смена</th>
                         <th>Время работы<br><small class="fw-normal text-muted">чч:мм:сс</small></th>
                         <th>Факт. расход, л<br><small class="fw-normal text-muted">норма л/ч</small></th>
                         <th>Расход<br>к норме</th>
@@ -160,7 +166,10 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for rec in records %}
+                    {% for row in daily_view %}
+
+                    {% if row.type == 'record' %}
+                    {% with rec=row.obj %}
                     <tr class="{% if rec.has_anomaly %}anomaly-row{% endif %}">
                         <td class="ps-3 text-muted">{{ rec.row_number }}</td>
                         <td><div class="fw-semibold">{{ rec.name }}</div></td>
@@ -178,6 +187,9 @@
                             {% endif %}
                         </td>
                         <td class="text-muted small">{{ rec.date }}</td>
+                        <td class="text-muted small">
+                            {% if rec.shift %}<span class="badge bg-light text-dark border">С{{ rec.shift }}</span>{% else %}—{% endif %}
+                        </td>
                         <td>
                             <div class="fw-semibold">{{ rec.engine_time_str }}</div>
                             {% if rec.is_excavator and rec.downtime_sec is not None %}
@@ -205,70 +217,111 @@
                         <td>
                             {% with pct=rec.fuel_efficiency_pct %}
                             {% if pct is not None %}
-                                <span class="{% if pct <= 100 %}efficiency-good{% elif pct <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">
-                                    {{ pct }}%
-                                </span>
-                            {% else %}
-                            <span class="text-muted">—</span>
-                            {% endif %}
+                                <span class="{% if pct <= 100 %}efficiency-good{% elif pct <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ pct }}%</span>
+                            {% else %}<span class="text-muted">—</span>{% endif %}
                             {% endwith %}
                         </td>
                         <td>
                             {% with pct=rec.equipment_output_pct %}
                             {% if pct is not None %}
-                                <span class="{% if pct >= 80 %}output-good{% else %}output-bad{% endif %}">
-                                    {{ pct }}%
-                                </span>
-                            {% else %}
-                            <span class="text-muted">—</span>
-                            {% endif %}
+                                <span class="{% if pct >= 80 %}output-good{% else %}output-bad{% endif %}">{{ pct }}%</span>
+                            {% else %}<span class="text-muted">—</span>{% endif %}
                             {% endwith %}
                         </td>
                         <td>
                             {% with pct=rec.type_efficiency_pct %}
                             {% if pct is not None %}
-                                <span class="{% if pct <= 100 %}efficiency-good{% elif pct <= 130 %}efficiency-warn{% else %}efficiency-bad{% endif %}">
-                                    {{ pct }}%
-                                </span>
-                                {% if rec.is_bulldozer_or_loader %}
-                                <div class="text-muted small">хол.ход</div>
-                                {% elif rec.is_excavator %}
-                                <div class="text-muted small">прост.стрелы</div>
-                                {% elif rec.is_dumptruck %}
-                                <div class="text-muted small">без движения</div>
-                                {% endif %}
-                            {% else %}
-                            <span class="text-muted">—</span>
-                            {% endif %}
+                                <span class="{% if pct <= 100 %}efficiency-good{% elif pct <= 130 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ pct }}%</span>
+                                {% if rec.is_bulldozer_or_loader %}<div class="text-muted small">хол.ход</div>
+                                {% elif rec.is_excavator %}<div class="text-muted small">прост.стрелы</div>
+                                {% elif rec.is_dumptruck %}<div class="text-muted small">без движения</div>{% endif %}
+                            {% else %}<span class="text-muted">—</span>{% endif %}
                             {% endwith %}
                         </td>
-                        <td class="text-muted small">
-                            {% if rec.mileage is not None %}{{ rec.mileage }}{% else %}—{% endif %}
-                        </td>
-                        <td class="text-muted small">
-                            {% if rec.refueling is not None %}{{ rec.refueling }}{% else %}—{% endif %}
-                        </td>
+                        <td class="text-muted small">{% if rec.mileage is not None %}{{ rec.mileage }}{% else %}—{% endif %}</td>
+                        <td class="text-muted small">{% if rec.refueling is not None %}{{ rec.refueling }}{% else %}—{% endif %}</td>
                         <td>
                             {% if rec.has_anomaly %}
                                 {% for anomaly in rec.anomaly_details %}
-                                <div class="anomaly-badge">
-                                    <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ anomaly }}
-                                </div>
+                                <div class="anomaly-badge"><i class="bi bi-exclamation-triangle-fill me-1"></i>{{ anomaly }}</div>
                                 {% endfor %}
                             {% else %}
                             <span class="text-success small"><i class="bi bi-check-circle me-1"></i>Норма</span>
                             {% endif %}
                         </td>
                         <td class="comment-cell">
-                            <input type="text" class="comment-input"
-                                   data-rec-id="{{ rec.pk }}"
-                                   value="{{ rec.comment }}"
-                                   placeholder="Комментарий…">
+                            <input type="text" class="comment-input" data-rec-id="{{ rec.pk }}"
+                                   value="{{ rec.comment }}" placeholder="Комментарий…">
                         </td>
                     </tr>
+                    {% endwith %}
+
+                    {% else %}
+                    {# ── Daily total row ── #}
+                    <tr class="daily-total-row{% if row.has_anomaly %} anomaly-row{% endif %}">
+                        <td class="ps-3 text-muted">—</td>
+                        <td><div class="fw-bold text-primary small">{{ row.name }}</div></td>
+                        <td>
+                            {% if row.group == 'Бульдозеры' %}
+                            <span class="badge bg-warning text-dark group-badge">{{ row.group }}</span>
+                            {% elif row.group == 'Экскаваторы' %}
+                            <span class="badge bg-info text-dark group-badge">{{ row.group }}</span>
+                            {% elif row.group == 'Самосвалы' %}
+                            <span class="badge bg-secondary group-badge">{{ row.group }}</span>
+                            {% elif row.group == 'Погрузчики' %}
+                            <span class="badge bg-success group-badge">{{ row.group }}</span>
+                            {% else %}
+                            <span class="badge bg-light text-dark group-badge">{{ row.group }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted small">{{ row.date }}</td>
+                        <td><span class="badge bg-primary">День</span></td>
+                        <td>
+                            <div class="fw-bold">{{ row.engine_time_str }}</div>
+                            {% if row.is_excavator %}<div class="text-muted small">Прост.стрелы: {{ row.downtime_str }}</div>{% endif %}
+                            {% if row.is_bulldozer_or_loader %}<div class="text-muted small">Хол.ход: {{ row.engine_idle_str }}</div>{% endif %}
+                            {% if row.is_dumptruck %}<div class="text-muted small">Без движения: {{ row.engine_no_move_str }}</div>{% endif %}
+                        </td>
+                        <td>
+                            {% if row.fuel_actual is not None %}
+                            <span class="fw-bold">{{ row.fuel_actual }}</span>
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                            <div class="text-muted small">норма {{ row.fuel_norm }} л/ч</div>
+                        </td>
+                        <td>
+                            {% if row.fuel_efficiency_pct is not None %}
+                            <span class="fw-bold {% if row.fuel_efficiency_pct <= 100 %}efficiency-good{% elif row.fuel_efficiency_pct <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ row.fuel_efficiency_pct }}%</span>
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td>
+                            {% if row.equipment_output_pct is not None %}
+                            <span class="fw-bold {% if row.equipment_output_pct >= 80 %}output-good{% else %}output-bad{% endif %}">{{ row.equipment_output_pct }}%</span>
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td>
+                            {% if row.type_efficiency_pct is not None %}
+                            <span class="fw-bold {% if row.type_efficiency_pct <= 100 %}efficiency-good{% elif row.type_efficiency_pct <= 130 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ row.type_efficiency_pct }}%</span>
+                            {% if row.is_bulldozer_or_loader %}<div class="text-muted small">хол.ход</div>
+                            {% elif row.is_excavator %}<div class="text-muted small">прост.стрелы</div>
+                            {% elif row.is_dumptruck %}<div class="text-muted small">без движения</div>{% endif %}
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-muted small fw-bold">{% if row.mileage is not None %}{{ row.mileage }}{% else %}—{% endif %}</td>
+                        <td class="text-muted small fw-bold">{% if row.refueling is not None %}{{ row.refueling }}{% else %}—{% endif %}</td>
+                        <td>
+                            {% if row.has_anomaly %}
+                            <span class="text-warning small"><i class="bi bi-exclamation-triangle-fill me-1"></i>Есть аномалии</span>
+                            {% else %}
+                            <span class="text-success small"><i class="bi bi-check-circle me-1"></i>Норма</span>
+                            {% endif %}
+                        </td>
+                        <td></td>
+                    </tr>
+                    {% endif %}
+
                     {% empty %}
                     <tr>
-                        <td colspan="13" class="text-center text-muted py-4">Нет записей по выбранным фильтрам</td>
+                        <td colspan="14" class="text-center text-muted py-4">Нет записей по выбранным фильтрам</td>
                     </tr>
                     {% endfor %}
                 </tbody>

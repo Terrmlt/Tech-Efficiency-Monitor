@@ -97,6 +97,8 @@ class VehicleRecord(models.Model):
     fuel_actual = models.FloatField(null=True, blank=True, verbose_name='Фактический расход (л)')
     downtime_sec = models.FloatField(null=True, blank=True, verbose_name='Время простоя стрелы (сек)')
 
+    shift = models.SmallIntegerField(default=0, verbose_name='Смена')
+
     mileage = models.FloatField(null=True, blank=True, verbose_name='Пробег (км)')
     refueling = models.FloatField(null=True, blank=True, verbose_name='Объём заправок (л)')
     comment = models.TextField(blank=True, default='', verbose_name='Комментарий')

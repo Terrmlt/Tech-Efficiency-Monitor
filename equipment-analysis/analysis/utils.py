@@ -190,6 +190,7 @@ def _find_column_indices(header_row):
         'name': 1,
         'group': 2,
         'date': 3,
+        'shift': None,
         'engine_time': 4,
         'engine_no_move': 6,
         'engine_idle': 8,
@@ -206,6 +207,7 @@ def _find_column_indices(header_row):
     header_lower = [str(c).lower().strip() if c else '' for c in header_row]
 
     keywords = {
+        'shift': ['№ смены', 'номер смены', '# смены', 'смена', 'shift'],
         'mileage': ['пробег', 'km', 'км'],
         'refueling': ['заправк', 'топливо заправ', 'объём заправ', 'объем заправ'],
         'downtime': ['простой', 'простоя', 'простоя стрелы', 'время простоя'],
@@ -277,11 +279,22 @@ def parse_excel_file(file_path):
         else:
             date_str = str(date_val) if date_val else ''
 
+        # Parse shift number from column if present
+        shift_val = 0
+        if cols.get('shift') is not None:
+            raw_shift = get(cols['shift'])
+            if raw_shift is not None:
+                try:
+                    shift_val = int(float(str(raw_shift).strip()))
+                except (ValueError, TypeError):
+                    shift_val = 0
+
         records.append({
             'row_number': row_num,
             'name': str(get(cols['name'])) if get(cols['name']) else '',
             'group': str(get(cols['group'])) if get(cols['group']) else '',
             'date': date_str,
+            'shift': shift_val,
             'engine_time_sec': engine_time_sec,
             'engine_no_move_sec': engine_no_move_sec,
             'engine_idle_sec': engine_idle_sec,

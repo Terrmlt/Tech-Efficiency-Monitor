@@ -52,6 +52,7 @@ def upload(request):
                             group=rec_data['group'],
                             date=rec_data['date'],
                             record_date=record_date,
+                            shift=rec_data.get('shift', 0),
                             engine_time_sec=rec_data['engine_time_sec'],
                             engine_no_move_sec=rec_data['engine_no_move_sec'],
                             engine_idle_sec=rec_data['engine_idle_sec'],
@@ -80,35 +81,131 @@ def upload(request):
     return render(request, 'analysis/upload.html', {'form': form})
 
 
+# ─── Daily-view helper ────────────────────────────────────────────────────────
+
+def _build_daily_view(records, report):
+    """
+    Groups records by (name, date).  Returns a flat list of row-dicts:
+      {'type': 'record',      'obj': VehicleRecord}
+      {'type': 'daily_total', ...computed display fields...}
+    Total rows are inserted after each group that has >1 shift entry.
+    """
+    from .models import secs_to_hhmmss
+
+    order = []
+    groups = {}
+    for rec in records:
+        key = (rec.name, rec.date)
+        if key not in groups:
+            order.append(key)
+            groups[key] = []
+        groups[key].append(rec)
+
+    rows = []
+    for key in order:
+        name, date = key
+        recs = sorted(groups[key], key=lambda r: r.shift if r.shift else 99)
+
+        for rec in recs:
+            rows.append({'type': 'record', 'obj': rec})
+
+        if len(recs) > 1:
+            n = len(recs)
+            total_engine   = sum(r.engine_time_sec for r in recs)
+            total_no_move  = sum(r.engine_no_move_sec for r in recs)
+            total_idle     = sum(r.engine_idle_sec for r in recs)
+            has_fuel       = any(r.fuel_actual is not None for r in recs)
+            total_fuel     = sum(r.fuel_actual for r in recs if r.fuel_actual is not None) if has_fuel else None
+            has_mileage    = any(r.mileage is not None for r in recs)
+            total_mileage  = sum(r.mileage for r in recs if r.mileage is not None) if has_mileage else None
+            has_ref        = any(r.refueling is not None for r in recs)
+            total_ref      = sum(r.refueling for r in recs if r.refueling is not None) if has_ref else None
+            has_dt         = any(r.downtime_sec is not None for r in recs)
+            total_downtime = sum(r.downtime_sec for r in recs if r.downtime_sec is not None) if has_dt else None
+
+            fuel_norm = recs[0].fuel_norm
+            group     = recs[0].group
+
+            daily_norm_n  = report.daily_norm_sec * n
+            daily_hours_n = daily_norm_n / 3600 if daily_norm_n > 0 else 0
+
+            fuel_eff = None
+            if fuel_norm > 0 and daily_hours_n > 0 and total_fuel is not None and total_fuel >= 0:
+                fuel_eff = round(total_fuel / (fuel_norm * daily_hours_n) * 100, 1)
+
+            output = round(total_engine / daily_norm_n * 100, 1) if daily_norm_n > 0 else None
+
+            type_eff = None
+            if group in ('Бульдозеры', 'Погрузчики') and report.bulldozer_norm_sec > 0:
+                type_eff = round(total_idle / (report.bulldozer_norm_sec * n) * 100, 1)
+            elif group == 'Экскаваторы' and total_downtime is not None and report.excavator_norm_sec > 0:
+                type_eff = round(total_downtime / (report.excavator_norm_sec * n) * 100, 1)
+            elif group == 'Самосвалы' and report.dumptruck_norm_sec > 0:
+                type_eff = round(total_no_move / (report.dumptruck_norm_sec * n) * 100, 1)
+
+            rows.append({
+                'type':                 'daily_total',
+                'name':                 name,
+                'date':                 date,
+                'group':                group,
+                'has_anomaly':          any(r.has_anomaly for r in recs),
+                'engine_time_str':      secs_to_hhmmss(total_engine),
+                'engine_idle_str':      secs_to_hhmmss(total_idle),
+                'engine_no_move_str':   secs_to_hhmmss(total_no_move),
+                'downtime_str':         secs_to_hhmmss(total_downtime) if total_downtime is not None else '—',
+                'fuel_actual':          total_fuel,
+                'fuel_norm':            fuel_norm,
+                'mileage':              total_mileage,
+                'refueling':            total_ref,
+                'fuel_efficiency_pct':  fuel_eff,
+                'equipment_output_pct': output,
+                'type_efficiency_pct':  type_eff,
+                'is_bulldozer_or_loader': group in ('Бульдозеры', 'Погрузчики'),
+                'is_excavator':         group == 'Экскаваторы',
+                'is_dumptruck':         group == 'Самосвалы',
+            })
+
+    return rows
+
+
 # ─── Report detail ────────────────────────────────────────────────────────────
 
 def report_detail(request, pk):
     report = get_object_or_404(Report, pk=pk)
-    records = report.vehiclerecord_set.all()
-
-    group_filter = request.GET.get('group', '')
-    anomaly_filter = request.GET.get('anomaly', '')
-
-    if group_filter:
-        records = records.filter(group=group_filter)
-    if anomaly_filter == 'yes':
-        records = records.filter(has_anomaly=True)
-    elif anomaly_filter == 'no':
-        records = records.filter(has_anomaly=False)
-
     all_records = report.vehiclerecord_set.all()
-    summary = build_summary(all_records, report)
-    groups = all_records.values_list('group', flat=True).distinct().order_by('group')
+
+    group_filter  = request.GET.get('group', '')
+    anomaly_filter = request.GET.get('anomaly', '')
+    shift_filter  = request.GET.get('shift', '')
+
+    filtered = all_records
+    if group_filter:
+        filtered = filtered.filter(group=group_filter)
+    if anomaly_filter == 'yes':
+        filtered = filtered.filter(has_anomaly=True)
+    elif anomaly_filter == 'no':
+        filtered = filtered.filter(has_anomaly=False)
+    if shift_filter:
+        try:
+            filtered = filtered.filter(shift=int(shift_filter))
+        except ValueError:
+            pass
+
+    summary    = build_summary(all_records, report)
+    groups     = all_records.values_list('group', flat=True).distinct().order_by('group')
+    daily_view = _build_daily_view(filtered.order_by('row_number', 'shift'), report)
 
     context = {
-        'report': report,
-        'records': records,
-        'summary': summary,
-        'groups': groups,
-        'group_filter': group_filter,
+        'report':        report,
+        'daily_view':    daily_view,
+        'summary':       summary,
+        'groups':        groups,
+        'group_filter':  group_filter,
         'anomaly_filter': anomaly_filter,
-        'total_count': all_records.count(),
+        'shift_filter':  shift_filter,
+        'total_count':   all_records.count(),
         'anomaly_count': all_records.filter(has_anomaly=True).count(),
+        'shown_count':   filtered.count(),
     }
     return render(request, 'analysis/report_detail.html', context)
 
@@ -169,13 +266,16 @@ def records(request):
     elif anomaly_filter == 'no':
         qs = qs.filter(has_anomaly=False)
     if shift_filter:
-        qs = qs.filter(report__shift=shift_filter)
+        try:
+            qs = qs.filter(shift=int(shift_filter))
+        except ValueError:
+            pass
 
     sections = Section.objects.all()
     groups = VehicleRecord.objects.values_list('group', flat=True).distinct().order_by('group')
 
     context = {
-        'records': qs.order_by('record_date', 'report__shift', 'group', 'name'),
+        'records': qs.order_by('record_date', 'shift', 'group', 'name'),
         'sections': sections,
         'groups': groups,
         'date_from': date_from,
@@ -376,9 +476,12 @@ def export_records_excel(request):
     elif anomaly_filter == 'no':
         qs = qs.filter(has_anomaly=False)
     if shift_filter:
-        qs = qs.filter(report__shift=shift_filter)
+        try:
+            qs = qs.filter(shift=int(shift_filter))
+        except ValueError:
+            pass
 
-    all_records = list(qs.order_by('record_date', 'report__shift', 'group', 'name'))
+    all_records = list(qs.order_by('record_date', 'shift', 'group', 'name'))
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -416,7 +519,7 @@ def export_records_excel(request):
 
         row_data = [
             date_display,
-            f'Смена {rec.report.shift}',
+            f'Смена {rec.shift}' if rec.shift else '—',
             section_name,
             rec.report.name,
             rec.row_number,
