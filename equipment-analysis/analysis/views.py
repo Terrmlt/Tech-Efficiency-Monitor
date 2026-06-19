@@ -11,7 +11,7 @@ from django.db.models import Q, Avg, Count, Sum
 
 from .forms import ReportUploadForm, SectionForm
 from .models import Report, VehicleRecord, Section
-from .utils import parse_excel_file, detect_anomalies, calculate_metrics, build_summary, build_record_date
+from .utils import parse_excel_file, detect_anomalies, calculate_metrics, build_summary
 
 
 # ─── Index ────────────────────────────────────────────────────────────────────
@@ -38,12 +38,13 @@ def upload(request):
                         report.vehicles_list = metadata['vehicles_list']
                     if metadata.get('report_name') and not report.name:
                         report.name = metadata['report_name']
+                    if metadata.get('year'):
+                        report.year = metadata['year']
                     report.save()
 
                     for rec_data in records_data:
                         has_anomaly, anomaly_details = detect_anomalies(rec_data)
                         metrics = calculate_metrics(rec_data, report)
-                        record_date = build_record_date(rec_data['date'], report.year)
 
                         VehicleRecord.objects.create(
                             report=report,
@@ -51,7 +52,7 @@ def upload(request):
                             name=rec_data['name'],
                             group=rec_data['group'],
                             date=rec_data['date'],
-                            record_date=record_date,
+                            record_date=rec_data.get('record_date'),
                             shift=rec_data.get('shift', 0),
                             engine_time_sec=rec_data['engine_time_sec'],
                             engine_no_move_sec=rec_data['engine_no_move_sec'],

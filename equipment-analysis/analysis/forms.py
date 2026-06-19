@@ -34,16 +34,6 @@ class SectionForm(forms.ModelForm):
 
 
 class ReportUploadForm(forms.ModelForm):
-    year = forms.IntegerField(
-        initial=datetime.date.today().year,
-        label='Год',
-        help_text='Год для дат в отчёте',
-        widget=forms.NumberInput(attrs={
-            'class': 'form-control',
-            'min': 2020,
-            'max': 2099,
-        }),
-    )
     section = forms.ModelChoiceField(
         queryset=Section.objects.all(),
         required=False,
@@ -120,7 +110,6 @@ class ReportUploadForm(forms.ModelForm):
         report.bulldozer_norm_sec = self.cleaned_data['bulldozer_norm']
         report.excavator_norm_sec = self.cleaned_data['excavator_norm']
         report.dumptruck_norm_sec = self.cleaned_data['dumptruck_norm']
-        report.year = self.cleaned_data['year']
         report.section = self.cleaned_data.get('section')
         if commit:
             report.save()
