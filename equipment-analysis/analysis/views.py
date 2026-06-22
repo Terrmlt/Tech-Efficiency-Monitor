@@ -202,7 +202,7 @@ def report_detail(request, pk):
         (vn.vehicle_name, vn.shift): vn
         for vn in VehicleNorm.objects.filter(report=report)
     }
-    # Enrich dump truck rows with norm string, efficiency %, and overage time
+    # Enrich rows with norm string, efficiency %, and overage time for all groups
     for row in daily_view:
         if row['type'] == 'record':
             rec = row['obj']
@@ -211,10 +211,22 @@ def report_detail(request, pk):
                 if vn and vn.dumptruck_norm_sec:
                     row['dt_norm_str'] = vn.norm_str()
                     overage_sec = (rec.engine_no_move_sec or 0) - vn.dumptruck_norm_sec
-                    row['dt_over_str'] = secs_to_hhmmss(overage_sec) if overage_sec > 0 else ''
+                    row['over_str'] = secs_to_hhmmss(overage_sec) if overage_sec > 0 else ''
                 else:
                     row['dt_norm_str'] = ''
-                    row['dt_over_str'] = ''
+                    row['over_str'] = ''
+            elif rec.group in ('Бульдозеры', 'Погрузчики'):
+                if report.bulldozer_norm_sec > 0:
+                    overage_sec = (rec.engine_idle_sec or 0) - report.bulldozer_norm_sec
+                    row['over_str'] = secs_to_hhmmss(overage_sec) if overage_sec > 0 else ''
+                else:
+                    row['over_str'] = ''
+            elif rec.group == 'Экскаваторы':
+                if report.excavator_norm_sec > 0 and rec.downtime_sec is not None:
+                    overage_sec = rec.downtime_sec - report.excavator_norm_sec
+                    row['over_str'] = secs_to_hhmmss(overage_sec) if overage_sec > 0 else ''
+                else:
+                    row['over_str'] = ''
         elif row['type'] == 'daily_total' and row.get('is_dumptruck'):
             total_norm_sec = 0
             for shift_key in [1, 2]:
@@ -226,10 +238,24 @@ def report_detail(request, pk):
                 no_move_sec = row.get('engine_no_move_sec') or 0
                 row['type_efficiency_pct'] = round(no_move_sec / total_norm_sec * 100, 1)
                 overage_sec = no_move_sec - total_norm_sec
-                row['dt_over_str'] = secs_to_hhmmss(overage_sec) if overage_sec > 0 else ''
+                row['over_str'] = secs_to_hhmmss(overage_sec) if overage_sec > 0 else ''
             else:
                 row['dt_norm_str'] = ''
-                row['dt_over_str'] = ''
+                row['over_str'] = ''
+        elif row['type'] == 'daily_total' and row.get('is_bulldozer_or_loader'):
+            if report.bulldozer_norm_sec > 0:
+                idle_sec = row.get('engine_idle_sec') or 0
+                overage_sec = idle_sec - report.bulldozer_norm_sec
+                row['over_str'] = secs_to_hhmmss(overage_sec) if overage_sec > 0 else ''
+            else:
+                row['over_str'] = ''
+        elif row['type'] == 'daily_total' and row.get('is_excavator'):
+            if report.excavator_norm_sec > 0:
+                dt_sec = row.get('downtime_sec') or 0
+                overage_sec = dt_sec - report.excavator_norm_sec
+                row['over_str'] = secs_to_hhmmss(overage_sec) if overage_sec > 0 else ''
+            else:
+                row['over_str'] = ''
 
     context = {
         'report':         report,
@@ -417,8 +443,11 @@ def _build_daily_view_records(records):
                 'has_anomaly':          any(r.has_anomaly for r in recs),
                 'engine_time_str':      secs_to_hhmmss(total_engine),
                 'engine_idle_str':      secs_to_hhmmss(total_idle),
+                'engine_idle_sec':      total_idle,
                 'engine_no_move_str':   secs_to_hhmmss(total_no_move),
+                'engine_no_move_sec':   total_no_move,
                 'downtime_str':         secs_to_hhmmss(total_downtime) if total_downtime is not None else '—',
+                'downtime_sec':         total_downtime,
                 'fuel_actual':          total_fuel,
                 'fuel_norm':            fuel_norm,
                 'mileage':              total_mileage,
