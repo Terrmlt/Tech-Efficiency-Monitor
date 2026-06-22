@@ -774,14 +774,14 @@ def _build_excel_workbook(report, all_records, summary):
     from collections import defaultdict
 
     DARK_BLUE = '1F3864'
-    MID_BLUE = '2E75B6'
+    MID_BLUE  = '2E75B6'
     YELLOW_BG = 'FFF2CC'
     ORANGE_BG = 'FCE4D6'
-    GREEN_BG = 'E2EFDA'
-    RED_BG = 'FFE0E0'
-    GREY_BG = 'F2F2F2'
-    GROUP_BG = 'D6E4F0'
-    TOTAL_BG = 'BDD7EE'
+    GREEN_BG  = 'E2EFDA'
+    RED_BG    = 'FFE0E0'
+    GREY_BG   = 'F2F2F2'
+    GROUP_BG  = 'D6E4F0'
+    TOTAL_BG  = 'BDD7EE'
 
     def make_font(bold=False, color='000000', size=10, name='Calibri'):
         return Font(bold=bold, color=color, size=size, name=name)
@@ -796,18 +796,41 @@ def _build_excel_workbook(report, all_records, summary):
         s = Side(style='thin', color='BFBFBF')
         return Border(left=s, right=s, top=s, bottom=s)
 
-    def pct_fill(val, good_max, warn_max, invert=False):
+    def pct_fill(val, good_max, warn_max):
         if val is None:
             return None
-        ok = val <= good_max if not invert else val >= good_max
-        mid = val <= warn_max if not invert else val >= warn_max
-        if ok:
+        if val <= good_max:
             return make_fill(GREEN_BG)
-        if mid:
+        if val <= warn_max:
             return make_fill(YELLOW_BG)
         return make_fill(ORANGE_BG)
 
-    NCOLS = 15
+    # ── Columns (18 total) ─────────────────────────────────────────────
+    # 1  №
+    # 2  Техника
+    # 3  Группа
+    # 4  Дата
+    # 5  Смена
+    # 6  Время работы (чч:мм:сс)
+    # 7  Факт. расход (л)
+    # 8  Норма расхода (л/ч)
+    # 9  Расход к норме (%)
+    # 10 Выход техники (%)
+    # 11 Эффективность (%)
+    # 12 Тип эффективности
+    # 13 Норма б/д (чч:мм:сс)    ← dump trucks
+    # 14 Превышение нормы б/д     ← dump trucks >100 %
+    # 15 Пробег (км)
+    # 16 Заправка (л)
+    # 17 Аномалии
+    # 18 Комментарий
+    NCOLS = 18
+
+    # Load per-shift dump truck norms for this report
+    dt_norms = {
+        (vn.vehicle_name, vn.shift): vn.dumptruck_norm_sec
+        for vn in VehicleNorm.objects.filter(report=report)
+    }
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -826,16 +849,15 @@ def _build_excel_workbook(report, all_records, summary):
     ws.row_dimensions[1].height = 28
 
     section_name = report.section.name if report.section else '—'
-    period_text = f'Период: {report.period} | Смена: {report.get_shift_display_short()} | Участок: {section_name}'
+    period_text = f'Период: {report.period} | Участок: {section_name}'
     write_merged(2, period_text, 'E8F0FB', '595959', bold=False, size=10)
 
-    ws.append([
+    norm_row = [
         'Норма/смену:', report.daily_norm_str(),
-        'Хол.ход бульдозеры:', report.bulldozer_norm_str(),
-        'Простой стрелы экскаваторы:', report.excavator_norm_str(),
-        'Без движения самосвалы:', report.dumptruck_norm_str(),
-        None, None, None, None, None, None, None,
-    ])
+        'Хол.ход (бульдозеры):', report.bulldozer_norm_str(),
+        'Простой стрелы (экскаваторы):', report.excavator_norm_str(),
+    ] + [None] * (NCOLS - 6)
+    ws.append(norm_row)
     for col in range(1, NCOLS + 1):
         c = ws.cell(row=3, column=col)
         c.font = Font(bold=(col % 2 == 1), size=9, name='Calibri', color='444444')
@@ -845,14 +867,20 @@ def _build_excel_workbook(report, all_records, summary):
     ws.append([])
 
     COL_HEADERS = [
-        '№', 'Техника', 'Группа', 'Дата',
+        '№',
+        'Техника',
+        'Группа',
+        'Дата',
+        'Смена',
         'Время работы\n(чч:мм:сс)',
-        'Расход\nфакт (л)',
+        'Факт. расход\n(л)',
         'Норма расхода\n(л/ч)',
         'Расход\nк норме (%)',
         'Выход\nтехники (%)',
         'Эффективность\n(%)',
         'Тип\nэффективности',
+        'Норма\nб/д (чч:мм:сс)',
+        'Превышение\nнормы б/д',
         'Пробег\n(км)',
         'Заправка\n(л)',
         'Аномалии',
@@ -866,7 +894,7 @@ def _build_excel_workbook(report, all_records, summary):
         c.fill = make_fill(MID_BLUE)
         c.alignment = make_align('center', wrap=True)
         c.border = thin_border()
-    ws.row_dimensions[HDR_ROW].height = 36
+    ws.row_dimensions[HDR_ROW].height = 40
     ws.freeze_panes = f'A{HDR_ROW + 1}'
 
     records_by_group = defaultdict(list)
@@ -887,15 +915,15 @@ def _build_excel_workbook(report, all_records, summary):
         ws.row_dimensions[gr].height = 18
 
         g_fuel_actual_sum = 0.0
-        g_engine_h_sum = 0.0
-        g_fuel_eff_vals = []
-        g_output_vals = []
-        g_type_eff_vals = []
-        g_anomaly_count = 0
+        g_engine_h_sum    = 0.0
+        g_fuel_eff_vals   = []
+        g_output_vals     = []
+        g_type_eff_vals   = []
+        g_anomaly_count   = 0
 
         for rec in group_records:
             fuel_eff_pct = round(rec.fuel_efficiency * 100, 1) if rec.fuel_efficiency is not None else None
-            output_pct = round(rec.equipment_output * 100, 1) if rec.equipment_output is not None else None
+            output_pct   = round(rec.equipment_output * 100, 1) if rec.equipment_output is not None else None
             type_eff_pct = round(rec.type_efficiency * 100, 1) if rec.type_efficiency is not None else None
 
             type_label = {
@@ -905,13 +933,26 @@ def _build_excel_workbook(report, all_records, summary):
                 'Самосвалы': 'Без движения',
             }.get(rec.group, '')
 
+            # Per-shift dump truck norm and overage
+            norm_bd_str = ''
+            over_bd_str = ''
+            if rec.group == 'Самосвалы':
+                norm_sec = dt_norms.get((rec.name, rec.shift))
+                if norm_sec:
+                    norm_bd_str = secs_to_hhmmss(norm_sec)
+                    overage = (rec.engine_no_move_sec or 0) - norm_sec
+                    if overage > 0:
+                        over_bd_str = f'+{secs_to_hhmmss(overage)}'
+
             anomaly_text = '; '.join(rec.anomaly_details) if rec.has_anomaly else ''
             date_display = rec.record_date.strftime('%d.%m.%Y') if rec.record_date else rec.date
+            shift_display = f'С{rec.shift}' if rec.shift else '—'
 
             ws.append([
-                rec.row_number, rec.name, rec.group, date_display,
+                rec.row_number, rec.name, rec.group, date_display, shift_display,
                 rec.engine_time_str(), rec.fuel_actual, rec.fuel_norm,
                 fuel_eff_pct, output_pct, type_eff_pct, type_label,
+                norm_bd_str, over_bd_str,
                 rec.mileage, rec.refueling, anomaly_text, rec.comment,
             ])
             r = ws.max_row
@@ -922,26 +963,32 @@ def _build_excel_workbook(report, all_records, summary):
                 c.font = make_font()
                 c.alignment = make_align()
                 c.border = thin_border()
-                if row_fill and col not in (8, 9, 10):
+                if row_fill and col not in (9, 10, 11):
                     c.fill = row_fill
 
             ws.cell(row=r, column=2).alignment = make_align('left')
-            ws.cell(row=r, column=14).alignment = make_align('left', wrap=True)
-            ws.cell(row=r, column=15).alignment = make_align('left', wrap=True)
+            ws.cell(row=r, column=17).alignment = make_align('left', wrap=True)
+            ws.cell(row=r, column=18).alignment = make_align('left', wrap=True)
 
+            # Расход к норме (col 9)
             f = pct_fill(fuel_eff_pct, 100, 115)
             if f:
-                ws.cell(row=r, column=8).fill = f
-            # Output: >=80 green, <80 red
+                ws.cell(row=r, column=9).fill = f
+            # Выход техники (col 10): >=80 green, <80 red
             if output_pct is not None:
-                ws.cell(row=r, column=9).fill = make_fill(GREEN_BG) if output_pct >= 80 else make_fill(RED_BG)
+                ws.cell(row=r, column=10).fill = make_fill(GREEN_BG) if output_pct >= 80 else make_fill(RED_BG)
+            # Эффективность (col 11)
             f = pct_fill(type_eff_pct, 100, 130)
             if f:
-                ws.cell(row=r, column=10).fill = f
-
+                ws.cell(row=r, column=11).fill = f
+            # Превышение б/д (col 14): red if overage exists
+            if over_bd_str:
+                ws.cell(row=r, column=14).fill = make_fill('FFB3B3')
+                ws.cell(row=r, column=14).font = Font(bold=True, color='C00000', name='Calibri', size=10)
+            # Отрицательный расход (col 7)
             if rec.fuel_actual is not None and rec.fuel_actual < 0:
-                ws.cell(row=r, column=6).fill = make_fill('FFB3B3')
-                ws.cell(row=r, column=6).font = Font(bold=True, color='C00000', name='Calibri', size=10)
+                ws.cell(row=r, column=7).fill = make_fill('FFB3B3')
+                ws.cell(row=r, column=7).font = Font(bold=True, color='C00000', name='Calibri', size=10)
 
             if rec.fuel_actual and rec.fuel_actual > 0:
                 g_fuel_actual_sum += rec.fuel_actual
@@ -956,13 +1003,13 @@ def _build_excel_workbook(report, all_records, summary):
                 g_anomaly_count += 1
 
         g_avg_fuel = round(sum(g_fuel_eff_vals) / len(g_fuel_eff_vals), 1) if g_fuel_eff_vals else None
-        g_avg_out = round(sum(g_output_vals) / len(g_output_vals), 1) if g_output_vals else None
-        g_avg_type = round(sum(g_type_eff_vals) / len(g_type_eff_vals), 1) if g_type_eff_vals else None
+        g_avg_out  = round(sum(g_output_vals)    / len(g_output_vals),    1) if g_output_vals    else None
+        g_avg_type = round(sum(g_type_eff_vals)  / len(g_type_eff_vals),  1) if g_type_eff_vals  else None
 
         ws.append([
-            '', f'ИТОГО {group_name}', '', '',
+            '', f'ИТОГО {group_name}', '', '', '',
             f'{round(g_engine_h_sum, 1)} ч', round(g_fuel_actual_sum, 1),
-            '', g_avg_fuel, g_avg_out, g_avg_type, '', '', '',
+            '', g_avg_fuel, g_avg_out, g_avg_type, '', '', '', '', '',
             f'Аномалий: {g_anomaly_count}' if g_anomaly_count else '', '',
         ])
         tr = ws.max_row
@@ -974,7 +1021,8 @@ def _build_excel_workbook(report, all_records, summary):
             c.border = thin_border()
         ws.cell(row=tr, column=2).alignment = make_align('left')
 
-    col_widths = [5, 30, 14, 12, 16, 14, 13, 13, 13, 14, 16, 12, 12, 45, 35]
+    # Column widths: 18 columns
+    col_widths = [5, 30, 14, 12, 8, 16, 13, 13, 13, 13, 14, 16, 15, 15, 12, 12, 45, 35]
     for i, w in enumerate(col_widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
