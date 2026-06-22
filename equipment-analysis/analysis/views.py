@@ -636,6 +636,102 @@ def analytics(request):
     return render(request, 'analysis/analytics.html', context)
 
 
+# ─── Analytics Compare ────────────────────────────────────────────────────────
+
+def analytics_compare(request):
+    selected_ids = request.GET.getlist('sections')
+    date_from = request.GET.get('date_from', '')
+    date_to = request.GET.get('date_to', '')
+
+    all_sections = list(Section.objects.all())
+    comparison_data = []
+
+    if selected_ids:
+        from collections import defaultdict as _dd
+        for section in all_sections:
+            if str(section.pk) not in selected_ids:
+                continue
+
+            qs = VehicleRecord.objects.select_related('report').filter(report__section=section)
+            if date_from:
+                try:
+                    qs = qs.filter(record_date__gte=datetime.date.fromisoformat(date_from))
+                except ValueError:
+                    pass
+            if date_to:
+                try:
+                    qs = qs.filter(record_date__lte=datetime.date.fromisoformat(date_to))
+                except ValueError:
+                    pass
+
+            recs = list(qs)
+            count = len(recs)
+            total_fuel = round(sum(r.fuel_actual for r in recs if r.fuel_actual and r.fuel_actual > 0), 1)
+            total_hours = round(sum(r.engine_time_sec for r in recs) / 3600, 1)
+            fuel_eff_vals = [r.fuel_efficiency * 100 for r in recs if r.fuel_efficiency is not None]
+            output_vals   = [r.equipment_output * 100 for r in recs if r.equipment_output is not None]
+            type_eff_vals = [r.type_efficiency  * 100 for r in recs if r.type_efficiency  is not None]
+            anomaly_count = sum(1 for r in recs if r.has_anomaly)
+
+            groups_map = _dd(list)
+            for rec in recs:
+                groups_map[rec.group].append(rec)
+            group_stats = []
+            for grp in sorted(groups_map):
+                g = groups_map[grp]
+                gfe = [r.fuel_efficiency * 100 for r in g if r.fuel_efficiency is not None]
+                go  = [r.equipment_output * 100 for r in g if r.equipment_output is not None]
+                gte = [r.type_efficiency  * 100 for r in g if r.type_efficiency  is not None]
+                group_stats.append({
+                    'group':        grp,
+                    'count':        len(g),
+                    'avg_fuel_eff': round(sum(gfe)/len(gfe), 1) if gfe else None,
+                    'avg_output':   round(sum(go)/len(go), 1)   if go  else None,
+                    'avg_type_eff': round(sum(gte)/len(gte), 1) if gte else None,
+                })
+
+            comparison_data.append({
+                'section':       section,
+                'count':         count,
+                'total_fuel':    total_fuel,
+                'total_hours':   total_hours,
+                'avg_fuel_eff':  round(sum(fuel_eff_vals)/len(fuel_eff_vals), 1) if fuel_eff_vals else None,
+                'avg_output':    round(sum(output_vals)/len(output_vals), 1)     if output_vals  else None,
+                'avg_type_eff':  round(sum(type_eff_vals)/len(type_eff_vals), 1) if type_eff_vals else None,
+                'anomaly_count': anomaly_count,
+                'anomaly_pct':   round(anomaly_count / count * 100, 1) if count > 0 else 0,
+                'group_stats':   group_stats,
+            })
+
+    PALETTE = ['#0d6efd','#198754','#fd7e14','#6f42c1','#dc3545','#0dcaf0','#ffc107','#20c997']
+    for i, d in enumerate(comparison_data):
+        d['color'] = PALETTE[i % len(PALETTE)]
+
+    compare_json = json.dumps([
+        {
+            'name':         d['section'].name,
+            'color':        d['color'],
+            'total_hours':  d['total_hours'],
+            'total_fuel':   d['total_fuel'],
+            'avg_fuel_eff': d['avg_fuel_eff'],
+            'avg_output':   d['avg_output'],
+            'avg_type_eff': d['avg_type_eff'],
+            'anomaly_pct':  d['anomaly_pct'],
+        }
+        for d in comparison_data
+    ]) if comparison_data else '[]'
+
+    context = {
+        'all_sections':    all_sections,
+        'selected_ids':    selected_ids,
+        'comparison_data': comparison_data,
+        'date_from':       date_from,
+        'date_to':         date_to,
+        'compare_json':    compare_json,
+    }
+    return render(request, 'analysis/compare.html', context)
+
+
 # ─── Sections CRUD ────────────────────────────────────────────────────────────
 
 def sections(request):
