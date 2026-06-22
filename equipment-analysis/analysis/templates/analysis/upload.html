@@ -101,18 +101,9 @@
                         {% if form.excavator_norm.errors %}<div class="text-danger small mt-1">{{ form.excavator_norm.errors.0 }}</div>{% endif %}
                     </div>
 
-                    <div class="mb-0 p-3 bg-light rounded">
-                        <div class="fw-semibold mb-2 small text-uppercase text-muted">
-                            <i class="bi bi-truck-front me-1"></i>Самосвалы
-                        </div>
-                        <label class="form-label">{{ form.dumptruck_norm.label }}</label>
-                        <div class="row align-items-center">
-                            <div class="col-md-4">{{ form.dumptruck_norm }}</div>
-                            <div class="col-md-8">
-                                <div class="form-text">{{ form.dumptruck_norm.help_text }}</div>
-                            </div>
-                        </div>
-                        {% if form.dumptruck_norm.errors %}<div class="text-danger small mt-1">{{ form.dumptruck_norm.errors.0 }}</div>{% endif %}
+                    <div class="alert alert-info py-2 mb-0 small">
+                        <i class="bi bi-truck-front me-1"></i><strong>Самосвалы:</strong>
+                        норма «без движения» задаётся индивидуально для каждого самосвала прямо в таблице отчёта после загрузки.
                     </div>
 
                 </div>

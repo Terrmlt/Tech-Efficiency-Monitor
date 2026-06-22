@@ -31,65 +31,6 @@
     </div>
 </div>
 
-{% if dumptruck_norms %}
-<!-- Индивидуальные нормы самосвалов -->
-<div class="card mb-4" id="dumptruck-norms-card">
-    <div class="card-header d-flex align-items-center justify-content-between py-2">
-        <span class="fw-bold"><i class="bi bi-truck-front me-2"></i>Индивидуальные нормы самосвалов (без движения)</span>
-        <button class="btn btn-sm btn-outline-secondary" type="button"
-                data-bs-toggle="collapse" data-bs-target="#dumptruckNormsBody">
-            <i class="bi bi-chevron-down"></i>
-        </button>
-    </div>
-    <div class="collapse show" id="dumptruckNormsBody">
-        <div class="card-body">
-            <p class="small text-muted mb-3">
-                Укажите индивидуальную норму «без движения» для каждого самосвала в формате <code>ЧЧ:ММ:СС</code>.
-                Нажмите <strong>Рассчитать</strong> — эффективность будет пересчитана по новым нормам.
-            </p>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-3" id="dumptruckNormsTable">
-                    <thead>
-                        <tr>
-                            <th>Самосвал</th>
-                            <th style="width:180px">Норма без движения<br><small class="fw-normal text-muted">ЧЧ:ММ:СС</small></th>
-                            <th>Статус</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for vn in dumptruck_norms %}
-                        <tr>
-                            <td class="fw-semibold small">{{ vn.name }}</td>
-                            <td>
-                                <input type="text"
-                                       class="form-control form-control-sm dumptruck-norm-input font-monospace"
-                                       data-vehicle="{{ vn.name }}"
-                                       value="{{ vn.norm_str }}"
-                                       placeholder="чч:мм:сс">
-                            </td>
-                            <td>
-                                {% if vn.is_custom %}
-                                <span class="badge bg-success norm-status">Индивидуальная</span>
-                                {% else %}
-                                <span class="badge bg-secondary norm-status">По умолчанию отчёта</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            <div class="d-flex align-items-center gap-3">
-                <button class="btn btn-primary" id="calcDumptruckNorms">
-                    <i class="bi bi-calculator me-1"></i>Рассчитать
-                </button>
-                <span class="small text-muted" id="calcNormsStatus"></span>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
-
 <!-- Сводка по группам -->
 <h5 class="fw-bold mb-3">Сводка по группам</h5>
 <div class="row g-3 mb-4">
@@ -218,6 +159,7 @@
                         <th>Расход<br>к норме</th>
                         <th>Выход<br>техники</th>
                         <th>Эффективность<br><small class="fw-normal text-muted">факт / норма</small></th>
+                        <th>Норма б/д<br><small class="fw-normal text-muted">чч:мм:сс</small></th>
                         <th>Пробег<br><small class="fw-normal text-muted">км</small></th>
                         <th>Заправка<br><small class="fw-normal text-muted">л</small></th>
                         <th>Аномалии</th>
@@ -297,6 +239,17 @@
                             {% else %}<span class="text-muted">—</span>{% endif %}
                             {% endwith %}
                         </td>
+                        <td class="comment-cell">
+                            {% if rec.is_dumptruck %}
+                            <input type="text"
+                                   class="comment-input dt-norm-input font-monospace"
+                                   data-vehicle="{{ rec.name }}"
+                                   data-report-pk="{{ report.pk }}"
+                                   value="{{ row.dt_norm_str }}"
+                                   placeholder="чч:мм:сс"
+                                   title="Норма без движения для {{ rec.name }}">
+                            {% endif %}
+                        </td>
                         <td class="text-muted small">{% if rec.mileage is not None %}{{ rec.mileage }}{% else %}—{% endif %}</td>
                         <td class="text-muted small">{% if rec.refueling is not None %}{{ rec.refueling }}{% else %}—{% endif %}</td>
                         <td>
@@ -365,6 +318,11 @@
                             {% elif row.is_dumptruck %}<div class="text-muted small">без движения</div>{% endif %}
                             {% else %}<span class="text-muted">—</span>{% endif %}
                         </td>
+                        <td class="text-muted small">
+                            {% if row.is_dumptruck and row.dt_norm_str %}
+                            <span class="font-monospace">{{ row.dt_norm_str }}</span>
+                            {% endif %}
+                        </td>
                         <td class="text-muted small fw-bold">{% if row.mileage is not None %}{{ row.mileage }}{% else %}—{% endif %}</td>
                         <td class="text-muted small fw-bold">{% if row.refueling is not None %}{{ row.refueling }}{% else %}—{% endif %}</td>
                         <td>
@@ -415,58 +373,45 @@ document.querySelectorAll('.comment-input').forEach(function(input) {
     });
 });
 
-// ── Dump truck individual norms ──
-var calcBtn = document.getElementById('calcDumptruckNorms');
-if (calcBtn) {
-    calcBtn.addEventListener('click', function() {
-        var norms = {};
-        document.querySelectorAll('.dumptruck-norm-input').forEach(function(inp) {
-            norms[inp.dataset.vehicle] = inp.value.trim();
-        });
+// ── Dump truck individual norms — auto-save on change ──
+document.querySelectorAll('.dt-norm-input').forEach(function(input) {
+    var timer;
+    input.addEventListener('input', function() {
+        clearTimeout(timer);
+        var vehicle = this.dataset.vehicle;
+        var reportPk = this.dataset.reportPk;
+        var normStr = this.value.trim();
+        var el = this;
 
-        var status = document.getElementById('calcNormsStatus');
-        calcBtn.disabled = true;
-        status.textContent = 'Сохранение…';
-
-        fetch('{% url "set_vehicle_norms" report.pk %}', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token }}'
-            },
-            body: JSON.stringify({norms: norms})
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            calcBtn.disabled = false;
-            if (data.ok) {
-                status.textContent = 'Обновлено записей: ' + data.updated;
-                status.style.color = '#198754';
-                // Update status badges
-                document.querySelectorAll('#dumptruckNormsTable tbody tr').forEach(function(row) {
-                    var badge = row.querySelector('.norm-status');
-                    if (badge) {
-                        badge.textContent = 'Индивидуальная';
-                        badge.className = 'badge bg-success norm-status';
-                    }
-                });
-                if (data.errors && data.errors.length) {
-                    status.textContent += ' ⚠ ' + data.errors.join('; ');
-                    status.style.color = '#dc3545';
+        timer = setTimeout(function() {
+            if (!normStr) return;
+            fetch('/report/' + reportPk + '/vehicle-norm/save/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({vehicle_name: vehicle, norm_str: normStr})
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ok) {
+                    el.style.borderColor = '#198754';
+                    setTimeout(function() {
+                        el.style.borderColor = '';
+                        window.location.reload();
+                    }, 600);
+                } else {
+                    el.style.borderColor = '#dc3545';
+                    setTimeout(function() { el.style.borderColor = ''; }, 2000);
                 }
-                // Reload page after short delay to refresh efficiency values in table
-                setTimeout(function() { window.location.reload(); }, 1200);
-            } else {
-                status.textContent = 'Ошибка: ' + (data.error || 'неизвестная');
-                status.style.color = '#dc3545';
-            }
-        })
-        .catch(function() {
-            calcBtn.disabled = false;
-            status.textContent = 'Ошибка сети';
-            status.style.color = '#dc3545';
-        });
+            })
+            .catch(function() {
+                el.style.borderColor = '#dc3545';
+                setTimeout(function() { el.style.borderColor = ''; }, 2000);
+            });
+        }, 1000);
     });
-}
+});
 </script>
 {% endblock %}

@@ -196,38 +196,33 @@ def report_detail(request, pk):
     groups     = all_records.values_list('group', flat=True).distinct().order_by('group')
     daily_view = _build_daily_view(filtered.order_by('row_number', 'shift'), report)
 
-    # Dump truck norms panel
-    dumptruck_names = (
-        all_records.filter(group='Самосвалы')
-        .values_list('name', flat=True)
-        .distinct()
-        .order_by('name')
-    )
+    # Per-vehicle norms map for dump trucks (used in table inline inputs)
     existing_norms = {
         vn.vehicle_name: vn
         for vn in VehicleNorm.objects.filter(report=report)
     }
-    dumptruck_norms = []
-    for vname in dumptruck_names:
-        vn = existing_norms.get(vname)
-        dumptruck_norms.append({
-            'name': vname,
-            'norm_str': vn.norm_str() if vn and vn.dumptruck_norm_sec else secs_to_hhmmss(report.dumptruck_norm_sec),
-            'is_custom': vn is not None and vn.dumptruck_norm_sec is not None,
-        })
+    # Enrich dump truck record rows with their individual norm string
+    for row in daily_view:
+        if row['type'] == 'record':
+            rec = row['obj']
+            if rec.group == 'Самосвалы':
+                vn = existing_norms.get(rec.name)
+                row['dt_norm_str'] = vn.norm_str() if vn and vn.dumptruck_norm_sec else ''
+        elif row['type'] == 'daily_total' and row.get('is_dumptruck'):
+            vn = existing_norms.get(row['name'])
+            row['dt_norm_str'] = vn.norm_str() if vn and vn.dumptruck_norm_sec else ''
 
     context = {
-        'report':          report,
-        'daily_view':      daily_view,
-        'summary':         summary,
-        'groups':          groups,
-        'group_filter':    group_filter,
-        'anomaly_filter':  anomaly_filter,
-        'shift_filter':    shift_filter,
-        'total_count':     all_records.count(),
-        'anomaly_count':   all_records.filter(has_anomaly=True).count(),
-        'shown_count':     filtered.count(),
-        'dumptruck_norms': dumptruck_norms,
+        'report':         report,
+        'daily_view':     daily_view,
+        'summary':        summary,
+        'groups':         groups,
+        'group_filter':   group_filter,
+        'anomaly_filter': anomaly_filter,
+        'shift_filter':   shift_filter,
+        'total_count':    all_records.count(),
+        'anomaly_count':  all_records.filter(has_anomaly=True).count(),
+        'shown_count':    filtered.count(),
     }
     return render(request, 'analysis/report_detail.html', context)
 
@@ -247,6 +242,42 @@ def _parse_hhmmss_to_sec(value):
     except (ValueError, IndexError):
         return None
     return None
+
+
+@require_POST
+def save_vehicle_norm(request, pk):
+    """Auto-save a single dump truck's norm and recalculate its records."""
+    report = get_object_or_404(Report, pk=pk)
+    try:
+        data = json.loads(request.body)
+        vehicle_name = data.get('vehicle_name', '').strip()
+        norm_str = data.get('norm_str', '').strip()
+    except Exception:
+        return JsonResponse({'ok': False, 'error': 'Неверный формат данных'}, status=400)
+
+    if not vehicle_name:
+        return JsonResponse({'ok': False, 'error': 'Не указано название ТС'}, status=400)
+
+    norm_sec = _parse_hhmmss_to_sec(norm_str)
+    if norm_sec is None or norm_sec <= 0:
+        return JsonResponse({'ok': False, 'error': f'Неверный формат нормы «{norm_str}»'}, status=400)
+
+    with transaction.atomic():
+        VehicleNorm.objects.update_or_create(
+            report=report,
+            vehicle_name=vehicle_name,
+            defaults={'dumptruck_norm_sec': norm_sec},
+        )
+        records = VehicleRecord.objects.filter(
+            report=report, name=vehicle_name, group='Самосвалы',
+        )
+        updated = 0
+        for rec in records:
+            rec.type_efficiency = rec.engine_no_move_sec / norm_sec
+            rec.save(update_fields=['type_efficiency'])
+            updated += 1
+
+    return JsonResponse({'ok': True, 'updated': updated})
 
 
 @require_POST

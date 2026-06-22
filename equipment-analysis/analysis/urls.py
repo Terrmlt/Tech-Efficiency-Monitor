@@ -8,6 +8,7 @@ urlpatterns = [
     path('report/<int:pk>/delete/', views.delete_report, name='delete_report'),
     path('report/<int:pk>/export/', views.export_excel, name='export_excel'),
     path('report/<int:pk>/vehicle-norms/', views.set_vehicle_norms, name='set_vehicle_norms'),
+    path('report/<int:pk>/vehicle-norm/save/', views.save_vehicle_norm, name='save_vehicle_norm'),
     path('records/', views.records, name='records'),
     path('records/export/', views.export_records_excel, name='export_records_excel'),
     path('analytics/', views.analytics, name='analytics'),

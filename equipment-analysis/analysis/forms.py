@@ -59,13 +59,6 @@ class ReportUploadForm(forms.ModelForm):
         help_text='Допустимое время простоя стрелы (колонка «Время простоя»)',
         widget=forms.TextInput(attrs=TIME_INPUT_ATTRS),
     )
-    dumptruck_norm = forms.CharField(
-        initial='03:00:00',
-        label='Норма без движения — Самосвалы',
-        help_text='Допустимое время работы двигателя без движения',
-        widget=forms.TextInput(attrs=TIME_INPUT_ATTRS),
-    )
-
     class Meta:
         model = Report
         fields = ['name', 'file']
@@ -93,9 +86,6 @@ class ReportUploadForm(forms.ModelForm):
     def clean_excavator_norm(self):
         return parse_hhmmss(self.cleaned_data['excavator_norm'])
 
-    def clean_dumptruck_norm(self):
-        return parse_hhmmss(self.cleaned_data['dumptruck_norm'])
-
     def clean_file(self):
         f = self.cleaned_data.get('file')
         if f:
@@ -109,7 +99,6 @@ class ReportUploadForm(forms.ModelForm):
         report.daily_norm_sec = self.cleaned_data['daily_norm']
         report.bulldozer_norm_sec = self.cleaned_data['bulldozer_norm']
         report.excavator_norm_sec = self.cleaned_data['excavator_norm']
-        report.dumptruck_norm_sec = self.cleaned_data['dumptruck_norm']
         report.section = self.cleaned_data.get('section')
         if commit:
             report.save()
