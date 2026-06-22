@@ -248,7 +248,7 @@ def _find_column_indices(header_row):
         'shift':         ['№ смены', 'номер смены', 'смена', 'shift'],
         'engine_time':   ['время работы двигателя', 'работы двигателя', 'работа двигателя'],
         'engine_no_move': ['без движения'],
-        'engine_idle':   ['холостой ход', 'холостого хода'],
+        'engine_idle':   ['холостом ходу', 'на холостом', 'холостой ход', 'холостого хода'],
         'fuel_norm':     ['норма расхода', 'норм. расход'],
         'fuel_actual':   ['фактический расход', 'расход факт', 'факт. расход', 'факт расход'],
         'downtime':      ['простой стрелы', 'время простоя стрелы', 'время простоя'],
@@ -257,10 +257,16 @@ def _find_column_indices(header_row):
         'row_number':    ['№ п/п', '№ пп', '№'],
     }
 
+    # Fields that must NOT match headers containing these substrings
+    exclusions = {
+        'engine_time': ['холостом', 'без движения'],
+    }
+
     for field, kws in keywords.items():
+        exclude = exclusions.get(field, [])
         for kw in kws:
             for i, h in enumerate(header_lower):
-                if kw in h:
+                if kw in h and not any(ex in h for ex in exclude):
                     defaults[field] = i
                     break
             else:
