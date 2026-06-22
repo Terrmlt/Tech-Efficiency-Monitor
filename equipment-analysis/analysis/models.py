@@ -156,3 +156,25 @@ class VehicleRecord(models.Model):
 
     def is_dumptruck(self):
         return self.group == self.GROUP_DUMPTRUCK
+
+
+class VehicleNorm(models.Model):
+    report = models.ForeignKey(
+        Report, on_delete=models.CASCADE,
+        related_name='vehicle_norms', verbose_name='Отчёт'
+    )
+    vehicle_name = models.CharField(max_length=200, verbose_name='Название ТС')
+    dumptruck_norm_sec = models.IntegerField(
+        null=True, blank=True, verbose_name='Норма без движения (сек)'
+    )
+
+    class Meta:
+        unique_together = ('report', 'vehicle_name')
+        verbose_name = 'Индивидуальная норма ТС'
+        verbose_name_plural = 'Индивидуальные нормы ТС'
+
+    def __str__(self):
+        return f'{self.vehicle_name} / {self.report.name}'
+
+    def norm_str(self):
+        return secs_to_hhmmss(self.dumptruck_norm_sec)

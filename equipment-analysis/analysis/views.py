@@ -10,7 +10,7 @@ from django.views.decorators.http import require_POST
 from django.db.models import Q, Avg, Count, Sum
 
 from .forms import ReportUploadForm, SectionForm
-from .models import Report, VehicleRecord, Section
+from .models import Report, VehicleRecord, Section, VehicleNorm, secs_to_hhmmss
 from .utils import parse_excel_file, detect_anomalies, calculate_metrics, build_summary
 
 
@@ -196,19 +196,99 @@ def report_detail(request, pk):
     groups     = all_records.values_list('group', flat=True).distinct().order_by('group')
     daily_view = _build_daily_view(filtered.order_by('row_number', 'shift'), report)
 
+    # Dump truck norms panel
+    dumptruck_names = (
+        all_records.filter(group='Самосвалы')
+        .values_list('name', flat=True)
+        .distinct()
+        .order_by('name')
+    )
+    existing_norms = {
+        vn.vehicle_name: vn
+        for vn in VehicleNorm.objects.filter(report=report)
+    }
+    dumptruck_norms = []
+    for vname in dumptruck_names:
+        vn = existing_norms.get(vname)
+        dumptruck_norms.append({
+            'name': vname,
+            'norm_str': vn.norm_str() if vn and vn.dumptruck_norm_sec else secs_to_hhmmss(report.dumptruck_norm_sec),
+            'is_custom': vn is not None and vn.dumptruck_norm_sec is not None,
+        })
+
     context = {
-        'report':        report,
-        'daily_view':    daily_view,
-        'summary':       summary,
-        'groups':        groups,
-        'group_filter':  group_filter,
-        'anomaly_filter': anomaly_filter,
-        'shift_filter':  shift_filter,
-        'total_count':   all_records.count(),
-        'anomaly_count': all_records.filter(has_anomaly=True).count(),
-        'shown_count':   filtered.count(),
+        'report':          report,
+        'daily_view':      daily_view,
+        'summary':         summary,
+        'groups':          groups,
+        'group_filter':    group_filter,
+        'anomaly_filter':  anomaly_filter,
+        'shift_filter':    shift_filter,
+        'total_count':     all_records.count(),
+        'anomaly_count':   all_records.filter(has_anomaly=True).count(),
+        'shown_count':     filtered.count(),
+        'dumptruck_norms': dumptruck_norms,
     }
     return render(request, 'analysis/report_detail.html', context)
+
+
+# ─── Vehicle norms (dump trucks) ──────────────────────────────────────────────
+
+def _parse_hhmmss_to_sec(value):
+    """Parse 'HH:MM:SS' or 'HH:MM' string to total seconds. Returns None on error."""
+    if not value:
+        return None
+    parts = value.strip().split(':')
+    try:
+        if len(parts) == 3:
+            return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(float(parts[2]))
+        if len(parts) == 2:
+            return int(parts[0]) * 3600 + int(parts[1]) * 60
+    except (ValueError, IndexError):
+        return None
+    return None
+
+
+@require_POST
+def set_vehicle_norms(request, pk):
+    report = get_object_or_404(Report, pk=pk)
+    try:
+        data = json.loads(request.body)
+        norms = data.get('norms', {})
+    except Exception:
+        return JsonResponse({'ok': False, 'error': 'Неверный формат данных'}, status=400)
+
+    updated_records = 0
+    errors = []
+
+    with transaction.atomic():
+        for vehicle_name, norm_str in norms.items():
+            norm_sec = _parse_hhmmss_to_sec(norm_str)
+            if norm_sec is None or norm_sec <= 0:
+                errors.append(f'{vehicle_name}: неверный формат нормы «{norm_str}»')
+                continue
+
+            vn, _ = VehicleNorm.objects.update_or_create(
+                report=report,
+                vehicle_name=vehicle_name,
+                defaults={'dumptruck_norm_sec': norm_sec},
+            )
+
+            records = VehicleRecord.objects.filter(
+                report=report,
+                name=vehicle_name,
+                group='Самосвалы',
+            )
+            for rec in records:
+                rec.type_efficiency = rec.engine_no_move_sec / norm_sec
+                rec.save(update_fields=['type_efficiency'])
+                updated_records += 1
+
+    return JsonResponse({
+        'ok': True,
+        'updated': updated_records,
+        'errors': errors,
+    })
 
 
 # ─── Delete report ────────────────────────────────────────────────────────────
