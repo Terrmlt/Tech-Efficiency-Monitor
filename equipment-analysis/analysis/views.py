@@ -108,7 +108,14 @@ def _build_daily_view(records, report):
         recs = sorted(groups[key], key=lambda r: r.shift if r.shift else 99)
 
         for rec in recs:
-            rows.append({'type': 'record', 'obj': rec})
+            ov = 0
+            if rec.group in ('Бульдозеры', 'Погрузчики') and report.bulldozer_norm_sec > 0:
+                ov = (rec.engine_idle_sec or 0) - report.bulldozer_norm_sec
+            elif rec.group == 'Экскаваторы' and report.excavator_norm_sec > 0 and rec.downtime_sec is not None:
+                ov = rec.downtime_sec - report.excavator_norm_sec
+            elif rec.group == 'Самосвалы' and report.dumptruck_norm_sec > 0:
+                ov = (rec.engine_no_move_sec or 0) - report.dumptruck_norm_sec
+            rows.append({'type': 'record', 'obj': rec, 'over_str': secs_to_hhmmss(ov) if ov > 0 else ''})
 
         if len(recs) > 1:
             n = len(recs)
@@ -152,9 +159,11 @@ def _build_daily_view(records, report):
                 'has_anomaly':          any(r.has_anomaly for r in recs),
                 'engine_time_str':      secs_to_hhmmss(total_engine),
                 'engine_idle_str':      secs_to_hhmmss(total_idle),
+                'engine_idle_sec':      total_idle,
                 'engine_no_move_str':   secs_to_hhmmss(total_no_move),
                 'engine_no_move_sec':   total_no_move,
                 'downtime_str':         secs_to_hhmmss(total_downtime) if total_downtime is not None else '—',
+                'downtime_sec':         total_downtime,
                 'fuel_actual':          total_fuel,
                 'fuel_norm':            fuel_norm,
                 'mileage':              total_mileage,
@@ -397,7 +406,14 @@ def _build_daily_view_records(records):
         report = recs[0].report
 
         for rec in recs:
-            rows.append({'type': 'record', 'obj': rec})
+            ov = 0
+            if rec.group in ('Бульдозеры', 'Погрузчики') and report.bulldozer_norm_sec > 0:
+                ov = (rec.engine_idle_sec or 0) - report.bulldozer_norm_sec
+            elif rec.group == 'Экскаваторы' and report.excavator_norm_sec > 0 and rec.downtime_sec is not None:
+                ov = rec.downtime_sec - report.excavator_norm_sec
+            elif rec.group == 'Самосвалы' and report.dumptruck_norm_sec > 0:
+                ov = (rec.engine_no_move_sec or 0) - report.dumptruck_norm_sec
+            rows.append({'type': 'record', 'obj': rec, 'over_str': secs_to_hhmmss(ov) if ov > 0 else ''})
 
         if len(recs) > 1:
             n = len(recs)
@@ -433,6 +449,14 @@ def _build_daily_view_records(records):
             elif group == 'Самосвалы' and report.dumptruck_norm_sec > 0:
                 type_eff = round(total_no_move / (report.dumptruck_norm_sec * n) * 100, 1)
 
+            ov_total = 0
+            if group in ('Бульдозеры', 'Погрузчики') and report.bulldozer_norm_sec > 0:
+                ov_total = total_idle - report.bulldozer_norm_sec * n
+            elif group == 'Экскаваторы' and total_downtime is not None and report.excavator_norm_sec > 0:
+                ov_total = total_downtime - report.excavator_norm_sec * n
+            elif group == 'Самосвалы' and report.dumptruck_norm_sec > 0:
+                ov_total = total_no_move - report.dumptruck_norm_sec * n
+
             rows.append({
                 'type':                 'daily_total',
                 'name':                 name,
@@ -455,6 +479,7 @@ def _build_daily_view_records(records):
                 'fuel_efficiency_pct':  fuel_eff,
                 'equipment_output_pct': output,
                 'type_efficiency_pct':  type_eff,
+                'over_str':             secs_to_hhmmss(ov_total) if ov_total > 0 else '',
                 'is_bulldozer_or_loader': group in ('Бульдозеры', 'Погрузчики'),
                 'is_excavator':         group == 'Экскаваторы',
                 'is_dumptruck':         group == 'Самосвалы',
@@ -734,17 +759,31 @@ def export_records_excel(request):
         'Дата', 'Смена', 'Участок', 'Отчёт', '№', 'Техника', 'Группа',
         'Время работы', 'Факт. расход, л', 'Норма л/ч',
         'Расход к норме, %', 'Выход техники, %', 'Эффективность, %',
+        'Простой свыше нормы',
         'Пробег, км', 'Заправка, л', 'Аномалии', 'Комментарий',
     ]
     for i, h in enumerate(headers, 1):
         hdr_cell(ws, 1, i, h)
     ws.row_dimensions[1].height = 36
 
+    from .models import secs_to_hhmmss as _s2h
+
     YELLOW_BG = 'FFF2CC'
     for row_idx, rec in enumerate(all_records, 2):
         fuel_eff_pct = round(rec.fuel_efficiency * 100, 1) if rec.fuel_efficiency is not None else None
         output_pct = round(rec.equipment_output * 100, 1) if rec.equipment_output is not None else None
         type_eff_pct = round(rec.type_efficiency * 100, 1) if rec.type_efficiency is not None else None
+
+        # Compute overage (time beyond norm)
+        ov = 0
+        rpt = rec.report
+        if rec.group in ('Бульдозеры', 'Погрузчики') and rpt.bulldozer_norm_sec > 0:
+            ov = (rec.engine_idle_sec or 0) - rpt.bulldozer_norm_sec
+        elif rec.group == 'Экскаваторы' and rpt.excavator_norm_sec > 0 and rec.downtime_sec is not None:
+            ov = rec.downtime_sec - rpt.excavator_norm_sec
+        elif rec.group == 'Самосвалы' and rpt.dumptruck_norm_sec > 0:
+            ov = (rec.engine_no_move_sec or 0) - rpt.dumptruck_norm_sec
+        over_str = _s2h(ov) if ov > 0 else ''
 
         section_name = rec.report.section.name if rec.report.section else ''
         date_display = rec.record_date.strftime('%d.%m.%Y') if rec.record_date else rec.date
@@ -763,6 +802,7 @@ def export_records_excel(request):
             fuel_eff_pct,
             output_pct,
             type_eff_pct,
+            over_str,
             rec.mileage,
             rec.refueling,
             '; '.join(rec.anomaly_details) if rec.has_anomaly else '',
@@ -778,7 +818,7 @@ def export_records_excel(request):
             for col_idx in range(1, len(headers) + 1):
                 ws.cell(row=row_idx, column=col_idx).fill = PatternFill('solid', fgColor=YELLOW_BG)
 
-    col_widths = [12, 10, 16, 25, 5, 28, 14, 14, 14, 10, 14, 14, 14, 12, 12, 45, 35]
+    col_widths = [12, 10, 16, 25, 5, 28, 14, 14, 14, 10, 14, 14, 14, 14, 12, 12, 45, 35]
     for i, w in enumerate(col_widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
