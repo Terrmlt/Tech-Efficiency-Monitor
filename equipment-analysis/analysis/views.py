@@ -196,21 +196,26 @@ def report_detail(request, pk):
     groups     = all_records.values_list('group', flat=True).distinct().order_by('group')
     daily_view = _build_daily_view(filtered.order_by('row_number', 'shift'), report)
 
-    # Per-vehicle norms map for dump trucks (used in table inline inputs)
+    # Per-vehicle-per-shift norms map for dump trucks (used in table inline inputs)
     existing_norms = {
-        vn.vehicle_name: vn
+        (vn.vehicle_name, vn.shift): vn
         for vn in VehicleNorm.objects.filter(report=report)
     }
-    # Enrich dump truck record rows with their individual norm string
+    # Enrich dump truck rows with their individual norm string
     for row in daily_view:
         if row['type'] == 'record':
             rec = row['obj']
             if rec.group == 'Самосвалы':
-                vn = existing_norms.get(rec.name)
+                vn = existing_norms.get((rec.name, rec.shift))
                 row['dt_norm_str'] = vn.norm_str() if vn and vn.dumptruck_norm_sec else ''
         elif row['type'] == 'daily_total' and row.get('is_dumptruck'):
-            vn = existing_norms.get(row['name'])
-            row['dt_norm_str'] = vn.norm_str() if vn and vn.dumptruck_norm_sec else ''
+            # Sum norms for all shifts of this vehicle
+            total_sec = 0
+            for shift_key in [1, 2]:
+                vn = existing_norms.get((row['name'], shift_key))
+                if vn and vn.dumptruck_norm_sec:
+                    total_sec += vn.dumptruck_norm_sec
+            row['dt_norm_str'] = secs_to_hhmmss(total_sec) if total_sec else ''
 
     context = {
         'report':         report,
@@ -245,47 +250,15 @@ def _parse_hhmmss_to_sec(value):
 
 
 @require_POST
-def save_vehicle_norm(request, pk):
-    """Auto-save a single dump truck's norm and recalculate its records."""
-    report = get_object_or_404(Report, pk=pk)
-    try:
-        data = json.loads(request.body)
-        vehicle_name = data.get('vehicle_name', '').strip()
-        norm_str = data.get('norm_str', '').strip()
-    except Exception:
-        return JsonResponse({'ok': False, 'error': 'Неверный формат данных'}, status=400)
-
-    if not vehicle_name:
-        return JsonResponse({'ok': False, 'error': 'Не указано название ТС'}, status=400)
-
-    norm_sec = _parse_hhmmss_to_sec(norm_str)
-    if norm_sec is None or norm_sec <= 0:
-        return JsonResponse({'ok': False, 'error': f'Неверный формат нормы «{norm_str}»'}, status=400)
-
-    with transaction.atomic():
-        VehicleNorm.objects.update_or_create(
-            report=report,
-            vehicle_name=vehicle_name,
-            defaults={'dumptruck_norm_sec': norm_sec},
-        )
-        records = VehicleRecord.objects.filter(
-            report=report, name=vehicle_name, group='Самосвалы',
-        )
-        updated = 0
-        for rec in records:
-            rec.type_efficiency = rec.engine_no_move_sec / norm_sec
-            rec.save(update_fields=['type_efficiency'])
-            updated += 1
-
-    return JsonResponse({'ok': True, 'updated': updated})
-
-
-@require_POST
 def set_vehicle_norms(request, pk):
+    """Save per-shift dump truck norms and recalculate efficiency for matching records.
+
+    Expects JSON body: {"norms": [{"vehicle_name": "...", "shift": 1, "norm_str": "02:00:00"}, ...]}
+    """
     report = get_object_or_404(Report, pk=pk)
     try:
         data = json.loads(request.body)
-        norms = data.get('norms', {})
+        norms_list = data.get('norms', [])
     except Exception:
         return JsonResponse({'ok': False, 'error': 'Неверный формат данных'}, status=400)
 
@@ -293,27 +266,37 @@ def set_vehicle_norms(request, pk):
     errors = []
 
     with transaction.atomic():
-        for vehicle_name, norm_str in norms.items():
-            norm_sec = _parse_hhmmss_to_sec(norm_str)
-            if norm_sec is None or norm_sec <= 0:
-                errors.append(f'{vehicle_name}: неверный формат нормы «{norm_str}»')
+        for item in norms_list:
+            vehicle_name = (item.get('vehicle_name') or '').strip()
+            shift = item.get('shift')  # int or None
+            norm_str = (item.get('norm_str') or '').strip()
+
+            if not vehicle_name or not norm_str:
                 continue
 
-            vn, _ = VehicleNorm.objects.update_or_create(
+            norm_sec = _parse_hhmmss_to_sec(norm_str)
+            if norm_sec is None or norm_sec <= 0:
+                errors.append(f'{vehicle_name} С{shift}: неверный формат нормы «{norm_str}»')
+                continue
+
+            VehicleNorm.objects.update_or_create(
                 report=report,
                 vehicle_name=vehicle_name,
+                shift=shift,
                 defaults={'dumptruck_norm_sec': norm_sec},
             )
 
-            records = VehicleRecord.objects.filter(
-                report=report,
-                name=vehicle_name,
-                group='Самосвалы',
+            rec_qs = VehicleRecord.objects.filter(
+                report=report, name=vehicle_name, group='Самосвалы',
             )
-            for rec in records:
-                rec.type_efficiency = rec.engine_no_move_sec / norm_sec
-                rec.save(update_fields=['type_efficiency'])
-                updated_records += 1
+            if shift is not None:
+                rec_qs = rec_qs.filter(shift=shift)
+
+            for rec in rec_qs:
+                if rec.engine_no_move_sec is not None:
+                    rec.type_efficiency = rec.engine_no_move_sec / norm_sec
+                    rec.save(update_fields=['type_efficiency'])
+                    updated_records += 1
 
     return JsonResponse({
         'ok': True,

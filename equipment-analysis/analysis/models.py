@@ -164,17 +164,21 @@ class VehicleNorm(models.Model):
         related_name='vehicle_norms', verbose_name='Отчёт'
     )
     vehicle_name = models.CharField(max_length=200, verbose_name='Название ТС')
+    shift = models.PositiveSmallIntegerField(
+        null=True, blank=True, verbose_name='Смена'
+    )
     dumptruck_norm_sec = models.IntegerField(
         null=True, blank=True, verbose_name='Норма без движения (сек)'
     )
 
     class Meta:
-        unique_together = ('report', 'vehicle_name')
+        unique_together = ('report', 'vehicle_name', 'shift')
         verbose_name = 'Индивидуальная норма ТС'
         verbose_name_plural = 'Индивидуальные нормы ТС'
 
     def __str__(self):
-        return f'{self.vehicle_name} / {self.report.name}'
+        shift_str = f' С{self.shift}' if self.shift else ''
+        return f'{self.vehicle_name}{shift_str} / {self.report.name}'
 
     def norm_str(self):
         return secs_to_hhmmss(self.dumptruck_norm_sec)
