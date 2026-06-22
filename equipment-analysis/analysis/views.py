@@ -141,8 +141,8 @@ def _build_daily_view(records, report):
                 type_eff = round(total_idle / (report.bulldozer_norm_sec * n) * 100, 1)
             elif group == 'Экскаваторы' and total_downtime is not None and report.excavator_norm_sec > 0:
                 type_eff = round(total_downtime / (report.excavator_norm_sec * n) * 100, 1)
-            elif group == 'Самосвалы' and report.dumptruck_norm_sec > 0:
-                type_eff = round(total_no_move / (report.dumptruck_norm_sec * n) * 100, 1)
+            # Dump truck daily_total efficiency is computed later in report_detail
+            # after per-shift VehicleNorm data is loaded.
 
             rows.append({
                 'type':                 'daily_total',
@@ -153,6 +153,7 @@ def _build_daily_view(records, report):
                 'engine_time_str':      secs_to_hhmmss(total_engine),
                 'engine_idle_str':      secs_to_hhmmss(total_idle),
                 'engine_no_move_str':   secs_to_hhmmss(total_no_move),
+                'engine_no_move_sec':   total_no_move,
                 'downtime_str':         secs_to_hhmmss(total_downtime) if total_downtime is not None else '—',
                 'fuel_actual':          total_fuel,
                 'fuel_norm':            fuel_norm,
@@ -196,26 +197,39 @@ def report_detail(request, pk):
     groups     = all_records.values_list('group', flat=True).distinct().order_by('group')
     daily_view = _build_daily_view(filtered.order_by('row_number', 'shift'), report)
 
-    # Per-vehicle-per-shift norms map for dump trucks (used in table inline inputs)
+    # Per-vehicle-per-shift norms map for dump trucks
     existing_norms = {
         (vn.vehicle_name, vn.shift): vn
         for vn in VehicleNorm.objects.filter(report=report)
     }
-    # Enrich dump truck rows with their individual norm string
+    # Enrich dump truck rows with norm string, efficiency %, and overage time
     for row in daily_view:
         if row['type'] == 'record':
             rec = row['obj']
             if rec.group == 'Самосвалы':
                 vn = existing_norms.get((rec.name, rec.shift))
-                row['dt_norm_str'] = vn.norm_str() if vn and vn.dumptruck_norm_sec else ''
+                if vn and vn.dumptruck_norm_sec:
+                    row['dt_norm_str'] = vn.norm_str()
+                    overage_sec = (rec.engine_no_move_sec or 0) - vn.dumptruck_norm_sec
+                    row['dt_over_str'] = secs_to_hhmmss(overage_sec) if overage_sec > 0 else ''
+                else:
+                    row['dt_norm_str'] = ''
+                    row['dt_over_str'] = ''
         elif row['type'] == 'daily_total' and row.get('is_dumptruck'):
-            # Sum norms for all shifts of this vehicle
-            total_sec = 0
+            total_norm_sec = 0
             for shift_key in [1, 2]:
                 vn = existing_norms.get((row['name'], shift_key))
                 if vn and vn.dumptruck_norm_sec:
-                    total_sec += vn.dumptruck_norm_sec
-            row['dt_norm_str'] = secs_to_hhmmss(total_sec) if total_sec else ''
+                    total_norm_sec += vn.dumptruck_norm_sec
+            if total_norm_sec:
+                row['dt_norm_str'] = secs_to_hhmmss(total_norm_sec)
+                no_move_sec = row.get('engine_no_move_sec') or 0
+                row['type_efficiency_pct'] = round(no_move_sec / total_norm_sec * 100, 1)
+                overage_sec = no_move_sec - total_norm_sec
+                row['dt_over_str'] = secs_to_hhmmss(overage_sec) if overage_sec > 0 else ''
+            else:
+                row['dt_norm_str'] = ''
+                row['dt_over_str'] = ''
 
     context = {
         'report':         report,
