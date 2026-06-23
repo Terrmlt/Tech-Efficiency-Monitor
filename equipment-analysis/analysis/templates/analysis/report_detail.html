@@ -252,9 +252,10 @@
                                    class="comment-input dt-norm-input font-monospace"
                                    data-vehicle="{{ rec.name }}"
                                    data-shift="{{ rec.shift }}"
+                                   data-date="{{ rec.date }}"
                                    value="{{ row.dt_norm_str }}"
                                    placeholder="чч:мм:сс"
-                                   title="Норма без движения для {{ rec.name }} (смена {{ rec.shift }})">
+                                   title="Норма без движения для {{ rec.name }} (смена {{ rec.shift }}, {{ rec.date }})">
                             {% endif %}
                         </td>
                         <td class="text-muted small">{% if rec.mileage is not None %}{{ rec.mileage }}{% else %}—{% endif %}</td>
@@ -396,6 +397,7 @@ if (calcBtn) {
             norms.push({
                 vehicle_name: inp.dataset.vehicle,
                 shift: (!isNaN(shift) && shift !== null) ? shift : null,
+                date: inp.dataset.date || '',
                 norm_str: normStr
             });
         });

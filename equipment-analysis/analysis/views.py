@@ -207,9 +207,10 @@ def report_detail(request, pk):
     groups     = all_records.values_list('group', flat=True).distinct().order_by('group')
     daily_view = _build_daily_view(filtered.order_by('row_number', 'shift'), report)
 
-    # Per-vehicle-per-shift norms map for dump trucks
+    # Per-vehicle-per-shift-per-date norms map for dump trucks
+    # Key: (vehicle_name, shift, date)
     existing_norms = {
-        (vn.vehicle_name, vn.shift): vn
+        (vn.vehicle_name, vn.shift, vn.date): vn
         for vn in VehicleNorm.objects.filter(report=report)
     }
     # Enrich rows with norm string, efficiency %, and overage time for all groups
@@ -217,7 +218,7 @@ def report_detail(request, pk):
         if row['type'] == 'record':
             rec = row['obj']
             if rec.group == 'Самосвалы':
-                vn = existing_norms.get((rec.name, rec.shift))
+                vn = existing_norms.get((rec.name, rec.shift, rec.date))
                 if vn and vn.dumptruck_norm_sec:
                     row['dt_norm_str'] = vn.norm_str()
                     overage_sec = (rec.engine_no_move_sec or 0) - vn.dumptruck_norm_sec
@@ -238,9 +239,10 @@ def report_detail(request, pk):
                 else:
                     row['over_str'] = ''
         elif row['type'] == 'daily_total' and row.get('is_dumptruck'):
+            row_date = row.get('date', '')
             total_norm_sec = 0
             for shift_key in [1, 2]:
-                vn = existing_norms.get((row['name'], shift_key))
+                vn = existing_norms.get((row['name'], shift_key, row_date))
                 if vn and vn.dumptruck_norm_sec:
                     total_norm_sec += vn.dumptruck_norm_sec
             if total_norm_sec:
@@ -303,9 +305,11 @@ def _parse_hhmmss_to_sec(value):
 
 @require_POST
 def set_vehicle_norms(request, pk):
-    """Save per-shift dump truck norms and recalculate efficiency for matching records.
+    """Save per-day per-shift dump truck norms and recalculate efficiency.
 
-    Expects JSON body: {"norms": [{"vehicle_name": "...", "shift": 1, "norm_str": "02:00:00"}, ...]}
+    Expects JSON body:
+      {"norms": [{"vehicle_name": "...", "shift": 1, "date": "19.06", "norm_str": "06:10:00"}, ...]}
+    Each (vehicle_name, shift, date) tuple gets its own norm.
     """
     report = get_object_or_404(Report, pk=pk)
     try:
@@ -321,6 +325,7 @@ def set_vehicle_norms(request, pk):
         for item in norms_list:
             vehicle_name = (item.get('vehicle_name') or '').strip()
             shift = item.get('shift')  # int or None
+            date_str = (item.get('date') or '').strip()
             norm_str = (item.get('norm_str') or '').strip()
 
             if not vehicle_name or not norm_str:
@@ -328,40 +333,43 @@ def set_vehicle_norms(request, pk):
 
             norm_sec = _parse_hhmmss_to_sec(norm_str)
             if norm_sec is None or norm_sec <= 0:
-                errors.append(f'{vehicle_name} С{shift}: неверный формат нормы «{norm_str}»')
+                errors.append(f'{vehicle_name} С{shift} {date_str}: неверный формат нормы «{norm_str}»')
                 continue
 
-            # update_or_create with shift=None is unsafe in SQLite: NULL != NULL
-            # in UNIQUE constraints, so duplicate rows can be created.
-            # Use explicit filter+update/create pattern for NULL case.
+            # Save norm for this specific (vehicle, shift, date) combination.
+            # shift=None safe path: use filter+update/create to avoid SQLite NULL uniqueness issue.
             if shift is not None:
                 VehicleNorm.objects.update_or_create(
                     report=report,
                     vehicle_name=vehicle_name,
                     shift=shift,
+                    date=date_str,
                     defaults={'dumptruck_norm_sec': norm_sec},
                 )
             else:
                 updated_count = VehicleNorm.objects.filter(
-                    report=report, vehicle_name=vehicle_name, shift__isnull=True
+                    report=report, vehicle_name=vehicle_name,
+                    shift__isnull=True, date=date_str,
                 ).update(dumptruck_norm_sec=norm_sec)
                 if updated_count == 0:
                     VehicleNorm.objects.create(
                         report=report, vehicle_name=vehicle_name,
-                        shift=None, dumptruck_norm_sec=norm_sec,
+                        shift=None, date=date_str, dumptruck_norm_sec=norm_sec,
                     )
 
+            # Recalculate type_efficiency only for the matching record(s)
             rec_qs = VehicleRecord.objects.filter(
                 report=report, name=vehicle_name, group='Самосвалы',
             )
             if shift is not None:
                 rec_qs = rec_qs.filter(shift=shift)
+            if date_str:
+                rec_qs = rec_qs.filter(date=date_str)
 
             for rec in rec_qs:
-                if rec.engine_no_move_sec is not None:
-                    rec.type_efficiency = rec.engine_no_move_sec / norm_sec
-                    rec.save(update_fields=['type_efficiency'])
-                    updated_records += 1
+                rec.type_efficiency = rec.engine_no_move_sec / norm_sec
+                rec.save(update_fields=['type_efficiency'])
+                updated_records += 1
 
     return JsonResponse({
         'ok': True,
