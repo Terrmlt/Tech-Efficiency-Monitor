@@ -113,8 +113,7 @@ def _build_daily_view(records, report):
                 ov = (rec.engine_idle_sec or 0) - report.bulldozer_norm_sec
             elif rec.group == 'Экскаваторы' and report.excavator_norm_sec > 0 and rec.downtime_sec is not None:
                 ov = rec.downtime_sec - report.excavator_norm_sec
-            elif rec.group == 'Самосвалы' and report.dumptruck_norm_sec > 0:
-                ov = (rec.engine_no_move_sec or 0) - report.dumptruck_norm_sec
+            # Dump trucks: over_str is set later by report_detail enrichment loop (uses VehicleNorm)
             rows.append({'type': 'record', 'obj': rec, 'over_str': secs_to_hhmmss(ov) if ov > 0 else ''})
 
         if len(recs) > 1:
@@ -449,12 +448,10 @@ def _build_daily_view_records(records):
             elif rec.group == 'Экскаваторы' and report.excavator_norm_sec > 0 and rec.downtime_sec is not None:
                 ov = rec.downtime_sec - report.excavator_norm_sec
             elif rec.group == 'Самосвалы':
-                # Use per-day per-shift VehicleNorm if available, else fall back to global
+                # Use per-day per-shift VehicleNorm only — no global fallback
                 vn_sec = dt_norms.get((report_id, rec.name, rec.shift, rec.date))
                 if vn_sec:
                     ov = (rec.engine_no_move_sec or 0) - vn_sec
-                elif report.dumptruck_norm_sec > 0:
-                    ov = (rec.engine_no_move_sec or 0) - report.dumptruck_norm_sec
             rows.append({'type': 'record', 'obj': rec, 'over_str': secs_to_hhmmss(ov) if ov > 0 else ''})
 
         if len(recs) > 1:
@@ -496,20 +493,16 @@ def _build_daily_view_records(records):
                 type_eff = round(total_idle / (report.bulldozer_norm_sec * n) * 100, 1)
             elif group == 'Экскаваторы' and total_downtime is not None and report.excavator_norm_sec > 0:
                 type_eff = round(total_downtime / (report.excavator_norm_sec * n) * 100, 1)
-            elif group == 'Самосвалы':
-                norm_for_eff = dt_total_norm or (report.dumptruck_norm_sec * n)
-                if norm_for_eff > 0:
-                    type_eff = round(total_no_move / norm_for_eff * 100, 1)
+            elif group == 'Самосвалы' and dt_total_norm > 0:
+                type_eff = round(total_no_move / dt_total_norm * 100, 1)
 
             ov_total = 0
             if group in ('Бульдозеры', 'Погрузчики') and report.bulldozer_norm_sec > 0:
                 ov_total = total_idle - report.bulldozer_norm_sec * n
             elif group == 'Экскаваторы' and total_downtime is not None and report.excavator_norm_sec > 0:
                 ov_total = total_downtime - report.excavator_norm_sec * n
-            elif group == 'Самосвалы':
-                norm_for_ov = dt_total_norm or (report.dumptruck_norm_sec * n)
-                if norm_for_ov > 0:
-                    ov_total = total_no_move - norm_for_ov
+            elif group == 'Самосвалы' and dt_total_norm > 0:
+                ov_total = total_no_move - dt_total_norm
 
             rows.append({
                 'type':                 'daily_total',
@@ -931,8 +924,10 @@ def export_records_excel(request):
             ov = (rec.engine_idle_sec or 0) - rpt.bulldozer_norm_sec
         elif rec.group == 'Экскаваторы' and rpt.excavator_norm_sec > 0 and rec.downtime_sec is not None:
             ov = rec.downtime_sec - rpt.excavator_norm_sec
-        elif rec.group == 'Самосвалы' and rpt.dumptruck_norm_sec > 0:
-            ov = (rec.engine_no_move_sec or 0) - rpt.dumptruck_norm_sec
+        elif rec.group == 'Самосвалы':
+            vn_sec = export_dt_norms.get((rpt.pk, rec.name, rec.shift, rec.date))
+            if vn_sec:
+                ov = (rec.engine_no_move_sec or 0) - vn_sec
         over_str = _s2h(ov) if ov > 0 else ''
 
         section_name = rec.report.section.name if rec.report.section else ''
@@ -1045,9 +1040,9 @@ def _build_excel_workbook(report, all_records, summary):
     # 18 Комментарий
     NCOLS = 18
 
-    # Load per-shift dump truck norms for this report
+    # Load per-day per-shift dump truck norms for this report
     dt_norms = {
-        (vn.vehicle_name, vn.shift): vn.dumptruck_norm_sec
+        (vn.vehicle_name, vn.shift, vn.date): vn.dumptruck_norm_sec
         for vn in VehicleNorm.objects.filter(report=report)
     }
 
