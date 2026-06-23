@@ -156,6 +156,7 @@ def _build_daily_view(records, report):
                 'name':                 name,
                 'date':                 date,
                 'group':                group,
+                'n':                    n,
                 'has_anomaly':          any(r.has_anomaly for r in recs),
                 'engine_time_str':      secs_to_hhmmss(total_engine),
                 'engine_idle_str':      secs_to_hhmmss(total_idle),
@@ -254,14 +255,16 @@ def report_detail(request, pk):
         elif row['type'] == 'daily_total' and row.get('is_bulldozer_or_loader'):
             if report.bulldozer_norm_sec > 0:
                 idle_sec = row.get('engine_idle_sec') or 0
-                overage_sec = idle_sec - report.bulldozer_norm_sec
+                n_shifts = row.get('n', 1)
+                overage_sec = idle_sec - report.bulldozer_norm_sec * n_shifts
                 row['over_str'] = secs_to_hhmmss(overage_sec) if overage_sec > 0 else ''
             else:
                 row['over_str'] = ''
         elif row['type'] == 'daily_total' and row.get('is_excavator'):
             if report.excavator_norm_sec > 0:
                 dt_sec = row.get('downtime_sec') or 0
-                overage_sec = dt_sec - report.excavator_norm_sec
+                n_shifts = row.get('n', 1)
+                overage_sec = dt_sec - report.excavator_norm_sec * n_shifts
                 row['over_str'] = secs_to_hhmmss(overage_sec) if overage_sec > 0 else ''
             else:
                 row['over_str'] = ''
