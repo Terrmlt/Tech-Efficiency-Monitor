@@ -331,12 +331,25 @@ def set_vehicle_norms(request, pk):
                 errors.append(f'{vehicle_name} С{shift}: неверный формат нормы «{norm_str}»')
                 continue
 
-            VehicleNorm.objects.update_or_create(
-                report=report,
-                vehicle_name=vehicle_name,
-                shift=shift,
-                defaults={'dumptruck_norm_sec': norm_sec},
-            )
+            # update_or_create with shift=None is unsafe in SQLite: NULL != NULL
+            # in UNIQUE constraints, so duplicate rows can be created.
+            # Use explicit filter+update/create pattern for NULL case.
+            if shift is not None:
+                VehicleNorm.objects.update_or_create(
+                    report=report,
+                    vehicle_name=vehicle_name,
+                    shift=shift,
+                    defaults={'dumptruck_norm_sec': norm_sec},
+                )
+            else:
+                updated_count = VehicleNorm.objects.filter(
+                    report=report, vehicle_name=vehicle_name, shift__isnull=True
+                ).update(dumptruck_norm_sec=norm_sec)
+                if updated_count == 0:
+                    VehicleNorm.objects.create(
+                        report=report, vehicle_name=vehicle_name,
+                        shift=None, dumptruck_norm_sec=norm_sec,
+                    )
 
             rec_qs = VehicleRecord.objects.filter(
                 report=report, name=vehicle_name, group='Самосвалы',

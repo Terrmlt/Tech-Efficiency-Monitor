@@ -389,13 +389,15 @@ if (calcBtn) {
         var norms = [];
         document.querySelectorAll('.dt-norm-input').forEach(function(inp) {
             var normStr = inp.value.trim();
-            if (normStr) {
-                norms.push({
-                    vehicle_name: inp.dataset.vehicle,
-                    shift: inp.dataset.shift ? parseInt(inp.dataset.shift) : null,
-                    norm_str: normStr
-                });
-            }
+            if (!normStr) return;
+            // dataset.shift is always a string; use !== '' to avoid "0" being falsy
+            var shiftRaw = inp.dataset.shift;
+            var shift = (shiftRaw !== '' && shiftRaw !== undefined) ? parseInt(shiftRaw, 10) : null;
+            norms.push({
+                vehicle_name: inp.dataset.vehicle,
+                shift: (!isNaN(shift) && shift !== null) ? shift : null,
+                norm_str: normStr
+            });
         });
 
         if (!norms.length) {
@@ -406,7 +408,7 @@ if (calcBtn) {
         var status = document.getElementById('calcDumptruckStatus');
         calcBtn.disabled = true;
         calcBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Расчёт…';
-        if (status) status.textContent = '';
+        if (status) { status.textContent = ''; status.className = 'small text-muted'; }
 
         fetch('{% url "set_vehicle_norms" report.pk %}', {
             method: 'POST',
@@ -421,21 +423,30 @@ if (calcBtn) {
             calcBtn.disabled = false;
             calcBtn.innerHTML = '<i class="bi bi-calculator me-1"></i>Рассчитать эффективность самосвалов';
             if (data.ok) {
-                if (status) {
-                    status.textContent = 'Обновлено записей: ' + data.updated;
-                    if (data.errors && data.errors.length) {
-                        status.textContent += ' ⚠ ' + data.errors.join('; ');
-                    }
+                var msg = 'Обновлено записей: ' + data.updated;
+                if (data.errors && data.errors.length) {
+                    msg += ' ⚠ ' + data.errors.join('; ');
                 }
-                setTimeout(function() { window.location.reload(); }, 800);
+                if (data.updated === 0) {
+                    msg = '⚠ Нет записей для обновления. Проверьте формат нормы (чч:мм:сс).';
+                    if (status) { status.textContent = msg; status.className = 'small text-warning fw-semibold'; }
+                    return;
+                }
+                if (status) { status.textContent = msg; status.className = 'small text-success fw-semibold'; }
+                // Force fresh page load, bypassing browser bfcache
+                setTimeout(function() {
+                    var url = new URL(window.location.href);
+                    url.searchParams.set('_r', Date.now());
+                    window.location.replace(url.toString());
+                }, 1200);
             } else {
-                if (status) { status.textContent = 'Ошибка: ' + (data.error || 'неизвестная'); }
+                if (status) { status.textContent = 'Ошибка: ' + (data.error || 'неизвестная'); status.className = 'small text-danger'; }
             }
         })
         .catch(function() {
             calcBtn.disabled = false;
             calcBtn.innerHTML = '<i class="bi bi-calculator me-1"></i>Рассчитать эффективность самосвалов';
-            if (status) status.textContent = 'Ошибка сети';
+            if (status) { status.textContent = 'Ошибка сети — проверьте соединение'; status.className = 'small text-danger'; }
         });
     });
 }
