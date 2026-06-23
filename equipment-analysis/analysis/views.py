@@ -883,6 +883,14 @@ def export_records_excel(request):
 
     all_records = list(qs.order_by('record_date', 'shift', 'group', 'name'))
 
+    # Load per-day per-shift dump truck norms for all relevant reports
+    report_ids = {rec.report_id for rec in all_records}
+    export_dt_norms = {
+        (vn.report_id, vn.vehicle_name, vn.shift, vn.date): vn.dumptruck_norm_sec
+        for vn in VehicleNorm.objects.filter(report_id__in=report_ids)
+        if vn.dumptruck_norm_sec
+    }
+
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = 'Записи'
@@ -1151,7 +1159,7 @@ def _build_excel_workbook(report, all_records, summary):
             norm_bd_str = ''
             over_bd_str = ''
             if rec.group == 'Самосвалы':
-                norm_sec = dt_norms.get((rec.name, rec.shift))
+                norm_sec = dt_norms.get((rec.name, rec.shift, rec.date))
                 if norm_sec:
                     norm_bd_str = secs_to_hhmmss(norm_sec)
                     overage = (rec.engine_no_move_sec or 0) - norm_sec
