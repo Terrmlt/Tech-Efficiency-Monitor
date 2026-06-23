@@ -411,12 +411,25 @@ def _build_daily_view_records(records):
     Groups by (name, date, report_id) so records from different reports
     for the same vehicle are kept separate.
     Each group's norms come from its own report object.
+    Per-day per-shift dump truck norms are loaded from VehicleNorm.
     """
     from .models import secs_to_hhmmss
 
+    # Collect all report IDs present in this queryset
+    report_ids = set()
+    rec_list = list(records)
+    for rec in rec_list:
+        report_ids.add(rec.report_id)
+
+    # Load per-day per-shift norms for dump trucks: (report_id, vehicle_name, shift, date)
+    dt_norms = {}
+    for vn in VehicleNorm.objects.filter(report_id__in=report_ids):
+        if vn.dumptruck_norm_sec:
+            dt_norms[(vn.report_id, vn.vehicle_name, vn.shift, vn.date)] = vn.dumptruck_norm_sec
+
     order = []
     groups = {}
-    for rec in records:
+    for rec in rec_list:
         key = (rec.name, rec.date, rec.report_id)
         if key not in groups:
             order.append(key)
@@ -435,8 +448,13 @@ def _build_daily_view_records(records):
                 ov = (rec.engine_idle_sec or 0) - report.bulldozer_norm_sec
             elif rec.group == 'Экскаваторы' and report.excavator_norm_sec > 0 and rec.downtime_sec is not None:
                 ov = rec.downtime_sec - report.excavator_norm_sec
-            elif rec.group == 'Самосвалы' and report.dumptruck_norm_sec > 0:
-                ov = (rec.engine_no_move_sec or 0) - report.dumptruck_norm_sec
+            elif rec.group == 'Самосвалы':
+                # Use per-day per-shift VehicleNorm if available, else fall back to global
+                vn_sec = dt_norms.get((report_id, rec.name, rec.shift, rec.date))
+                if vn_sec:
+                    ov = (rec.engine_no_move_sec or 0) - vn_sec
+                elif report.dumptruck_norm_sec > 0:
+                    ov = (rec.engine_no_move_sec or 0) - report.dumptruck_norm_sec
             rows.append({'type': 'record', 'obj': rec, 'over_str': secs_to_hhmmss(ov) if ov > 0 else ''})
 
         if len(recs) > 1:
@@ -465,21 +483,33 @@ def _build_daily_view_records(records):
 
             output = round(total_engine / daily_norm_n * 100, 1) if daily_norm_n > 0 else None
 
+            # For dump trucks: use per-day norms from VehicleNorm (sum of both shifts)
+            dt_total_norm = 0
+            if group == 'Самосвалы':
+                for shift_key in [1, 2]:
+                    s = dt_norms.get((report_id, name, shift_key, date))
+                    if s:
+                        dt_total_norm += s
+
             type_eff = None
             if group in ('Бульдозеры', 'Погрузчики') and report.bulldozer_norm_sec > 0:
                 type_eff = round(total_idle / (report.bulldozer_norm_sec * n) * 100, 1)
             elif group == 'Экскаваторы' and total_downtime is not None and report.excavator_norm_sec > 0:
                 type_eff = round(total_downtime / (report.excavator_norm_sec * n) * 100, 1)
-            elif group == 'Самосвалы' and report.dumptruck_norm_sec > 0:
-                type_eff = round(total_no_move / (report.dumptruck_norm_sec * n) * 100, 1)
+            elif group == 'Самосвалы':
+                norm_for_eff = dt_total_norm or (report.dumptruck_norm_sec * n)
+                if norm_for_eff > 0:
+                    type_eff = round(total_no_move / norm_for_eff * 100, 1)
 
             ov_total = 0
             if group in ('Бульдозеры', 'Погрузчики') and report.bulldozer_norm_sec > 0:
                 ov_total = total_idle - report.bulldozer_norm_sec * n
             elif group == 'Экскаваторы' and total_downtime is not None and report.excavator_norm_sec > 0:
                 ov_total = total_downtime - report.excavator_norm_sec * n
-            elif group == 'Самосвалы' and report.dumptruck_norm_sec > 0:
-                ov_total = total_no_move - report.dumptruck_norm_sec * n
+            elif group == 'Самосвалы':
+                norm_for_ov = dt_total_norm or (report.dumptruck_norm_sec * n)
+                if norm_for_ov > 0:
+                    ov_total = total_no_move - norm_for_ov
 
             rows.append({
                 'type':                 'daily_total',
