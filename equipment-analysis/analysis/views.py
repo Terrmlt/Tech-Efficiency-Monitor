@@ -843,10 +843,11 @@ def export_excel(request, pk):
 
 
 def export_records_excel(request):
-    """Export filtered records from the unified view."""
+    """Export filtered records — grouped by equipment type, shifts hierarchically."""
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
+    from collections import defaultdict, OrderedDict
 
     qs = VehicleRecord.objects.select_related('report', 'report__section').all()
 
@@ -881,7 +882,7 @@ def export_records_excel(request):
         except ValueError:
             pass
 
-    all_records = list(qs.order_by('record_date', 'shift', 'group', 'name'))
+    all_records = list(qs.order_by('group', 'name', 'record_date', 'date', 'shift'))
 
     # Load per-day per-shift dump truck norms for all relevant reports
     report_ids = {rec.report_id for rec in all_records}
@@ -891,43 +892,76 @@ def export_records_excel(request):
         if vn.dumptruck_norm_sec
     }
 
+    from .models import secs_to_hhmmss as _s2h
+
+    # ── Style constants ────────────────────────────────────────────────
+    DARK_BLUE = '1F3864'
+    MID_BLUE  = '2E75B6'
+    GROUP_BG  = 'D6E4F0'
+    TOTAL_BG  = 'BDD7EE'
+    YELLOW_BG = 'FFF2CC'
+    GREEN_BG  = 'E2EFDA'
+    RED_BG    = 'FFE0E0'
+    ORANGE_BG = 'FCE4D6'
+
+    NCOLS = 18
+
+    def _side():
+        return Side(style='thin', color='BFBFBF')
+
+    def _border():
+        s = _side()
+        return Border(left=s, right=s, top=s, bottom=s)
+
+    def _fill(color):
+        return PatternFill('solid', fgColor=color)
+
+    def _font(bold=False, color='000000', size=10):
+        return Font(bold=bold, color=color, size=size, name='Calibri')
+
+    def _align(h='center', v='center', wrap=False):
+        return Alignment(horizontal=h, vertical=v, wrap_text=wrap)
+
+    def _pct_fill(val, good_max, warn_max):
+        if val is None:
+            return None
+        if val <= good_max:
+            return _fill(GREEN_BG)
+        if val <= warn_max:
+            return _fill(ORANGE_BG)
+        return _fill(RED_BG)
+
+    # ── Build workbook ─────────────────────────────────────────────────
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = 'Записи'
+    ws.sheet_properties.outlinePr.summaryBelow = True
 
-    DARK_BLUE = '1F3864'
-    MID_BLUE = '2E75B6'
-
-    def hdr_cell(ws, row, col, val):
-        c = ws.cell(row=row, column=col, value=val)
-        c.font = Font(bold=True, color='FFFFFF', size=10, name='Calibri')
-        c.fill = PatternFill('solid', fgColor=MID_BLUE)
-        c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-        s = Side(style='thin', color='BFBFBF')
-        c.border = Border(left=s, right=s, top=s, bottom=s)
-
-    headers = [
+    # ── Column headers (row 1) ─────────────────────────────────────────
+    HEADERS = [
         'Дата', 'Смена', 'Участок', 'Отчёт', '№', 'Техника', 'Группа',
-        'Время работы', 'Факт. расход, л', 'Норма л/ч',
-        'Расход к норме, %', 'Выход техники, %', 'Эффективность, %',
-        'Простой свыше нормы',
-        'Пробег, км', 'Заправка, л', 'Аномалии', 'Комментарий',
+        'Время\nработы', 'Факт. расход\n(л)', 'Норма\n(л/ч)',
+        'Расход к норме\n(%)', 'Выход техники\n(%)', 'Эффективность\n(%)',
+        'Простой свыше\nнормы',
+        'Пробег\n(км)', 'Заправка\n(л)', 'Аномалии', 'Комментарий',
     ]
-    for i, h in enumerate(headers, 1):
-        hdr_cell(ws, 1, i, h)
-    ws.row_dimensions[1].height = 36
+    for col, h in enumerate(HEADERS, 1):
+        c = ws.cell(row=1, column=col, value=h)
+        c.font = Font(bold=True, color='FFFFFF', size=10, name='Calibri')
+        c.fill = _fill(MID_BLUE)
+        c.alignment = _align(wrap=True)
+        c.border = _border()
+    ws.row_dimensions[1].height = 40
+    ws.freeze_panes = 'A2'
 
-    from .models import secs_to_hhmmss as _s2h
-
-    YELLOW_BG = 'FFF2CC'
-    for row_idx, rec in enumerate(all_records, 2):
-        fuel_eff_pct = round(rec.fuel_efficiency * 100, 1) if rec.fuel_efficiency is not None else None
-        output_pct = round(rec.equipment_output * 100, 1) if rec.equipment_output is not None else None
-        type_eff_pct = round(rec.type_efficiency * 100, 1) if rec.type_efficiency is not None else None
-
-        # Compute overage (time beyond norm)
-        ov = 0
+    # ── Helper: write one data row ─────────────────────────────────────
+    def write_record_row(rec, outline_level=0):
         rpt = rec.report
+        fuel_eff_pct  = round(rec.fuel_efficiency  * 100, 1) if rec.fuel_efficiency  is not None else None
+        output_pct    = round(rec.equipment_output * 100, 1) if rec.equipment_output is not None else None
+        type_eff_pct  = round(rec.type_efficiency  * 100, 1) if rec.type_efficiency  is not None else None
+
+        ov = 0
         if rec.group in ('Бульдозеры', 'Погрузчики') and rpt.bulldozer_norm_sec > 0:
             ov = (rec.engine_idle_sec or 0) - rpt.bulldozer_norm_sec
         elif rec.group == 'Экскаваторы' and rpt.excavator_norm_sec > 0 and rec.downtime_sec is not None:
@@ -938,40 +972,157 @@ def export_records_excel(request):
                 ov = (rec.engine_no_move_sec or 0) - vn_sec
         over_str = _s2h(ov) if ov > 0 else ''
 
-        section_name = rec.report.section.name if rec.report.section else ''
-        date_display = rec.record_date.strftime('%d.%m.%Y') if rec.record_date else rec.date
+        section_name  = rpt.section.name if rpt.section else ''
+        date_display  = rec.record_date.strftime('%d.%m.%Y') if rec.record_date else rec.date
 
-        row_data = [
+        ws.append([
             date_display,
-            f'Смена {rec.shift}' if rec.shift else '—',
-            section_name,
-            rec.report.name,
-            rec.row_number,
-            rec.name,
-            rec.group,
-            rec.engine_time_str(),
-            rec.fuel_actual,
-            rec.fuel_norm,
-            fuel_eff_pct,
-            output_pct,
-            type_eff_pct,
-            over_str,
-            rec.mileage,
-            rec.refueling,
+            f'С{rec.shift}' if rec.shift else '—',
+            section_name, rpt.name, rec.row_number, rec.name, rec.group,
+            rec.engine_time_str(), rec.fuel_actual, rec.fuel_norm,
+            fuel_eff_pct, output_pct, type_eff_pct, over_str,
+            rec.mileage, rec.refueling,
             '; '.join(rec.anomaly_details) if rec.has_anomaly else '',
             rec.comment,
-        ]
-        for col_idx, val in enumerate(row_data, 1):
-            c = ws.cell(row=row_idx, column=col_idx, value=val)
-            c.font = Font(size=10, name='Calibri')
-            c.alignment = Alignment(horizontal='center', vertical='center')
-            s = Side(style='thin', color='BFBFBF')
-            c.border = Border(left=s, right=s, top=s, bottom=s)
-        if rec.has_anomaly:
-            for col_idx in range(1, len(headers) + 1):
-                ws.cell(row=row_idx, column=col_idx).fill = PatternFill('solid', fgColor=YELLOW_BG)
+        ])
+        r = ws.max_row
+        ws.row_dimensions[r].outline_level = outline_level
+        base_fill = _fill(YELLOW_BG) if rec.has_anomaly else None
+        for col in range(1, NCOLS + 1):
+            c = ws.cell(row=r, column=col)
+            c.font = _font()
+            c.alignment = _align()
+            c.border = _border()
+            if base_fill and col not in (11, 12, 13):
+                c.fill = base_fill
+        ws.cell(row=r, column=6).alignment  = _align('left')
+        ws.cell(row=r, column=17).alignment = _align('left', wrap=True)
+        ws.cell(row=r, column=18).alignment = _align('left', wrap=True)
+        # Colour KPI cells
+        f = _pct_fill(fuel_eff_pct, 100, 115)
+        if f:
+            ws.cell(row=r, column=11).fill = f
+        if output_pct is not None:
+            ws.cell(row=r, column=12).fill = _fill(GREEN_BG) if output_pct >= 80 else _fill(RED_BG)
+        f = _pct_fill(type_eff_pct, 100, 130)
+        if f:
+            ws.cell(row=r, column=13).fill = f
+        if over_str:
+            ws.cell(row=r, column=14).fill = _fill('FFB3B3')
+            ws.cell(row=r, column=14).font = Font(bold=True, color='C00000', name='Calibri', size=10)
 
-    col_widths = [12, 10, 16, 25, 5, 28, 14, 14, 14, 10, 14, 14, 14, 14, 12, 12, 45, 35]
+    # ── Helper: write a daily-total row for multi-shift vehicle+date ───
+    def write_total_row(recs, outline_level=0):
+        rpt           = recs[0].report
+        group         = recs[0].group
+        date_display  = recs[0].record_date.strftime('%d.%m.%Y') if recs[0].record_date else recs[0].date
+        section_name  = rpt.section.name if rpt.section else ''
+        n             = len(recs)
+
+        total_engine  = sum(r.engine_time_sec for r in recs)
+        total_no_move = sum(r.engine_no_move_sec for r in recs)
+        total_idle    = sum(r.engine_idle_sec for r in recs)
+        total_fuel    = sum(r.fuel_actual for r in recs if r.fuel_actual is not None) if any(r.fuel_actual is not None for r in recs) else None
+        total_mileage = sum(r.mileage for r in recs if r.mileage is not None) if any(r.mileage is not None for r in recs) else None
+        total_ref     = sum(r.refueling for r in recs if r.refueling is not None) if any(r.refueling is not None for r in recs) else None
+        total_dt      = sum(r.downtime_sec for r in recs if r.downtime_sec is not None) if any(r.downtime_sec is not None for r in recs) else None
+        fuel_norm     = recs[0].fuel_norm
+
+        daily_norm_n  = rpt.daily_norm_sec * n
+        daily_h_n     = daily_norm_n / 3600 if daily_norm_n > 0 else 0
+
+        fuel_eff_pct = None
+        if fuel_norm > 0 and daily_h_n > 0 and total_fuel is not None and total_fuel >= 0:
+            fuel_eff_pct = round(total_fuel / (fuel_norm * daily_h_n) * 100, 1)
+        output_pct = round(total_engine / daily_norm_n * 100, 1) if daily_norm_n > 0 else None
+
+        type_eff_pct = None
+        if group in ('Бульдозеры', 'Погрузчики') and rpt.bulldozer_norm_sec > 0:
+            type_eff_pct = round(total_idle / (rpt.bulldozer_norm_sec * n) * 100, 1)
+        elif group == 'Экскаваторы' and total_dt is not None and rpt.excavator_norm_sec > 0:
+            type_eff_pct = round(total_dt / (rpt.excavator_norm_sec * n) * 100, 1)
+        elif group == 'Самосвалы':
+            dt_total = sum(
+                export_dt_norms.get((rpt.pk, recs[0].name, r.shift, r.date), 0)
+                for r in recs
+            )
+            if dt_total > 0:
+                type_eff_pct = round(total_no_move / dt_total * 100, 1)
+
+        ov = 0
+        if group in ('Бульдозеры', 'Погрузчики') and rpt.bulldozer_norm_sec > 0:
+            ov = total_idle - rpt.bulldozer_norm_sec * n
+        elif group == 'Экскаваторы' and total_dt is not None and rpt.excavator_norm_sec > 0:
+            ov = total_dt - rpt.excavator_norm_sec * n
+        over_str = _s2h(ov) if ov > 0 else ''
+
+        anomaly_cnt = sum(1 for r in recs if r.has_anomaly)
+
+        ws.append([
+            date_display, 'Итого', section_name, rpt.name, '',
+            recs[0].name, group,
+            _s2h(total_engine), total_fuel, fuel_norm,
+            fuel_eff_pct, output_pct, type_eff_pct, over_str,
+            total_mileage, total_ref,
+            f'Аномалий: {anomaly_cnt}' if anomaly_cnt else '', '',
+        ])
+        r = ws.max_row
+        ws.row_dimensions[r].outline_level = outline_level
+        for col in range(1, NCOLS + 1):
+            c = ws.cell(row=r, column=col)
+            c.font = Font(bold=True, size=10, name='Calibri', color=DARK_BLUE)
+            c.fill = _fill(TOTAL_BG)
+            c.alignment = _align()
+            c.border = _border()
+        ws.cell(row=r, column=6).alignment  = _align('left')
+        ws.cell(row=r, column=17).alignment = _align('left')
+        f = _pct_fill(fuel_eff_pct, 100, 115)
+        if f:
+            ws.cell(row=r, column=11).fill = f
+        if output_pct is not None:
+            ws.cell(row=r, column=12).fill = _fill(GREEN_BG) if output_pct >= 80 else _fill(RED_BG)
+        f = _pct_fill(type_eff_pct, 100, 130)
+        if f:
+            ws.cell(row=r, column=13).fill = f
+
+    # ── Build hierarchy: group → vehicle → date → shifts ──────────────
+    by_group = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    for rec in all_records:
+        by_group[rec.group][rec.name][rec.date].append(rec)
+
+    for group_name in sorted(by_group.keys()):
+        vehicles = by_group[group_name]
+        total_recs = sum(
+            len(shifts)
+            for dates in vehicles.values()
+            for shifts in dates.values()
+        )
+
+        # Group header
+        ws.append([''] * NCOLS)
+        gr = ws.max_row
+        ws.merge_cells(f'A{gr}:{get_column_letter(NCOLS)}{gr}')
+        gc = ws.cell(row=gr, column=1)
+        gc.value = f'  {group_name.upper()}  ({total_recs} записей)'
+        gc.font  = Font(bold=True, color='FFFFFF', size=11, name='Calibri')
+        gc.fill  = _fill(DARK_BLUE)
+        gc.alignment = _align('left')
+        ws.row_dimensions[gr].height = 20
+
+        for vehicle_name in sorted(vehicles.keys()):
+            dates = vehicles[vehicle_name]
+            for date_key in sorted(dates.keys()):
+                shifts = sorted(dates[date_key], key=lambda r: r.shift if r.shift else 99)
+                multi  = len(shifts) > 1
+
+                for rec in shifts:
+                    write_record_row(rec, outline_level=1 if multi else 0)
+
+                if multi:
+                    write_total_row(shifts, outline_level=0)
+
+    # ── Column widths ──────────────────────────────────────────────────
+    col_widths = [12, 8, 16, 25, 5, 30, 14, 14, 14, 10, 14, 14, 14, 14, 12, 12, 45, 35]
     for i, w in enumerate(col_widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
@@ -1002,53 +1153,33 @@ def _build_excel_workbook(report, all_records, summary):
     GREEN_BG  = 'E2EFDA'
     RED_BG    = 'FFE0E0'
     GREY_BG   = 'F2F2F2'
-    GROUP_BG  = 'D6E4F0'
     TOTAL_BG  = 'BDD7EE'
 
-    def make_font(bold=False, color='000000', size=10, name='Calibri'):
-        return Font(bold=bold, color=color, size=size, name=name)
-
-    def make_fill(color):
+    def _fill(color):
         return PatternFill('solid', fgColor=color)
 
-    def make_align(h='center', v='center', wrap=False):
-        return Alignment(horizontal=h, vertical=v, wrap_text=wrap)
-
-    def thin_border():
+    def _border():
         s = Side(style='thin', color='BFBFBF')
         return Border(left=s, right=s, top=s, bottom=s)
 
-    def pct_fill(val, good_max, warn_max):
+    def _align(h='center', v='center', wrap=False):
+        return Alignment(horizontal=h, vertical=v, wrap_text=wrap)
+
+    def _pct_fill(val, good_max, warn_max):
         if val is None:
             return None
         if val <= good_max:
-            return make_fill(GREEN_BG)
+            return _fill(GREEN_BG)
         if val <= warn_max:
-            return make_fill(YELLOW_BG)
-        return make_fill(ORANGE_BG)
+            return _fill(YELLOW_BG)
+        return _fill(ORANGE_BG)
 
-    # ── Columns (18 total) ─────────────────────────────────────────────
-    # 1  №
-    # 2  Техника
-    # 3  Группа
-    # 4  Дата
-    # 5  Смена
-    # 6  Время работы (чч:мм:сс)
-    # 7  Факт. расход (л)
-    # 8  Норма расхода (л/ч)
-    # 9  Расход к норме (%)
-    # 10 Выход техники (%)
-    # 11 Эффективность (%)
-    # 12 Тип эффективности
-    # 13 Норма б/д (чч:мм:сс)    ← dump trucks
-    # 14 Превышение нормы б/д     ← dump trucks >100 %
-    # 15 Пробег (км)
-    # 16 Заправка (л)
-    # 17 Аномалии
-    # 18 Комментарий
+    # Columns: 1=№ 2=Техника 3=Группа 4=Дата 5=Смена 6=Время работы
+    # 7=Факт.расход 8=Норма(л/ч) 9=Расход% 10=Выход% 11=Эффект%
+    # 12=Тип 13=Норма б/д 14=Превышение 15=Пробег 16=Заправка 17=Аномалии 18=Комментарий
     NCOLS = 18
 
-    # Load per-day per-shift dump truck norms for this report
+    # Load dump-truck per-shift norms: (vehicle_name, shift, date) → seconds
     dt_norms = {
         (vn.vehicle_name, vn.shift, vn.date): vn.dumptruck_norm_sec
         for vn in VehicleNorm.objects.filter(report=report)
@@ -1057,22 +1188,23 @@ def _build_excel_workbook(report, all_records, summary):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = 'Отчёт'
+    ws.sheet_properties.outlinePr.summaryBelow = True
 
+    # ── Title rows ─────────────────────────────────────────────────────
     def write_merged(row_num, text, bg, fg='FFFFFF', bold=True, size=11):
         ws.merge_cells(f'A{row_num}:{get_column_letter(NCOLS)}{row_num}')
         c = ws.cell(row=row_num, column=1)
         c.value = text
         c.font = Font(bold=bold, color=fg, size=size, name='Calibri')
-        c.fill = make_fill(bg)
-        c.alignment = make_align('center')
+        c.fill = _fill(bg)
+        c.alignment = _align('center')
         ws.row_dimensions[row_num].height = 22
 
     write_merged(1, f'Анализ эффективности техники — {report.name}', DARK_BLUE, size=13)
     ws.row_dimensions[1].height = 28
 
     section_name = report.section.name if report.section else '—'
-    period_text = f'Период: {report.period} | Участок: {section_name}'
-    write_merged(2, period_text, 'E8F0FB', '595959', bold=False, size=10)
+    write_merged(2, f'Период: {report.period} | Участок: {section_name}', 'E8F0FB', '595959', bold=False, size=10)
 
     norm_row = [
         'Норма/смену:', report.daily_norm_str(),
@@ -1083,167 +1215,238 @@ def _build_excel_workbook(report, all_records, summary):
     for col in range(1, NCOLS + 1):
         c = ws.cell(row=3, column=col)
         c.font = Font(bold=(col % 2 == 1), size=9, name='Calibri', color='444444')
-        c.fill = make_fill(GREY_BG)
-        c.alignment = make_align('center')
+        c.fill = _fill(GREY_BG)
+        c.alignment = _align('center')
 
     ws.append([])
 
+    # ── Column headers (row 5) ─────────────────────────────────────────
     COL_HEADERS = [
-        '№',
-        'Техника',
-        'Группа',
-        'Дата',
-        'Смена',
-        'Время работы\n(чч:мм:сс)',
-        'Факт. расход\n(л)',
-        'Норма расхода\n(л/ч)',
-        'Расход\nк норме (%)',
-        'Выход\nтехники (%)',
-        'Эффективность\n(%)',
-        'Тип\nэффективности',
-        'Норма\nб/д (чч:мм:сс)',
-        'Превышение\nнормы б/д',
-        'Пробег\n(км)',
-        'Заправка\n(л)',
-        'Аномалии',
-        'Комментарий',
+        '№', 'Техника', 'Группа', 'Дата', 'Смена',
+        'Время работы\n(чч:мм:сс)', 'Факт. расход\n(л)', 'Норма расхода\n(л/ч)',
+        'Расход\nк норме (%)', 'Выход\nтехники (%)', 'Эффективность\n(%)',
+        'Тип\nэффективности', 'Норма\nб/д (чч:мм:сс)', 'Превышение\nнормы б/д',
+        'Пробег\n(км)', 'Заправка\n(л)', 'Аномалии', 'Комментарий',
     ]
     ws.append(COL_HEADERS)
     HDR_ROW = 5
     for col in range(1, NCOLS + 1):
         c = ws.cell(row=HDR_ROW, column=col)
         c.font = Font(bold=True, color='FFFFFF', size=10, name='Calibri')
-        c.fill = make_fill(MID_BLUE)
-        c.alignment = make_align('center', wrap=True)
-        c.border = thin_border()
+        c.fill = _fill(MID_BLUE)
+        c.alignment = _align(wrap=True)
+        c.border = _border()
     ws.row_dimensions[HDR_ROW].height = 40
     ws.freeze_panes = f'A{HDR_ROW + 1}'
 
-    records_by_group = defaultdict(list)
+    TYPE_LABEL = {
+        'Бульдозеры': 'Холостой ход',
+        'Погрузчики': 'Холостой ход',
+        'Экскаваторы': 'Простой стрелы',
+        'Самосвалы': 'Без движения',
+    }
+
+    # ── Helper: style one data row ─────────────────────────────────────
+    def _style_row(r, rec_has_anomaly, fuel_eff_pct, output_pct, type_eff_pct,
+                   over_bd_str, fuel_actual, is_total=False):
+        for col in range(1, NCOLS + 1):
+            c = ws.cell(row=r, column=col)
+            c.font = Font(bold=is_total, size=10, name='Calibri',
+                          color=DARK_BLUE if is_total else '000000')
+            c.alignment = _align()
+            c.border = _border()
+            if is_total:
+                c.fill = _fill(TOTAL_BG)
+            elif rec_has_anomaly and col not in (9, 10, 11):
+                c.fill = _fill(YELLOW_BG)
+        ws.cell(row=r, column=2).alignment = _align('left')
+        ws.cell(row=r, column=17).alignment = _align('left', wrap=True)
+        ws.cell(row=r, column=18).alignment = _align('left', wrap=True)
+        f = _pct_fill(fuel_eff_pct, 100, 115)
+        if f:
+            ws.cell(row=r, column=9).fill = f
+        if output_pct is not None:
+            ws.cell(row=r, column=10).fill = _fill(GREEN_BG) if output_pct >= 80 else _fill(RED_BG)
+        f = _pct_fill(type_eff_pct, 100, 130)
+        if f:
+            ws.cell(row=r, column=11).fill = f
+        if over_bd_str:
+            ws.cell(row=r, column=14).fill = _fill('FFB3B3')
+            ws.cell(row=r, column=14).font = Font(bold=True, color='C00000', name='Calibri', size=10)
+        if fuel_actual is not None and fuel_actual < 0:
+            ws.cell(row=r, column=7).fill = _fill('FFB3B3')
+            ws.cell(row=r, column=7).font = Font(bold=True, color='C00000', name='Calibri', size=10)
+
+    # ── Helper: write one shift row ────────────────────────────────────
+    def write_rec_row(rec, outline_level=0):
+        fuel_eff_pct = round(rec.fuel_efficiency  * 100, 1) if rec.fuel_efficiency  is not None else None
+        output_pct   = round(rec.equipment_output * 100, 1) if rec.equipment_output is not None else None
+        type_eff_pct = round(rec.type_efficiency  * 100, 1) if rec.type_efficiency  is not None else None
+
+        norm_bd_str = over_bd_str = ''
+        if rec.group == 'Самосвалы':
+            norm_sec = dt_norms.get((rec.name, rec.shift, rec.date))
+            if norm_sec:
+                norm_bd_str = secs_to_hhmmss(norm_sec)
+                ov = (rec.engine_no_move_sec or 0) - norm_sec
+                if ov > 0:
+                    over_bd_str = f'+{secs_to_hhmmss(ov)}'
+
+        date_display  = rec.record_date.strftime('%d.%m.%Y') if rec.record_date else rec.date
+        shift_display = f'С{rec.shift}' if rec.shift else '—'
+        anomaly_text  = '; '.join(rec.anomaly_details) if rec.has_anomaly else ''
+
+        ws.append([
+            rec.row_number, rec.name, rec.group, date_display, shift_display,
+            rec.engine_time_str(), rec.fuel_actual, rec.fuel_norm,
+            fuel_eff_pct, output_pct, type_eff_pct,
+            TYPE_LABEL.get(rec.group, ''),
+            norm_bd_str, over_bd_str,
+            rec.mileage, rec.refueling, anomaly_text, rec.comment,
+        ])
+        r = ws.max_row
+        ws.row_dimensions[r].outline_level = outline_level
+        _style_row(r, rec.has_anomaly, fuel_eff_pct, output_pct, type_eff_pct,
+                   over_bd_str, rec.fuel_actual)
+        return fuel_eff_pct, output_pct, type_eff_pct, rec
+
+    # ── Helper: write a daily-total row for multi-shift vehicle+date ───
+    def write_daily_total(recs, outline_level=0):
+        n             = len(recs)
+        group         = recs[0].group
+        date_display  = recs[0].record_date.strftime('%d.%m.%Y') if recs[0].record_date else recs[0].date
+        total_engine  = sum(r.engine_time_sec for r in recs)
+        total_no_move = sum(r.engine_no_move_sec for r in recs)
+        total_idle    = sum(r.engine_idle_sec for r in recs)
+        total_fuel    = sum(r.fuel_actual for r in recs if r.fuel_actual is not None) if any(r.fuel_actual is not None for r in recs) else None
+        total_mileage = sum(r.mileage for r in recs if r.mileage is not None) if any(r.mileage is not None for r in recs) else None
+        total_ref     = sum(r.refueling for r in recs if r.refueling is not None) if any(r.refueling is not None for r in recs) else None
+        total_dt      = sum(r.downtime_sec for r in recs if r.downtime_sec is not None) if any(r.downtime_sec is not None for r in recs) else None
+        fuel_norm     = recs[0].fuel_norm
+
+        daily_norm_n = report.daily_norm_sec * n
+        daily_h_n    = daily_norm_n / 3600 if daily_norm_n > 0 else 0
+
+        fuel_eff_pct = None
+        if fuel_norm > 0 and daily_h_n > 0 and total_fuel is not None and total_fuel >= 0:
+            fuel_eff_pct = round(total_fuel / (fuel_norm * daily_h_n) * 100, 1)
+        output_pct = round(total_engine / daily_norm_n * 100, 1) if daily_norm_n > 0 else None
+
+        type_eff_pct = None
+        if group in ('Бульдозеры', 'Погрузчики') and report.bulldozer_norm_sec > 0:
+            type_eff_pct = round(total_idle / (report.bulldozer_norm_sec * n) * 100, 1)
+        elif group == 'Экскаваторы' and total_dt is not None and report.excavator_norm_sec > 0:
+            type_eff_pct = round(total_dt / (report.excavator_norm_sec * n) * 100, 1)
+        elif group == 'Самосвалы':
+            dt_total = sum(dt_norms.get((recs[0].name, r.shift, r.date), 0) for r in recs)
+            if dt_total > 0:
+                type_eff_pct = round(total_no_move / dt_total * 100, 1)
+
+        over_bd_str = ''
+        if group in ('Бульдозеры', 'Погрузчики') and report.bulldozer_norm_sec > 0:
+            ov = total_idle - report.bulldozer_norm_sec * n
+            if ov > 0:
+                over_bd_str = f'+{secs_to_hhmmss(ov)}'
+        elif group == 'Экскаваторы' and total_dt is not None and report.excavator_norm_sec > 0:
+            ov = total_dt - report.excavator_norm_sec * n
+            if ov > 0:
+                over_bd_str = f'+{secs_to_hhmmss(ov)}'
+
+        anomaly_cnt = sum(1 for r in recs if r.has_anomaly)
+
+        ws.append([
+            '', recs[0].name, group, date_display, 'Итого',
+            secs_to_hhmmss(total_engine), total_fuel, fuel_norm,
+            fuel_eff_pct, output_pct, type_eff_pct,
+            TYPE_LABEL.get(group, ''), '', over_bd_str,
+            total_mileage, total_ref,
+            f'Аномалий: {anomaly_cnt}' if anomaly_cnt else '', '',
+        ])
+        r = ws.max_row
+        ws.row_dimensions[r].outline_level = outline_level
+        _style_row(r, False, fuel_eff_pct, output_pct, type_eff_pct, over_bd_str, None, is_total=True)
+        return fuel_eff_pct, output_pct, type_eff_pct, anomaly_cnt, total_fuel, total_engine
+
+    # ── Build hierarchy: group → vehicle → date → shifts ──────────────
+    by_group = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
     for rec in all_records:
-        records_by_group[rec.group].append(rec)
+        by_group[rec.group][rec.name][rec.date].append(rec)
 
-    for group_name in sorted(records_by_group.keys()):
-        group_records = records_by_group[group_name]
+    for group_name in sorted(by_group.keys()):
+        vehicles    = by_group[group_name]
+        total_count = sum(len(s) for dates in vehicles.values() for s in dates.values())
 
-        ws.append([])
+        # Group header row
+        ws.append([''] * NCOLS)
         gr = ws.max_row
         ws.merge_cells(f'A{gr}:{get_column_letter(NCOLS)}{gr}')
         gc = ws.cell(row=gr, column=1)
-        gc.value = f'  {group_name.upper()}  ({len(group_records)} ед.)'
-        gc.font = Font(bold=True, color=DARK_BLUE, size=10, name='Calibri')
-        gc.fill = make_fill(GROUP_BG)
-        gc.alignment = make_align('left')
-        ws.row_dimensions[gr].height = 18
+        gc.value       = f'  {group_name.upper()}  ({total_count} записей)'
+        gc.font        = Font(bold=True, color='FFFFFF', size=11, name='Calibri')
+        gc.fill        = _fill(DARK_BLUE)
+        gc.alignment   = _align('left')
+        ws.row_dimensions[gr].height = 20
 
-        g_fuel_actual_sum = 0.0
-        g_engine_h_sum    = 0.0
-        g_fuel_eff_vals   = []
-        g_output_vals     = []
-        g_type_eff_vals   = []
-        g_anomaly_count   = 0
+        # Group-level accumulators for group-total row
+        g_fuel_eff_vals = []
+        g_output_vals   = []
+        g_type_eff_vals = []
+        g_fuel_sum      = 0.0
+        g_engine_h_sum  = 0.0
+        g_anomaly_cnt   = 0
 
-        for rec in group_records:
-            fuel_eff_pct = round(rec.fuel_efficiency * 100, 1) if rec.fuel_efficiency is not None else None
-            output_pct   = round(rec.equipment_output * 100, 1) if rec.equipment_output is not None else None
-            type_eff_pct = round(rec.type_efficiency * 100, 1) if rec.type_efficiency is not None else None
+        for vehicle_name in sorted(vehicles.keys()):
+            dates = vehicles[vehicle_name]
+            for date_key in sorted(dates.keys()):
+                shifts = sorted(dates[date_key], key=lambda r: r.shift if r.shift else 99)
+                multi  = len(shifts) > 1
 
-            type_label = {
-                'Бульдозеры': 'Холостой ход',
-                'Погрузчики': 'Холостой ход',
-                'Экскаваторы': 'Простой стрелы',
-                'Самосвалы': 'Без движения',
-            }.get(rec.group, '')
+                for rec in shifts:
+                    fe, op, te, r = write_rec_row(rec, outline_level=1 if multi else 0)
+                    if fe is not None:
+                        g_fuel_eff_vals.append(fe)
+                    if op is not None:
+                        g_output_vals.append(op)
+                    if te is not None:
+                        g_type_eff_vals.append(te)
+                    if rec.fuel_actual and rec.fuel_actual > 0:
+                        g_fuel_sum += rec.fuel_actual
+                    g_engine_h_sum += rec.engine_time_sec / 3600
+                    if rec.has_anomaly:
+                        g_anomaly_cnt += 1
 
-            # Per-shift dump truck norm and overage
-            norm_bd_str = ''
-            over_bd_str = ''
-            if rec.group == 'Самосвалы':
-                norm_sec = dt_norms.get((rec.name, rec.shift, rec.date))
-                if norm_sec:
-                    norm_bd_str = secs_to_hhmmss(norm_sec)
-                    overage = (rec.engine_no_move_sec or 0) - norm_sec
-                    if overage > 0:
-                        over_bd_str = f'+{secs_to_hhmmss(overage)}'
+                if multi:
+                    write_daily_total(shifts, outline_level=0)
 
-            anomaly_text = '; '.join(rec.anomaly_details) if rec.has_anomaly else ''
-            date_display = rec.record_date.strftime('%d.%m.%Y') if rec.record_date else rec.date
-            shift_display = f'С{rec.shift}' if rec.shift else '—'
-
-            ws.append([
-                rec.row_number, rec.name, rec.group, date_display, shift_display,
-                rec.engine_time_str(), rec.fuel_actual, rec.fuel_norm,
-                fuel_eff_pct, output_pct, type_eff_pct, type_label,
-                norm_bd_str, over_bd_str,
-                rec.mileage, rec.refueling, anomaly_text, rec.comment,
-            ])
-            r = ws.max_row
-            row_fill = make_fill(YELLOW_BG) if rec.has_anomaly else None
-
-            for col in range(1, NCOLS + 1):
-                c = ws.cell(row=r, column=col)
-                c.font = make_font()
-                c.alignment = make_align()
-                c.border = thin_border()
-                if row_fill and col not in (9, 10, 11):
-                    c.fill = row_fill
-
-            ws.cell(row=r, column=2).alignment = make_align('left')
-            ws.cell(row=r, column=17).alignment = make_align('left', wrap=True)
-            ws.cell(row=r, column=18).alignment = make_align('left', wrap=True)
-
-            # Расход к норме (col 9)
-            f = pct_fill(fuel_eff_pct, 100, 115)
-            if f:
-                ws.cell(row=r, column=9).fill = f
-            # Выход техники (col 10): >=80 green, <80 red
-            if output_pct is not None:
-                ws.cell(row=r, column=10).fill = make_fill(GREEN_BG) if output_pct >= 80 else make_fill(RED_BG)
-            # Эффективность (col 11)
-            f = pct_fill(type_eff_pct, 100, 130)
-            if f:
-                ws.cell(row=r, column=11).fill = f
-            # Превышение б/д (col 14): red if overage exists
-            if over_bd_str:
-                ws.cell(row=r, column=14).fill = make_fill('FFB3B3')
-                ws.cell(row=r, column=14).font = Font(bold=True, color='C00000', name='Calibri', size=10)
-            # Отрицательный расход (col 7)
-            if rec.fuel_actual is not None and rec.fuel_actual < 0:
-                ws.cell(row=r, column=7).fill = make_fill('FFB3B3')
-                ws.cell(row=r, column=7).font = Font(bold=True, color='C00000', name='Calibri', size=10)
-
-            if rec.fuel_actual and rec.fuel_actual > 0:
-                g_fuel_actual_sum += rec.fuel_actual
-            g_engine_h_sum += rec.engine_time_sec / 3600
-            if fuel_eff_pct is not None:
-                g_fuel_eff_vals.append(fuel_eff_pct)
-            if output_pct is not None:
-                g_output_vals.append(output_pct)
-            if type_eff_pct is not None:
-                g_type_eff_vals.append(type_eff_pct)
-            if rec.has_anomaly:
-                g_anomaly_count += 1
-
+        # Group total row
         g_avg_fuel = round(sum(g_fuel_eff_vals) / len(g_fuel_eff_vals), 1) if g_fuel_eff_vals else None
         g_avg_out  = round(sum(g_output_vals)    / len(g_output_vals),    1) if g_output_vals    else None
         g_avg_type = round(sum(g_type_eff_vals)  / len(g_type_eff_vals),  1) if g_type_eff_vals  else None
 
         ws.append([
             '', f'ИТОГО {group_name}', '', '', '',
-            f'{round(g_engine_h_sum, 1)} ч', round(g_fuel_actual_sum, 1),
+            f'{round(g_engine_h_sum, 1)} ч', round(g_fuel_sum, 1),
             '', g_avg_fuel, g_avg_out, g_avg_type, '', '', '', '', '',
-            f'Аномалий: {g_anomaly_count}' if g_anomaly_count else '', '',
+            f'Аномалий: {g_anomaly_cnt}' if g_anomaly_cnt else '', '',
         ])
         tr = ws.max_row
         for col in range(1, NCOLS + 1):
             c = ws.cell(row=tr, column=col)
-            c.font = Font(bold=True, size=10, name='Calibri', color=DARK_BLUE)
-            c.fill = make_fill(TOTAL_BG)
-            c.alignment = make_align('center')
-            c.border = thin_border()
-        ws.cell(row=tr, column=2).alignment = make_align('left')
+            c.font      = Font(bold=True, size=11, name='Calibri', color='FFFFFF')
+            c.fill      = _fill(MID_BLUE)
+            c.alignment = _align()
+            c.border    = _border()
+        ws.cell(row=tr, column=2).alignment = _align('left')
+        f = _pct_fill(g_avg_fuel, 100, 115)
+        if f:
+            ws.cell(row=tr, column=9).fill = f
+        if g_avg_out is not None:
+            ws.cell(row=tr, column=10).fill = _fill(GREEN_BG) if g_avg_out >= 80 else _fill(RED_BG)
+        f = _pct_fill(g_avg_type, 100, 130)
+        if f:
+            ws.cell(row=tr, column=11).fill = f
 
-    # Column widths: 18 columns
+    # ── Column widths ──────────────────────────────────────────────────
     col_widths = [5, 30, 14, 12, 8, 16, 13, 13, 13, 13, 14, 16, 15, 15, 12, 12, 45, 35]
     for i, w in enumerate(col_widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = w
