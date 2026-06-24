@@ -10,6 +10,8 @@ def parse_timedelta_to_seconds(value):
         return None
     if isinstance(value, datetime.timedelta):
         return value.total_seconds()
+    if isinstance(value, datetime.time):
+        return value.hour * 3600 + value.minute * 60 + value.second
     if isinstance(value, (int, float)):
         return float(value)
     if isinstance(value, str):
