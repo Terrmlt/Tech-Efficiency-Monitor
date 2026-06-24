@@ -220,19 +220,20 @@ def _find_column_indices(header_row):
     Uses keyword matching; falls back to default positional indices.
     """
     defaults = {
-        'row_number':    0,
-        'name':          1,
-        'group':         2,
-        'date':          3,
-        'shift':         None,
-        'engine_time':   4,
+        'row_number':     0,
+        'name':           1,
+        'group':          2,
+        'date':           3,
+        'shift':          None,
+        'engine_time':    4,
         'engine_no_move': 6,
-        'engine_idle':   8,
-        'fuel_norm':     10,
-        'fuel_actual':   11,
-        'downtime':      None,
-        'mileage':       None,
-        'refueling':     None,
+        'engine_idle':    8,
+        'fuel_norm':      10,
+        'fuel_actual':    11,
+        'downtime':       None,
+        'mileage':        None,
+        'refueling':      None,
+        'dumptruck_norm': None,
     }
 
     if not header_row or all(c is None for c in header_row):
@@ -242,19 +243,20 @@ def _find_column_indices(header_row):
 
     # Keywords listed from most specific to least specific
     keywords = {
-        'name':          ['транспортное средство', 'транспортное'],
-        'group':         ['группа тс', 'группа'],
-        'date':          ['дата'],
-        'shift':         ['№ смены', 'номер смены', 'смена', 'shift'],
-        'engine_time':   ['время работы двигателя', 'работы двигателя', 'работа двигателя'],
+        'name':           ['транспортное средство', 'транспортное'],
+        'group':          ['группа тс', 'группа'],
+        'date':           ['дата'],
+        'shift':          ['№ смены', 'номер смены', 'смена', 'shift'],
+        'engine_time':    ['время работы двигателя', 'работы двигателя', 'работа двигателя'],
         'engine_no_move': ['без движения'],
-        'engine_idle':   ['холостом ходу', 'на холостом', 'холостой ход', 'холостого хода'],
-        'fuel_norm':     ['норма расхода', 'норм. расход'],
-        'fuel_actual':   ['фактический расход', 'расход факт', 'факт. расход', 'факт расход'],
-        'downtime':      ['простой стрелы', 'время простоя стрелы', 'время простоя'],
-        'mileage':       ['пробег'],
-        'refueling':     ['заправк', 'объём заправ', 'объем заправ'],
-        'row_number':    ['№ п/п', '№ пп', '№'],
+        'engine_idle':    ['холостом ходу', 'на холостом', 'холостой ход', 'холостого хода'],
+        'fuel_norm':      ['норма расхода', 'норм. расход'],
+        'fuel_actual':    ['фактический расход', 'расход факт', 'факт. расход', 'факт расход'],
+        'downtime':       ['простой стрелы', 'время простоя стрелы', 'время простоя'],
+        'mileage':        ['пробег'],
+        'refueling':      ['заправк', 'объём заправ', 'объем заправ'],
+        'row_number':     ['№ п/п', '№ пп', '№'],
+        'dumptruck_norm': ['норма самосвала', 'норма сам.', 'норма сам'],
     }
 
     # Fields that must NOT match headers containing these substrings
@@ -339,6 +341,17 @@ def parse_excel_file(file_path):
         # ── Optional ──
         mileage   = parse_float(get(cols['mileage']))
         refueling = parse_float(get(cols['refueling']))
+
+        # ── Dump-truck per-shift norm (HH:MM:SS timedelta or float hours) ──
+        dumptruck_norm_sec = None
+        raw_dt_norm = get(cols.get('dumptruck_norm'))
+        if raw_dt_norm is not None and raw_dt_norm != '-' and raw_dt_norm != '':
+            dumptruck_norm_sec = parse_timedelta_to_seconds(raw_dt_norm)
+            # If it's a plain number, treat as hours
+            if dumptruck_norm_sec is None:
+                hours = parse_float(raw_dt_norm)
+                if hours is not None and hours > 0:
+                    dumptruck_norm_sec = hours * 3600
 
         # ── Row number ──
         try:
