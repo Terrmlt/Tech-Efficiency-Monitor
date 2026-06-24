@@ -394,6 +394,7 @@ def parse_excel_file(file_path):
             'downtime_sec':      downtime_sec,
             'mileage':           mileage,
             'refueling':         refueling,
+            'dumptruck_norm_sec': dumptruck_norm_sec,
         })
 
     if detected_year:

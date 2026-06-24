@@ -42,6 +42,9 @@ def upload(request):
                         report.year = metadata['year']
                     report.save()
 
+                    # Collect dump-truck norms from Excel for auto-fill
+                    excel_norms = {}  # (vehicle_name, shift, date) -> norm_sec
+
                     for rec_data in records_data:
                         has_anomaly, anomaly_details = detect_anomalies(rec_data)
                         metrics = calculate_metrics(rec_data, report)
@@ -68,6 +71,34 @@ def upload(request):
                             equipment_output=metrics['equipment_output'],
                             type_efficiency=metrics['type_efficiency'],
                         )
+
+                        # Collect dump-truck per-shift norms from Excel column
+                        dt_norm = rec_data.get('dumptruck_norm_sec')
+                        if dt_norm and rec_data.get('group') == 'Самосвалы':
+                            key = (rec_data['name'], rec_data.get('shift') or None, rec_data['date'])
+                            excel_norms[key] = int(dt_norm)
+
+                    # Auto-create VehicleNorm entries from Excel norms
+                    for (vehicle_name, shift, date), norm_sec in excel_norms.items():
+                        VehicleNorm.objects.update_or_create(
+                            report=report,
+                            vehicle_name=vehicle_name,
+                            shift=shift,
+                            date=date,
+                            defaults={'dumptruck_norm_sec': norm_sec},
+                        )
+
+                    # Recalculate type_efficiency for dump trucks using the saved norms
+                    if excel_norms:
+                        norm_map = {
+                            (vn.vehicle_name, vn.shift, vn.date): vn.dumptruck_norm_sec
+                            for vn in VehicleNorm.objects.filter(report=report)
+                        }
+                        for rec in report.vehiclerecord_set.filter(group='Самосвалы'):
+                            norm_sec = norm_map.get((rec.name, rec.shift if rec.shift else None, rec.date))
+                            if norm_sec and norm_sec > 0:
+                                rec.type_efficiency = rec.engine_no_move_sec / norm_sec
+                                rec.save(update_fields=['type_efficiency'])
 
                 messages.success(request, f'Отчёт успешно загружен: {report.vehiclerecord_set.count()} записей.')
                 return redirect('report_detail', pk=report.pk)
