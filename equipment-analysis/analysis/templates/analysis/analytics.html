@@ -83,9 +83,7 @@
 
 {% if has_trend %}
 
-<!-- ══════════════════════════════════════════════════════════════
-     ЛИНЕЙНЫЕ ТРЕНД-ГРАФИКИ
-     ══════════════════════════════════════════════════════════════ -->
+<!-- ══ ЛИНЕЙНЫЕ ТРЕНД-ГРАФИКИ ══ -->
 <div class="card mb-4">
     <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
         <span class="fw-semibold"><i class="bi bi-graph-up me-2 text-primary"></i>Ежедневная динамика (линии тренда)</span>
@@ -98,30 +96,31 @@
     <div class="card-body">
         <div class="row g-3">
             <div class="col-12 col-lg-4">
-                <p class="small fw-semibold text-muted mb-1"><i class="bi bi-bar-chart text-primary me-1"></i>Выход техники, %</p>
-                <div style="position:relative;height:220px">
-                    <canvas id="trendOutput"></canvas>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <p class="small fw-semibold text-muted mb-0"><i class="bi bi-bar-chart text-primary me-1"></i>Выход техники, %</p>
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-1 border-0" onclick="expandChart('trendOutput','Выход техники, %')" title="Развернуть"><i class="bi bi-fullscreen"></i></button>
                 </div>
+                <div style="position:relative;height:220px"><canvas id="trendOutput"></canvas></div>
             </div>
             <div class="col-12 col-lg-4">
-                <p class="small fw-semibold text-muted mb-1"><i class="bi bi-droplet text-danger me-1"></i>Расход к норме, %</p>
-                <div style="position:relative;height:220px">
-                    <canvas id="trendFuelEff"></canvas>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <p class="small fw-semibold text-muted mb-0"><i class="bi bi-droplet text-danger me-1"></i>Расход к норме, %</p>
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-1 border-0" onclick="expandChart('trendFuelEff','Расход к норме, %')" title="Развернуть"><i class="bi bi-fullscreen"></i></button>
                 </div>
+                <div style="position:relative;height:220px"><canvas id="trendFuelEff"></canvas></div>
             </div>
             <div class="col-12 col-lg-4">
-                <p class="small fw-semibold text-muted mb-1"><i class="bi bi-speedometer2 text-success me-1"></i>Эффективность, %</p>
-                <div style="position:relative;height:220px">
-                    <canvas id="trendTypeEff"></canvas>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <p class="small fw-semibold text-muted mb-0"><i class="bi bi-speedometer2 text-success me-1"></i>Эффективность, %</p>
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-1 border-0" onclick="expandChart('trendTypeEff','Эффективность, %')" title="Развернуть"><i class="bi bi-fullscreen"></i></button>
                 </div>
+                <div style="position:relative;height:220px"><canvas id="trendTypeEff"></canvas></div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════════════
-     СТОЛБЧАТЫЕ ДИАГРАММЫ ПО ГРУППАМ
-     ══════════════════════════════════════════════════════════════ -->
+<!-- ══ СТОЛБЧАТЫЕ ДИАГРАММЫ ПО ГРУППАМ ══ -->
 {% if group_stats %}
 <div class="card mb-4">
     <div class="card-header bg-white border-bottom">
@@ -130,22 +129,25 @@
     <div class="card-body">
         <div class="row g-3">
             <div class="col-12 col-lg-4">
-                <p class="small fw-semibold text-muted mb-1"><i class="bi bi-bar-chart text-primary me-1"></i>Выход техники, %</p>
-                <div style="position:relative;height:220px">
-                    <canvas id="barOutput"></canvas>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <p class="small fw-semibold text-muted mb-0"><i class="bi bi-bar-chart text-primary me-1"></i>Выход техники, %</p>
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-1 border-0" onclick="expandChart('barOutput','Выход техники по группам, %')" title="Развернуть"><i class="bi bi-fullscreen"></i></button>
                 </div>
+                <div style="position:relative;height:220px"><canvas id="barOutput"></canvas></div>
             </div>
             <div class="col-12 col-lg-4">
-                <p class="small fw-semibold text-muted mb-1"><i class="bi bi-droplet text-danger me-1"></i>Расход к норме, %</p>
-                <div style="position:relative;height:220px">
-                    <canvas id="barFuelEff"></canvas>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <p class="small fw-semibold text-muted mb-0"><i class="bi bi-droplet text-danger me-1"></i>Расход к норме, %</p>
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-1 border-0" onclick="expandChart('barFuelEff','Расход к норме по группам, %')" title="Развернуть"><i class="bi bi-fullscreen"></i></button>
                 </div>
+                <div style="position:relative;height:220px"><canvas id="barFuelEff"></canvas></div>
             </div>
             <div class="col-12 col-lg-4">
-                <p class="small fw-semibold text-muted mb-1"><i class="bi bi-speedometer2 text-success me-1"></i>Эффективность, %</p>
-                <div style="position:relative;height:220px">
-                    <canvas id="barTypeEff"></canvas>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <p class="small fw-semibold text-muted mb-0"><i class="bi bi-speedometer2 text-success me-1"></i>Эффективность, %</p>
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-1 border-0" onclick="expandChart('barTypeEff','Эффективность по группам, %')" title="Развернуть"><i class="bi bi-fullscreen"></i></button>
                 </div>
+                <div style="position:relative;height:220px"><canvas id="barTypeEff"></canvas></div>
             </div>
         </div>
     </div>
@@ -212,6 +214,23 @@
     </div>
 </div>
 {% endif %}
+
+<!-- ══ МОДАЛЬНОЕ ОКНО ══ -->
+<div class="modal fade" id="chartModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-2 px-3">
+                <h6 class="modal-title fw-semibold" id="chartModalTitle"></h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-3">
+                <div style="position:relative;height:520px">
+                    <canvas id="modalCanvas"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -224,45 +243,90 @@
 
     var PAL = ['#0d6efd','#198754','#fd7e14','#6f42c1','#dc3545','#0dcaf0','#ffc107','#20c997','#6c757d','#343a40',
                '#e83e8c','#17a2b8','#28a745','#007bff','#ff5722','#9c27b0','#3f51b5','#00bcd4','#4caf50','#ff9800'];
-
     function col(i)  { return PAL[i % PAL.length]; }
     function colA(i) { return PAL[i % PAL.length] + '55'; }
 
-    /* ── shared chart options ── */
-    var baseLineOpts = {
-        responsive: true,
-        maintainAspectRatio: false,
-        spanGaps: true,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-            legend: { display: true, position: 'bottom',
-                      labels: { boxWidth: 10, padding: 8, font: { size: 10 } } },
-            tooltip: { callbacks: {
-                label: function(ctx) {
+    /* registry: id -> {type, labels, datasets} */
+    var CHART_REG = {};
+    var lineCharts = {};
+    var modalChart = null;
+
+    /* ── shared option factories ── */
+    function lineOpts(showLegend, fontSize) {
+        fontSize = fontSize || 10;
+        return {
+            responsive: true, maintainAspectRatio: false, spanGaps: true,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: showLegend, position: 'bottom',
+                          labels: { boxWidth: 12, padding: 10, font: { size: fontSize } } },
+                tooltip: { callbacks: { label: function(ctx) {
                     var v = ctx.parsed.y;
                     return ctx.dataset.label + ': ' + (v !== null ? v + '%' : '—');
-                }
-            }}
-        },
-        scales: {
-            x: { ticks: { font: { size: 10 } } },
-            y: { beginAtZero: false, ticks: { callback: function(v) { return v + '%'; }, font: { size: 10 } } }
-        }
-    };
+                }}}
+            },
+            scales: {
+                x: { ticks: { font: { size: fontSize } } },
+                y: { beginAtZero: false, ticks: { callback: function(v){ return v+'%'; }, font: { size: fontSize } } }
+            }
+        };
+    }
 
-    /* ── chart instances ── */
-    var lineCharts = {};
+    function barOpts(fontSize) {
+        fontSize = fontSize || 10;
+        return {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, ticks: { callback: function(v){ return v+'%'; }, font: { size: fontSize } } },
+                x: { ticks: { font: { size: fontSize } } }
+            }
+        };
+    }
 
+    /* ── build helpers ── */
     function buildLine(id, datasets, showLegend) {
         if (lineCharts[id]) { lineCharts[id].destroy(); }
-        var opts = JSON.parse(JSON.stringify(baseLineOpts));
-        opts.plugins.legend.display = showLegend;
         lineCharts[id] = new Chart(document.getElementById(id), {
             type: 'line',
             data: { labels: dates, datasets: datasets },
-            options: opts
+            options: lineOpts(showLegend)
         });
+        CHART_REG[id] = { type: 'line', labels: dates, datasets: datasets, showLegend: showLegend };
     }
+
+    function buildBar(id, labels, datasets) {
+        new Chart(document.getElementById(id), {
+            type: 'bar',
+            data: { labels: labels, datasets: datasets },
+            options: barOpts()
+        });
+        CHART_REG[id] = { type: 'bar', labels: labels, datasets: datasets };
+    }
+
+    /* ── expand chart in modal ── */
+    window.expandChart = function(id, title) {
+        var reg = CHART_REG[id];
+        if (!reg) return;
+        document.getElementById('chartModalTitle').textContent = title;
+        var modalEl = document.getElementById('chartModal');
+        var bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        bsModal.show();
+        modalEl.addEventListener('shown.bs.modal', function onShown() {
+            modalEl.removeEventListener('shown.bs.modal', onShown);
+            if (modalChart) { modalChart.destroy(); modalChart = null; }
+            var opts = reg.type === 'line' ? lineOpts(true, 12) : barOpts(12);
+            modalChart = new Chart(document.getElementById('modalCanvas'), {
+                type: reg.type,
+                data: { labels: reg.labels, datasets: reg.datasets },
+                options: opts
+            });
+        });
+        modalEl.addEventListener('hidden.bs.modal', function onHidden() {
+            modalEl.removeEventListener('hidden.bs.modal', onHidden);
+            if (modalChart) { modalChart.destroy(); modalChart = null; }
+        });
+    };
 
     /* ── dataset builders ── */
     function dsOverall() {
@@ -278,10 +342,8 @@
         var out = { output: [], fuel_eff: [], type_eff: [] };
         var keys = Object.keys(TREND.by_group).sort();
         for (var i = 0; i < keys.length; i++) {
-            var grp = keys[i];
-            var g = TREND.by_group[grp];
-            var c = col(i);
-            var ca = colA(i);
+            var grp = keys[i]; var g = TREND.by_group[grp];
+            var c = col(i); var ca = colA(i);
             out.output.push({   label: grp, data: g.output,   borderColor: c, backgroundColor: ca, fill: false, tension: 0.3, pointRadius: 3, borderWidth: 2 });
             out.fuel_eff.push({ label: grp, data: g.fuel_eff, borderColor: c, backgroundColor: ca, fill: false, tension: 0.3, pointRadius: 3, borderWidth: 2 });
             out.type_eff.push({ label: grp, data: g.type_eff, borderColor: c, backgroundColor: ca, fill: false, tension: 0.3, pointRadius: 3, borderWidth: 2 });
@@ -293,9 +355,7 @@
         var out = { output: [], fuel_eff: [], type_eff: [] };
         var keys = Object.keys(TREND.by_vehicle).sort();
         for (var i = 0; i < keys.length; i++) {
-            var vname = keys[i];
-            var v = TREND.by_vehicle[vname];
-            var c = col(i);
+            var vname = keys[i]; var v = TREND.by_vehicle[vname]; var c = col(i);
             out.output.push({   label: vname, data: v.output,   borderColor: c, backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 2, borderWidth: 1.5 });
             out.fuel_eff.push({ label: vname, data: v.fuel_eff, borderColor: c, backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 2, borderWidth: 1.5 });
             out.type_eff.push({ label: vname, data: v.type_eff, borderColor: c, backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 2, borderWidth: 1.5 });
@@ -304,55 +364,37 @@
     }
 
     window.setMode = function(mode) {
-        var modes = ['overall', 'group', 'vehicle'];
-        for (var i = 0; i < modes.length; i++) {
-            var btn = document.getElementById('btn-' + modes[i]);
-            if (btn) btn.classList.toggle('active', modes[i] === mode);
-        }
+        ['overall','group','vehicle'].forEach(function(m) {
+            var b = document.getElementById('btn-' + m);
+            if (b) b.classList.toggle('active', m === mode);
+        });
         var ds;
-        if (mode === 'overall')      ds = dsOverall();
-        else if (mode === 'group')   ds = dsGroup();
-        else                          ds = dsVehicle();
-        var showLegend = mode !== 'overall';
-        buildLine('trendOutput',  ds.output,   showLegend);
-        buildLine('trendFuelEff', ds.fuel_eff, showLegend);
-        buildLine('trendTypeEff', ds.type_eff, showLegend);
+        if (mode === 'overall')    ds = dsOverall();
+        else if (mode === 'group') ds = dsGroup();
+        else                        ds = dsVehicle();
+        var sl = mode !== 'overall';
+        buildLine('trendOutput',  ds.output,   sl);
+        buildLine('trendFuelEff', ds.fuel_eff, sl);
+        buildLine('trendTypeEff', ds.type_eff, sl);
     };
 
     setMode('overall');
 
-    /* ══════════ СТОЛБЧАТЫЕ ДИАГРАММЫ ══════════ */
+    /* ══ СТОЛБЧАТЫЕ ДИАГРАММЫ ══ */
     {% if group_stats %}
-    var barGroups   = [{% for s in group_stats %}'{{ s.group }}'{% if not forloop.last %},{% endif %}{% endfor %}];
-    var barOutput   = [{% for s in group_stats %}{{ s.avg_output|default:"null" }}{% if not forloop.last %},{% endif %}{% endfor %}];
-    var barFuelEff  = [{% for s in group_stats %}{{ s.avg_fuel_eff|default:"null" }}{% if not forloop.last %},{% endif %}{% endfor %}];
-    var barTypeEff  = [{% for s in group_stats %}{{ s.avg_type_eff|default:"null" }}{% if not forloop.last %},{% endif %}{% endfor %}];
+    var barLabels  = [{% for s in group_stats %}'{{ s.group }}'{% if not forloop.last %},{% endif %}{% endfor %}];
+    var barOutput  = [{% for s in group_stats %}{{ s.avg_output|default:"null" }}{% if not forloop.last %},{% endif %}{% endfor %}];
+    var barFuelEff = [{% for s in group_stats %}{{ s.avg_fuel_eff|default:"null" }}{% if not forloop.last %},{% endif %}{% endfor %}];
+    var barTypeEff = [{% for s in group_stats %}{{ s.avg_type_eff|default:"null" }}{% if not forloop.last %},{% endif %}{% endfor %}];
+    var bColors  = barLabels.map(function(_, i){ return col(i); });
+    var bColorsA = barLabels.map(function(_, i){ return colA(i); });
 
-    var barColors = barGroups.map(function(_, i) { return col(i); });
-    var barColorsA = barGroups.map(function(_, i) { return colA(i); });
-
-    var barOpts = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true, ticks: { callback: function(v) { return v + '%'; }, font: { size: 10 } } },
-                  x: { ticks: { font: { size: 10 } } } }
-    };
-
-    function makeBar(id, data) {
-        new Chart(document.getElementById(id), {
-            type: 'bar',
-            data: {
-                labels: barGroups,
-                datasets: [{ data: data, backgroundColor: barColorsA, borderColor: barColors, borderWidth: 2, borderRadius: 5 }]
-            },
-            options: barOpts
-        });
+    function mkDs(data) {
+        return [{ data: data, backgroundColor: bColorsA, borderColor: bColors, borderWidth: 2, borderRadius: 5 }];
     }
-
-    makeBar('barOutput',  barOutput);
-    makeBar('barFuelEff', barFuelEff);
-    makeBar('barTypeEff', barTypeEff);
+    buildBar('barOutput',  barLabels, mkDs(barOutput));
+    buildBar('barFuelEff', barLabels, mkDs(barFuelEff));
+    buildBar('barTypeEff', barLabels, mkDs(barTypeEff));
     {% endif %}
 
 })();

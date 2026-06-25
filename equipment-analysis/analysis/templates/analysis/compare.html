@@ -132,22 +132,25 @@
     <div class="card-body">
         <div class="row g-3">
             <div class="col-12 col-lg-4">
-                <p class="small fw-semibold text-muted mb-1"><i class="bi bi-bar-chart text-primary me-1"></i>Выход техники, %</p>
-                <div style="position:relative;height:240px">
-                    <canvas id="cmpOutput"></canvas>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <p class="small fw-semibold text-muted mb-0"><i class="bi bi-bar-chart text-primary me-1"></i>Выход техники, %</p>
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-1 border-0" onclick="expandChart('cmpOutput','Выход техники, %')" title="Развернуть"><i class="bi bi-fullscreen"></i></button>
                 </div>
+                <div style="position:relative;height:240px"><canvas id="cmpOutput"></canvas></div>
             </div>
             <div class="col-12 col-lg-4">
-                <p class="small fw-semibold text-muted mb-1"><i class="bi bi-droplet text-danger me-1"></i>Расход к норме, %</p>
-                <div style="position:relative;height:240px">
-                    <canvas id="cmpFuelEff"></canvas>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <p class="small fw-semibold text-muted mb-0"><i class="bi bi-droplet text-danger me-1"></i>Расход к норме, %</p>
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-1 border-0" onclick="expandChart('cmpFuelEff','Расход к норме, %')" title="Развернуть"><i class="bi bi-fullscreen"></i></button>
                 </div>
+                <div style="position:relative;height:240px"><canvas id="cmpFuelEff"></canvas></div>
             </div>
             <div class="col-12 col-lg-4">
-                <p class="small fw-semibold text-muted mb-1"><i class="bi bi-speedometer2 text-success me-1"></i>Эффективность, %</p>
-                <div style="position:relative;height:240px">
-                    <canvas id="cmpTypeEff"></canvas>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <p class="small fw-semibold text-muted mb-0"><i class="bi bi-speedometer2 text-success me-1"></i>Эффективность, %</p>
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-1 border-0" onclick="expandChart('cmpTypeEff','Эффективность, %')" title="Развернуть"><i class="bi bi-fullscreen"></i></button>
                 </div>
+                <div style="position:relative;height:240px"><canvas id="cmpTypeEff"></canvas></div>
             </div>
         </div>
     </div>
@@ -164,22 +167,25 @@
     <div class="card-body">
         <div class="row g-3">
             <div class="col-12 col-lg-4">
-                <p class="small fw-semibold text-muted mb-1"><i class="bi bi-bar-chart text-primary me-1"></i>Выход техники, %</p>
-                <div style="position:relative;height:220px">
-                    <canvas id="chartOutput"></canvas>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <p class="small fw-semibold text-muted mb-0"><i class="bi bi-bar-chart text-primary me-1"></i>Выход техники, %</p>
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-1 border-0" onclick="expandChart('chartOutput','Выход техники по участкам, %')" title="Развернуть"><i class="bi bi-fullscreen"></i></button>
                 </div>
+                <div style="position:relative;height:220px"><canvas id="chartOutput"></canvas></div>
             </div>
             <div class="col-12 col-lg-4">
-                <p class="small fw-semibold text-muted mb-1"><i class="bi bi-droplet text-danger me-1"></i>Расход к норме, %</p>
-                <div style="position:relative;height:220px">
-                    <canvas id="chartFuelEff"></canvas>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <p class="small fw-semibold text-muted mb-0"><i class="bi bi-droplet text-danger me-1"></i>Расход к норме, %</p>
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-1 border-0" onclick="expandChart('chartFuelEff','Расход к норме по участкам, %')" title="Развернуть"><i class="bi bi-fullscreen"></i></button>
                 </div>
+                <div style="position:relative;height:220px"><canvas id="chartFuelEff"></canvas></div>
             </div>
             <div class="col-12 col-lg-4">
-                <p class="small fw-semibold text-muted mb-1"><i class="bi bi-speedometer2 text-success me-1"></i>Эффективность, %</p>
-                <div style="position:relative;height:220px">
-                    <canvas id="chartTypeEff"></canvas>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <p class="small fw-semibold text-muted mb-0"><i class="bi bi-speedometer2 text-success me-1"></i>Эффективность, %</p>
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-1 border-0" onclick="expandChart('chartTypeEff','Эффективность по участкам, %')" title="Развернуть"><i class="bi bi-fullscreen"></i></button>
                 </div>
+                <div style="position:relative;height:220px"><canvas id="chartTypeEff"></canvas></div>
             </div>
         </div>
     </div>
@@ -311,6 +317,23 @@
     </div>
 </div>
 {% endif %}
+
+<!-- ══ МОДАЛЬНОЕ ОКНО ══ -->
+<div class="modal fade" id="chartModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-2 px-3">
+                <h6 class="modal-title fw-semibold" id="chartModalTitle"></h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-3">
+                <div style="position:relative;height:520px">
+                    <canvas id="modalCanvas"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -325,6 +348,68 @@
     var PAL = ['#0d6efd','#198754','#fd7e14','#6f42c1','#dc3545','#0dcaf0','#ffc107','#20c997'];
     function col(i)  { return PAL[i % PAL.length]; }
     function colA(i) { return PAL[i % PAL.length] + '55'; }
+
+    /* ── registry ── */
+    var CHART_REG = {};
+    var lineCharts = {};
+    var modalChart = null;
+
+    /* ── option factories ── */
+    function mkBarOpts(fs) {
+        fs = fs || 10;
+        return {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, ticks: { callback: function(v){ return v+'%'; }, font: { size: fs } } },
+                x: { ticks: { font: { size: fs } } }
+            }
+        };
+    }
+
+    function mkLineOpts(fs) {
+        fs = fs || 10;
+        return {
+            responsive: true, maintainAspectRatio: false, spanGaps: true,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: true, position: 'bottom',
+                          labels: { boxWidth: 12, padding: 10, font: { size: fs } } },
+                tooltip: { callbacks: { label: function(ctx) {
+                    var v = ctx.parsed.y;
+                    return ctx.dataset.label + ': ' + (v !== null ? v + '%' : '—');
+                }}}
+            },
+            scales: {
+                x: { ticks: { font: { size: fs } } },
+                y: { beginAtZero: false, ticks: { callback: function(v){ return v+'%'; }, font: { size: fs } } }
+            }
+        };
+    }
+
+    /* ── expand modal ── */
+    window.expandChart = function(id, title) {
+        var reg = CHART_REG[id];
+        if (!reg) return;
+        document.getElementById('chartModalTitle').textContent = title;
+        var modalEl = document.getElementById('chartModal');
+        var bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        bsModal.show();
+        modalEl.addEventListener('shown.bs.modal', function onShown() {
+            modalEl.removeEventListener('shown.bs.modal', onShown);
+            if (modalChart) { modalChart.destroy(); modalChart = null; }
+            var opts = reg.type === 'bar' ? mkBarOpts(12) : mkLineOpts(12);
+            modalChart = new Chart(document.getElementById('modalCanvas'), {
+                type: reg.type,
+                data: { labels: reg.labels, datasets: reg.datasets },
+                options: opts
+            });
+        });
+        modalEl.addEventListener('hidden.bs.modal', function onHidden() {
+            modalEl.removeEventListener('hidden.bs.modal', onHidden);
+            if (modalChart) { modalChart.destroy(); modalChart = null; }
+        });
+    };
 
     /* ══ Bar charts (summary) ══ */
     var barLabels = [];
@@ -342,73 +427,43 @@
         barTypeEff.push(sections[i].avg_type_eff);
     }
 
-    var barOpts = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-            y: { beginAtZero: true, ticks: { callback: function(v) { return v + '%'; }, font: { size: 10 } } },
-            x: { ticks: { font: { size: 10 } } }
-        }
-    };
-
-    function makeBar(id, data, colors, colorsA) {
-        new Chart(document.getElementById(id), {
-            type: 'bar',
-            data: {
-                labels: barLabels,
-                datasets: [{ data: data, backgroundColor: colorsA, borderColor: colors, borderWidth: 2, borderRadius: 5 }]
-            },
-            options: barOpts
-        });
+    function mkBarDs(data) {
+        return [{ data: data, backgroundColor: barColorsA, borderColor: barColors, borderWidth: 2, borderRadius: 5 }];
     }
 
-    makeBar('chartOutput',  barOutput,  barColors, barColorsA);
-    makeBar('chartFuelEff', barFuelEff, barColors, barColorsA);
-    makeBar('chartTypeEff', barTypeEff, barColors, barColorsA);
+    function buildBar(id, data) {
+        var ds = mkBarDs(data);
+        new Chart(document.getElementById(id), {
+            type: 'bar',
+            data: { labels: barLabels, datasets: ds },
+            options: mkBarOpts()
+        });
+        CHART_REG[id] = { type: 'bar', labels: barLabels, datasets: ds };
+    }
+
+    buildBar('chartOutput',  barOutput);
+    buildBar('chartFuelEff', barFuelEff);
+    buildBar('chartTypeEff', barTypeEff);
 
     {% if has_trend %}
     /* ══ Line trend charts ══ */
-    var lineCharts = {};
-
-    var lineOpts = {
-        responsive: true,
-        maintainAspectRatio: false,
-        spanGaps: true,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-            legend: { display: true, position: 'bottom',
-                      labels: { boxWidth: 10, padding: 6, font: { size: 10 } } },
-            tooltip: { callbacks: {
-                label: function(ctx) {
-                    var v = ctx.parsed.y;
-                    return ctx.dataset.label + ': ' + (v !== null ? v + '%' : '—');
-                }
-            }}
-        },
-        scales: {
-            x: { ticks: { font: { size: 10 } } },
-            y: { beginAtZero: false, ticks: { callback: function(v) { return v + '%'; }, font: { size: 10 } } }
-        }
-    };
-
     function buildLine(id, datasets) {
         if (lineCharts[id]) { lineCharts[id].destroy(); }
         lineCharts[id] = new Chart(document.getElementById(id), {
             type: 'line',
             data: { labels: dates, datasets: datasets },
-            options: lineOpts
+            options: mkLineOpts()
         });
+        CHART_REG[id] = { type: 'line', labels: dates, datasets: datasets };
     }
 
     function dsOverall() {
         var out = { output: [], fuel_eff: [], type_eff: [] };
         for (var i = 0; i < sections.length; i++) {
-            var s = sections[i];
-            var c = s.color;
-            out.output.push({   label: s.name, data: s.overall.output,   borderColor: c, backgroundColor: c + '33', fill: false, tension: 0.3, pointRadius: 4, borderWidth: 2 });
-            out.fuel_eff.push({ label: s.name, data: s.overall.fuel_eff, borderColor: c, backgroundColor: c + '33', fill: false, tension: 0.3, pointRadius: 4, borderWidth: 2 });
-            out.type_eff.push({ label: s.name, data: s.overall.type_eff, borderColor: c, backgroundColor: c + '33', fill: false, tension: 0.3, pointRadius: 4, borderWidth: 2 });
+            var s = sections[i]; var c = s.color;
+            out.output.push({   label: s.name, data: s.overall.output,   borderColor: c, backgroundColor: c+'33', fill: false, tension: 0.3, pointRadius: 4, borderWidth: 2 });
+            out.fuel_eff.push({ label: s.name, data: s.overall.fuel_eff, borderColor: c, backgroundColor: c+'33', fill: false, tension: 0.3, pointRadius: 4, borderWidth: 2 });
+            out.type_eff.push({ label: s.name, data: s.overall.type_eff, borderColor: c, backgroundColor: c+'33', fill: false, tension: 0.3, pointRadius: 4, borderWidth: 2 });
         }
         return out;
     }
@@ -420,9 +475,7 @@
             var s = sections[i];
             var vnames = Object.keys(s.vehicles).sort();
             for (var j = 0; j < vnames.length; j++) {
-                var vname = vnames[j];
-                var v = s.vehicles[vname];
-                var c = col(vi);
+                var vname = vnames[j]; var v = s.vehicles[vname]; var c = col(vi);
                 var lbl = s.name + ' / ' + vname;
                 out.output.push({   label: lbl, data: v.output,   borderColor: c, backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 2, borderWidth: 1.5 });
                 out.fuel_eff.push({ label: lbl, data: v.fuel_eff, borderColor: c, backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 2, borderWidth: 1.5 });
@@ -434,11 +487,10 @@
     }
 
     window.setCmpMode = function(mode) {
-        var btns = ['overall', 'vehicle'];
-        for (var i = 0; i < btns.length; i++) {
-            var btn = document.getElementById('cmp-btn-' + btns[i]);
-            if (btn) btn.classList.toggle('active', btns[i] === mode);
-        }
+        ['overall','vehicle'].forEach(function(m) {
+            var b = document.getElementById('cmp-btn-' + m);
+            if (b) b.classList.toggle('active', m === mode);
+        });
         var ds = (mode === 'overall') ? dsOverall() : dsVehicle();
         buildLine('cmpOutput',  ds.output);
         buildLine('cmpFuelEff', ds.fuel_eff);
