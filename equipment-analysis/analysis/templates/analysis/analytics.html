@@ -82,40 +82,69 @@
 </div>
 
 {% if has_trend %}
-<!-- ── Тренд-графики ── -->
-<div class="card mb-3">
+
+<!-- ══════════════════════════════════════════════════════════════
+     ЛИНЕЙНЫЕ ТРЕНД-ГРАФИКИ
+     ══════════════════════════════════════════════════════════════ -->
+<div class="card mb-4">
     <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
-        <span class="fw-semibold"><i class="bi bi-graph-up me-2 text-primary"></i>Ежедневная динамика</span>
+        <span class="fw-semibold"><i class="bi bi-graph-up me-2 text-primary"></i>Ежедневная динамика (линии тренда)</span>
         <div class="btn-group btn-group-sm" role="group">
-            <button type="button" class="btn btn-outline-primary active" id="btn-overall" onclick="setMode('overall')">По участку</button>
-            <button type="button" class="btn btn-outline-primary" id="btn-group"   onclick="setMode('group')">По группам</button>
-            <button type="button" class="btn btn-outline-primary" id="btn-vehicle" onclick="setMode('vehicle')">По единицам</button>
+            <button type="button" class="btn btn-outline-primary active" id="btn-overall"  onclick="setMode('overall')">По участку</button>
+            <button type="button" class="btn btn-outline-primary"        id="btn-group"    onclick="setMode('group')">По группам</button>
+            <button type="button" class="btn btn-outline-primary"        id="btn-vehicle"  onclick="setMode('vehicle')">По единицам</button>
         </div>
     </div>
     <div class="card-body">
         <div class="row g-3">
             <div class="col-12 col-lg-4">
-                <div class="card border-0 bg-light">
-                    <div class="card-body pb-2 pt-2 px-2">
-                        <div class="small fw-semibold text-muted mb-1"><i class="bi bi-bar-chart text-primary me-1"></i>Выход техники, %</div>
-                        <canvas id="trendOutput" style="height:200px"></canvas>
-                    </div>
+                <p class="small fw-semibold text-muted mb-1"><i class="bi bi-bar-chart text-primary me-1"></i>Выход техники, %</p>
+                <div style="position:relative;height:220px">
+                    <canvas id="trendOutput"></canvas>
                 </div>
             </div>
             <div class="col-12 col-lg-4">
-                <div class="card border-0 bg-light">
-                    <div class="card-body pb-2 pt-2 px-2">
-                        <div class="small fw-semibold text-muted mb-1"><i class="bi bi-droplet text-danger me-1"></i>Расход к норме, %</div>
-                        <canvas id="trendFuelEff" style="height:200px"></canvas>
-                    </div>
+                <p class="small fw-semibold text-muted mb-1"><i class="bi bi-droplet text-danger me-1"></i>Расход к норме, %</p>
+                <div style="position:relative;height:220px">
+                    <canvas id="trendFuelEff"></canvas>
                 </div>
             </div>
             <div class="col-12 col-lg-4">
-                <div class="card border-0 bg-light">
-                    <div class="card-body pb-2 pt-2 px-2">
-                        <div class="small fw-semibold text-muted mb-1"><i class="bi bi-speedometer2 text-success me-1"></i>Эффективность, %</div>
-                        <canvas id="trendTypeEff" style="height:200px"></canvas>
-                    </div>
+                <p class="small fw-semibold text-muted mb-1"><i class="bi bi-speedometer2 text-success me-1"></i>Эффективность, %</p>
+                <div style="position:relative;height:220px">
+                    <canvas id="trendTypeEff"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     СТОЛБЧАТЫЕ ДИАГРАММЫ ПО ГРУППАМ
+     ══════════════════════════════════════════════════════════════ -->
+{% if group_stats %}
+<div class="card mb-4">
+    <div class="card-header bg-white border-bottom">
+        <span class="fw-semibold"><i class="bi bi-bar-chart-fill me-2 text-secondary"></i>Сравнение групп (средние за период)</span>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-12 col-lg-4">
+                <p class="small fw-semibold text-muted mb-1"><i class="bi bi-bar-chart text-primary me-1"></i>Выход техники, %</p>
+                <div style="position:relative;height:220px">
+                    <canvas id="barOutput"></canvas>
+                </div>
+            </div>
+            <div class="col-12 col-lg-4">
+                <p class="small fw-semibold text-muted mb-1"><i class="bi bi-droplet text-danger me-1"></i>Расход к норме, %</p>
+                <div style="position:relative;height:220px">
+                    <canvas id="barFuelEff"></canvas>
+                </div>
+            </div>
+            <div class="col-12 col-lg-4">
+                <p class="small fw-semibold text-muted mb-1"><i class="bi bi-speedometer2 text-success me-1"></i>Эффективность, %</p>
+                <div style="position:relative;height:220px">
+                    <canvas id="barTypeEff"></canvas>
                 </div>
             </div>
         </div>
@@ -123,8 +152,10 @@
 </div>
 {% endif %}
 
+{% endif %}
+
 {% if group_stats %}
-<!-- По группам — сводные карточки -->
+<!-- Сводные карточки по группам -->
 <h5 class="fw-bold mb-3 mt-2">По группам техники</h5>
 <div class="row g-3 mb-4">
     {% for s in group_stats %}
@@ -187,112 +218,144 @@
 {% if has_trend %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
-var TREND = {{ trend_json|safe }};
-var dates = TREND.dates;
+(function() {
+    var TREND = {{ trend_json|safe }};
+    var dates = TREND.dates;
 
-/* ── color helpers ── */
-var GROUP_COLORS = {
-    'Бульдозеры':       '#0d6efd',
-    'Погрузчики':       '#198754',
-    'Экскаваторы':      '#fd7e14',
-    'Самосвалы':        '#6f42c1',
-    'ОП Немир':         '#dc3545',
-    'ОП Немир,Погрузчики': '#20c997',
-};
-function groupColor(name) {
-    return GROUP_COLORS[name] || '#adb5bd';
-}
-function vehicleColor(i, alpha) {
-    var hue = Math.round((i * 137.508) % 360);
-    return 'hsla(' + hue + ',65%,48%,' + alpha + ')';
-}
-function hexAlpha(hex, a) {
-    return hex + Math.round(a * 255).toString(16).padStart(2,'0');
-}
+    var PAL = ['#0d6efd','#198754','#fd7e14','#6f42c1','#dc3545','#0dcaf0','#ffc107','#20c997','#6c757d','#343a40',
+               '#e83e8c','#17a2b8','#28a745','#007bff','#ff5722','#9c27b0','#3f51b5','#00bcd4','#4caf50','#ff9800'];
 
-/* ── chart instances ── */
-var charts = {};
+    function col(i)  { return PAL[i % PAL.length]; }
+    function colA(i) { return PAL[i % PAL.length] + '55'; }
 
-function lineOpts(showLegend) {
-    return {
+    /* ── shared chart options ── */
+    var baseLineOpts = {
         responsive: true,
         maintainAspectRatio: false,
         spanGaps: true,
         interaction: { mode: 'index', intersect: false },
         plugins: {
-            legend: { display: showLegend, position: 'bottom',
-                      labels: { boxWidth: 12, font: { size: 11 } } },
-            tooltip: { callbacks: { label: function(ctx) {
-                return ctx.dataset.label + ': ' + (ctx.parsed.y !== null ? ctx.parsed.y + '%' : '—');
-            }}}
+            legend: { display: true, position: 'bottom',
+                      labels: { boxWidth: 10, padding: 8, font: { size: 10 } } },
+            tooltip: { callbacks: {
+                label: function(ctx) {
+                    var v = ctx.parsed.y;
+                    return ctx.dataset.label + ': ' + (v !== null ? v + '%' : '—');
+                }
+            }}
         },
         scales: {
             x: { ticks: { font: { size: 10 } } },
-            y: { beginAtZero: false, ticks: { callback: function(v){ return v + '%'; }, font: { size: 10 } } }
+            y: { beginAtZero: false, ticks: { callback: function(v) { return v + '%'; }, font: { size: 10 } } }
         }
     };
-}
 
-function makeDatasets_overall() {
-    var ov = TREND.overall;
-    return {
-        output:   [{ label: 'Выход техники',  data: ov.output,   borderColor:'#0d6efd', backgroundColor:'#0d6efd22', fill:true, tension:0.3, pointRadius:4 }],
-        fuel_eff: [{ label: 'Расход к норме', data: ov.fuel_eff, borderColor:'#dc3545', backgroundColor:'#dc354522', fill:true, tension:0.3, pointRadius:4 }],
-        type_eff: [{ label: 'Эффективность',  data: ov.type_eff, borderColor:'#198754', backgroundColor:'#19875422', fill:true, tension:0.3, pointRadius:4 }],
+    /* ── chart instances ── */
+    var lineCharts = {};
+
+    function buildLine(id, datasets, showLegend) {
+        if (lineCharts[id]) { lineCharts[id].destroy(); }
+        var opts = JSON.parse(JSON.stringify(baseLineOpts));
+        opts.plugins.legend.display = showLegend;
+        lineCharts[id] = new Chart(document.getElementById(id), {
+            type: 'line',
+            data: { labels: dates, datasets: datasets },
+            options: opts
+        });
+    }
+
+    /* ── dataset builders ── */
+    function dsOverall() {
+        var ov = TREND.overall;
+        return {
+            output:   [{ label: 'Выход техники',  data: ov.output,   borderColor: '#0d6efd', backgroundColor: '#0d6efd33', fill: true, tension: 0.3, pointRadius: 4, borderWidth: 2 }],
+            fuel_eff: [{ label: 'Расход к норме', data: ov.fuel_eff, borderColor: '#dc3545', backgroundColor: '#dc354533', fill: true, tension: 0.3, pointRadius: 4, borderWidth: 2 }],
+            type_eff: [{ label: 'Эффективность',  data: ov.type_eff, borderColor: '#198754', backgroundColor: '#19875433', fill: true, tension: 0.3, pointRadius: 4, borderWidth: 2 }]
+        };
+    }
+
+    function dsGroup() {
+        var out = { output: [], fuel_eff: [], type_eff: [] };
+        var keys = Object.keys(TREND.by_group).sort();
+        for (var i = 0; i < keys.length; i++) {
+            var grp = keys[i];
+            var g = TREND.by_group[grp];
+            var c = col(i);
+            var ca = colA(i);
+            out.output.push({   label: grp, data: g.output,   borderColor: c, backgroundColor: ca, fill: false, tension: 0.3, pointRadius: 3, borderWidth: 2 });
+            out.fuel_eff.push({ label: grp, data: g.fuel_eff, borderColor: c, backgroundColor: ca, fill: false, tension: 0.3, pointRadius: 3, borderWidth: 2 });
+            out.type_eff.push({ label: grp, data: g.type_eff, borderColor: c, backgroundColor: ca, fill: false, tension: 0.3, pointRadius: 3, borderWidth: 2 });
+        }
+        return out;
+    }
+
+    function dsVehicle() {
+        var out = { output: [], fuel_eff: [], type_eff: [] };
+        var keys = Object.keys(TREND.by_vehicle).sort();
+        for (var i = 0; i < keys.length; i++) {
+            var vname = keys[i];
+            var v = TREND.by_vehicle[vname];
+            var c = col(i);
+            out.output.push({   label: vname, data: v.output,   borderColor: c, backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 2, borderWidth: 1.5 });
+            out.fuel_eff.push({ label: vname, data: v.fuel_eff, borderColor: c, backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 2, borderWidth: 1.5 });
+            out.type_eff.push({ label: vname, data: v.type_eff, borderColor: c, backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 2, borderWidth: 1.5 });
+        }
+        return out;
+    }
+
+    window.setMode = function(mode) {
+        var modes = ['overall', 'group', 'vehicle'];
+        for (var i = 0; i < modes.length; i++) {
+            var btn = document.getElementById('btn-' + modes[i]);
+            if (btn) btn.classList.toggle('active', modes[i] === mode);
+        }
+        var ds;
+        if (mode === 'overall')      ds = dsOverall();
+        else if (mode === 'group')   ds = dsGroup();
+        else                          ds = dsVehicle();
+        var showLegend = mode !== 'overall';
+        buildLine('trendOutput',  ds.output,   showLegend);
+        buildLine('trendFuelEff', ds.fuel_eff, showLegend);
+        buildLine('trendTypeEff', ds.type_eff, showLegend);
     };
-}
 
-function makeDatasets_group() {
-    var out = {output:[], fuel_eff:[], type_eff:[]};
-    Object.keys(TREND.by_group).sort().forEach(function(grp) {
-        var g = TREND.by_group[grp];
-        var c = groupColor(grp);
-        out.output.push({   label: grp, data: g.output,   borderColor: c, backgroundColor: hexAlpha(c, 0.12), fill:false, tension:0.3, pointRadius:3 });
-        out.fuel_eff.push({ label: grp, data: g.fuel_eff, borderColor: c, backgroundColor: hexAlpha(c, 0.12), fill:false, tension:0.3, pointRadius:3 });
-        out.type_eff.push({ label: grp, data: g.type_eff, borderColor: c, backgroundColor: hexAlpha(c, 0.12), fill:false, tension:0.3, pointRadius:3 });
-    });
-    return out;
-}
+    setMode('overall');
 
-function makeDatasets_vehicle() {
-    var out = {output:[], fuel_eff:[], type_eff:[]};
-    var names = Object.keys(TREND.by_vehicle).sort();
-    names.forEach(function(vname, i) {
-        var v = TREND.by_vehicle[vname];
-        var c = vehicleColor(i, 1);
-        var cb = vehicleColor(i, 0.12);
-        out.output.push({   label: vname, data: v.output,   borderColor: c, backgroundColor: cb, fill:false, tension:0.3, pointRadius:3, borderWidth:1.5 });
-        out.fuel_eff.push({ label: vname, data: v.fuel_eff, borderColor: c, backgroundColor: cb, fill:false, tension:0.3, pointRadius:3, borderWidth:1.5 });
-        out.type_eff.push({ label: vname, data: v.type_eff, borderColor: c, backgroundColor: cb, fill:false, tension:0.3, pointRadius:3, borderWidth:1.5 });
-    });
-    return out;
-}
+    /* ══════════ СТОЛБЧАТЫЕ ДИАГРАММЫ ══════════ */
+    {% if group_stats %}
+    var barGroups   = [{% for s in group_stats %}'{{ s.group }}'{% if not forloop.last %},{% endif %}{% endfor %}];
+    var barOutput   = [{% for s in group_stats %}{{ s.avg_output|default:"null" }}{% if not forloop.last %},{% endif %}{% endfor %}];
+    var barFuelEff  = [{% for s in group_stats %}{{ s.avg_fuel_eff|default:"null" }}{% if not forloop.last %},{% endif %}{% endfor %}];
+    var barTypeEff  = [{% for s in group_stats %}{{ s.avg_type_eff|default:"null" }}{% if not forloop.last %},{% endif %}{% endfor %}];
 
-function buildChart(id, datasets, showLegend) {
-    if (charts[id]) { charts[id].destroy(); }
-    charts[id] = new Chart(document.getElementById(id), {
-        type: 'line',
-        data: { labels: dates, datasets: datasets },
-        options: lineOpts(showLegend),
-    });
-}
+    var barColors = barGroups.map(function(_, i) { return col(i); });
+    var barColorsA = barGroups.map(function(_, i) { return colA(i); });
 
-function setMode(mode) {
-    ['overall','group','vehicle'].forEach(function(m) {
-        document.getElementById('btn-' + m).classList.toggle('active', m === mode);
-    });
-    var ds;
-    if      (mode === 'overall') ds = makeDatasets_overall();
-    else if (mode === 'group')   ds = makeDatasets_group();
-    else                          ds = makeDatasets_vehicle();
+    var barOpts = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { callback: function(v) { return v + '%'; }, font: { size: 10 } } },
+                  x: { ticks: { font: { size: 10 } } } }
+    };
 
-    var showLegend = (mode !== 'overall');
-    buildChart('trendOutput',  ds.output,   showLegend);
-    buildChart('trendFuelEff', ds.fuel_eff, showLegend);
-    buildChart('trendTypeEff', ds.type_eff, showLegend);
-}
+    function makeBar(id, data) {
+        new Chart(document.getElementById(id), {
+            type: 'bar',
+            data: {
+                labels: barGroups,
+                datasets: [{ data: data, backgroundColor: barColorsA, borderColor: barColors, borderWidth: 2, borderRadius: 5 }]
+            },
+            options: barOpts
+        });
+    }
 
-setMode('overall');
+    makeBar('barOutput',  barOutput);
+    makeBar('barFuelEff', barFuelEff);
+    makeBar('barTypeEff', barTypeEff);
+    {% endif %}
+
+})();
 </script>
 {% endif %}
 {% endblock %}

@@ -118,39 +118,35 @@
 </div>
 
 {% if has_trend %}
-<!-- ── Тренд-графики по участкам ── -->
+<!-- ══════════════════════════════════════════════════════════════
+     ЛИНЕЙНЫЕ ТРЕНД-ГРАФИКИ
+     ══════════════════════════════════════════════════════════════ -->
 <div class="card mb-4">
     <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
-        <span class="fw-semibold"><i class="bi bi-graph-up me-2 text-primary"></i>Ежедневная динамика по участкам</span>
+        <span class="fw-semibold"><i class="bi bi-graph-up me-2 text-primary"></i>Ежедневная динамика (линии тренда)</span>
         <div class="btn-group btn-group-sm" role="group">
-            <button type="button" class="btn btn-outline-primary active" id="cmp-btn-overall"  onclick="setCmpMode('overall')">По участку</button>
-            <button type="button" class="btn btn-outline-primary"        id="cmp-btn-vehicle"  onclick="setCmpMode('vehicle')">По единицам</button>
+            <button type="button" class="btn btn-outline-primary active" id="cmp-btn-overall" onclick="setCmpMode('overall')">По участку</button>
+            <button type="button" class="btn btn-outline-primary"        id="cmp-btn-vehicle" onclick="setCmpMode('vehicle')">По единицам</button>
         </div>
     </div>
     <div class="card-body">
         <div class="row g-3">
             <div class="col-12 col-lg-4">
-                <div class="card border-0 bg-light">
-                    <div class="card-body pb-2 pt-2 px-2">
-                        <div class="small fw-semibold text-muted mb-1"><i class="bi bi-bar-chart text-primary me-1"></i>Выход техники, %</div>
-                        <canvas id="cmpOutput" style="height:220px"></canvas>
-                    </div>
+                <p class="small fw-semibold text-muted mb-1"><i class="bi bi-bar-chart text-primary me-1"></i>Выход техники, %</p>
+                <div style="position:relative;height:240px">
+                    <canvas id="cmpOutput"></canvas>
                 </div>
             </div>
             <div class="col-12 col-lg-4">
-                <div class="card border-0 bg-light">
-                    <div class="card-body pb-2 pt-2 px-2">
-                        <div class="small fw-semibold text-muted mb-1"><i class="bi bi-droplet text-danger me-1"></i>Расход к норме, %</div>
-                        <canvas id="cmpFuelEff" style="height:220px"></canvas>
-                    </div>
+                <p class="small fw-semibold text-muted mb-1"><i class="bi bi-droplet text-danger me-1"></i>Расход к норме, %</p>
+                <div style="position:relative;height:240px">
+                    <canvas id="cmpFuelEff"></canvas>
                 </div>
             </div>
             <div class="col-12 col-lg-4">
-                <div class="card border-0 bg-light">
-                    <div class="card-body pb-2 pt-2 px-2">
-                        <div class="small fw-semibold text-muted mb-1"><i class="bi bi-speedometer2 text-success me-1"></i>Эффективность, %</div>
-                        <canvas id="cmpTypeEff" style="height:220px"></canvas>
-                    </div>
+                <p class="small fw-semibold text-muted mb-1"><i class="bi bi-speedometer2 text-success me-1"></i>Эффективность, %</p>
+                <div style="position:relative;height:240px">
+                    <canvas id="cmpTypeEff"></canvas>
                 </div>
             </div>
         </div>
@@ -158,35 +154,32 @@
 </div>
 {% endif %}
 
-<!-- Итоговые bar-диаграммы -->
-<div class="row g-3 mb-4">
-    <div class="col-12 col-lg-4">
-        <div class="card">
-            <div class="card-header fw-semibold bg-white border-bottom small">
-                <i class="bi bi-bar-chart me-2 text-primary"></i>Выход техники, % (итог)
-            </div>
-            <div class="card-body">
-                <canvas id="chartOutput" style="height:220px"></canvas>
-            </div>
-        </div>
+<!-- ══════════════════════════════════════════════════════════════
+     СТОЛБЧАТЫЕ ДИАГРАММЫ (итог)
+     ══════════════════════════════════════════════════════════════ -->
+<div class="card mb-4">
+    <div class="card-header bg-white border-bottom">
+        <span class="fw-semibold"><i class="bi bi-bar-chart-fill me-2 text-secondary"></i>Сравнение участков (средние за период)</span>
     </div>
-    <div class="col-12 col-lg-4">
-        <div class="card">
-            <div class="card-header fw-semibold bg-white border-bottom small">
-                <i class="bi bi-droplet me-2 text-danger"></i>Расход к норме, % (итог)
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-12 col-lg-4">
+                <p class="small fw-semibold text-muted mb-1"><i class="bi bi-bar-chart text-primary me-1"></i>Выход техники, %</p>
+                <div style="position:relative;height:220px">
+                    <canvas id="chartOutput"></canvas>
+                </div>
             </div>
-            <div class="card-body">
-                <canvas id="chartFuelEff" style="height:220px"></canvas>
+            <div class="col-12 col-lg-4">
+                <p class="small fw-semibold text-muted mb-1"><i class="bi bi-droplet text-danger me-1"></i>Расход к норме, %</p>
+                <div style="position:relative;height:220px">
+                    <canvas id="chartFuelEff"></canvas>
+                </div>
             </div>
-        </div>
-    </div>
-    <div class="col-12 col-lg-4">
-        <div class="card">
-            <div class="card-header fw-semibold bg-white border-bottom small">
-                <i class="bi bi-speedometer2 me-2 text-success"></i>Эффективность, % (итог)
-            </div>
-            <div class="card-body">
-                <canvas id="chartTypeEff" style="height:220px"></canvas>
+            <div class="col-12 col-lg-4">
+                <p class="small fw-semibold text-muted mb-1"><i class="bi bi-speedometer2 text-success me-1"></i>Эффективность, %</p>
+                <div style="position:relative;height:220px">
+                    <canvas id="chartTypeEff"></canvas>
+                </div>
             </div>
         </div>
     </div>
@@ -204,9 +197,7 @@
                     <tr>
                         <th class="ps-3" style="min-width:180px">Показатель</th>
                         {% for d in comparison_data %}
-                        <th class="text-center" style="border-top: 3px solid {{ d.color }};">
-                            {{ d.section.name }}
-                        </th>
+                        <th class="text-center" style="border-top: 3px solid {{ d.color }};">{{ d.section.name }}</th>
                         {% endfor %}
                     </tr>
                 </thead>
@@ -285,19 +276,13 @@
                         <td class="ps-3 small">{{ g.group }}</td>
                         <td class="text-center small">{{ g.count }}</td>
                         <td class="text-center small">
-                            {% if g.avg_fuel_eff is not None %}
-                            <span class="{% if g.avg_fuel_eff <= 100 %}efficiency-good{% elif g.avg_fuel_eff <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ g.avg_fuel_eff }}%</span>
-                            {% else %}—{% endif %}
+                            {% if g.avg_fuel_eff is not None %}<span class="{% if g.avg_fuel_eff <= 100 %}efficiency-good{% elif g.avg_fuel_eff <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ g.avg_fuel_eff }}%</span>{% else %}—{% endif %}
                         </td>
                         <td class="text-center small">
-                            {% if g.avg_output is not None %}
-                            <span class="{% if g.avg_output >= 80 %}output-good{% else %}output-bad{% endif %}">{{ g.avg_output }}%</span>
-                            {% else %}—{% endif %}
+                            {% if g.avg_output is not None %}<span class="{% if g.avg_output >= 80 %}output-good{% else %}output-bad{% endif %}">{{ g.avg_output }}%</span>{% else %}—{% endif %}
                         </td>
                         <td class="text-center small">
-                            {% if g.avg_type_eff is not None %}
-                            <span class="{% if g.avg_type_eff <= 100 %}efficiency-good{% elif g.avg_type_eff <= 130 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ g.avg_type_eff }}%</span>
-                            {% else %}—{% endif %}
+                            {% if g.avg_type_eff is not None %}<span class="{% if g.avg_type_eff <= 100 %}efficiency-good{% elif g.avg_type_eff <= 130 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ g.avg_type_eff }}%</span>{% else %}—{% endif %}
                         </td>
                     </tr>
                     {% endfor %}
@@ -326,114 +311,144 @@
     </div>
 </div>
 {% endif %}
-
 {% endblock %}
 
 {% block extra_js %}
 {% if comparison_data %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
-var CMP = {{ compare_json|safe }};
-var dates   = CMP.dates;
-var sections = CMP.sections;
+(function() {
+    var CMP = {{ compare_json|safe }};
+    var dates = CMP.dates;
+    var sections = CMP.sections;
 
-/* ── bar charts (summary) ── */
-var barLabels  = sections.map(function(s){ return s.name; });
-var barColors  = sections.map(function(s){ return s.color; });
-var barFill    = sections.map(function(s){ return s.color + 'BB'; });
+    var PAL = ['#0d6efd','#198754','#fd7e14','#6f42c1','#dc3545','#0dcaf0','#ffc107','#20c997'];
+    function col(i)  { return PAL[i % PAL.length]; }
+    function colA(i) { return PAL[i % PAL.length] + '55'; }
 
-var noLegend  = { legend: { display: false } };
-var scalesPct = { y: { beginAtZero: true, ticks: { callback: function(v){ return v + '%'; } } } };
-var scalesHrs = { y: { beginAtZero: true, ticks: { callback: function(v){ return v + ' ч'; } } } };
+    /* ══ Bar charts (summary) ══ */
+    var barLabels = [];
+    var barColors = [];
+    var barColorsA = [];
+    var barOutput = [];
+    var barFuelEff = [];
+    var barTypeEff = [];
+    for (var i = 0; i < sections.length; i++) {
+        barLabels.push(sections[i].name);
+        barColors.push(sections[i].color);
+        barColorsA.push(sections[i].color + '99');
+        barOutput.push(sections[i].avg_output);
+        barFuelEff.push(sections[i].avg_fuel_eff);
+        barTypeEff.push(sections[i].avg_type_eff);
+    }
 
-function makeBar(id, vals, scaleOpts) {
-    new Chart(document.getElementById(id), {
-        type: 'bar',
-        data: { labels: barLabels, datasets: [{ data: vals, backgroundColor: barFill, borderColor: barColors, borderWidth: 2, borderRadius: 5 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: noLegend, scales: scaleOpts }
-    });
-}
-makeBar('chartOutput',  sections.map(function(s){ return s.avg_output;   }), scalesPct);
-makeBar('chartFuelEff', sections.map(function(s){ return s.avg_fuel_eff; }), scalesPct);
-makeBar('chartTypeEff', sections.map(function(s){ return s.avg_type_eff; }), scalesPct);
+    var barOpts = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            y: { beginAtZero: true, ticks: { callback: function(v) { return v + '%'; }, font: { size: 10 } } },
+            x: { ticks: { font: { size: 10 } } }
+        }
+    };
 
-{% if has_trend %}
-/* ── trend line charts ── */
-function vehicleColor(i, alpha) {
-    var hue = Math.round((i * 137.508) % 360);
-    return 'hsla(' + hue + ',65%,48%,' + alpha + ')';
-}
+    function makeBar(id, data, colors, colorsA) {
+        new Chart(document.getElementById(id), {
+            type: 'bar',
+            data: {
+                labels: barLabels,
+                datasets: [{ data: data, backgroundColor: colorsA, borderColor: colors, borderWidth: 2, borderRadius: 5 }]
+            },
+            options: barOpts
+        });
+    }
 
-var cmpCharts = {};
+    makeBar('chartOutput',  barOutput,  barColors, barColorsA);
+    makeBar('chartFuelEff', barFuelEff, barColors, barColorsA);
+    makeBar('chartTypeEff', barTypeEff, barColors, barColorsA);
 
-function lineOpts(title) {
-    return {
+    {% if has_trend %}
+    /* ══ Line trend charts ══ */
+    var lineCharts = {};
+
+    var lineOpts = {
         responsive: true,
         maintainAspectRatio: false,
         spanGaps: true,
         interaction: { mode: 'index', intersect: false },
         plugins: {
-            legend: { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } },
-            tooltip: { callbacks: { label: function(ctx) {
-                return ctx.dataset.label + ': ' + (ctx.parsed.y !== null ? ctx.parsed.y + '%' : '—');
-            }}}
+            legend: { display: true, position: 'bottom',
+                      labels: { boxWidth: 10, padding: 6, font: { size: 10 } } },
+            tooltip: { callbacks: {
+                label: function(ctx) {
+                    var v = ctx.parsed.y;
+                    return ctx.dataset.label + ': ' + (v !== null ? v + '%' : '—');
+                }
+            }}
         },
         scales: {
             x: { ticks: { font: { size: 10 } } },
-            y: { beginAtZero: false, ticks: { callback: function(v){ return v + '%'; }, font: { size: 10 } } }
+            y: { beginAtZero: false, ticks: { callback: function(v) { return v + '%'; }, font: { size: 10 } } }
         }
     };
-}
 
-function buildCmpChart(id, datasets) {
-    if (cmpCharts[id]) cmpCharts[id].destroy();
-    cmpCharts[id] = new Chart(document.getElementById(id), {
-        type: 'line',
-        data: { labels: dates, datasets: datasets },
-        options: lineOpts(),
-    });
-}
-
-function makeOverallDatasets() {
-    var out = { output: [], fuel_eff: [], type_eff: [] };
-    sections.forEach(function(sec) {
-        out.output.push({   label: sec.name, data: sec.overall.output,   borderColor: sec.color, backgroundColor: sec.color + '22', fill: false, tension: 0.3, pointRadius: 4, borderWidth: 2 });
-        out.fuel_eff.push({ label: sec.name, data: sec.overall.fuel_eff, borderColor: sec.color, backgroundColor: sec.color + '22', fill: false, tension: 0.3, pointRadius: 4, borderWidth: 2 });
-        out.type_eff.push({ label: sec.name, data: sec.overall.type_eff, borderColor: sec.color, backgroundColor: sec.color + '22', fill: false, tension: 0.3, pointRadius: 4, borderWidth: 2 });
-    });
-    return out;
-}
-
-function makeVehicleDatasets() {
-    var out = { output: [], fuel_eff: [], type_eff: [] };
-    var vi = 0;
-    sections.forEach(function(sec) {
-        var vnames = Object.keys(sec.vehicles).sort();
-        vnames.forEach(function(vname) {
-            var v = sec.vehicles[vname];
-            var c = vehicleColor(vi, 1);
-            var label = sec.name + ' / ' + vname;
-            out.output.push({   label: label, data: v.output,   borderColor: c, fill: false, tension: 0.3, pointRadius: 3, borderWidth: 1.5 });
-            out.fuel_eff.push({ label: label, data: v.fuel_eff, borderColor: c, fill: false, tension: 0.3, pointRadius: 3, borderWidth: 1.5 });
-            out.type_eff.push({ label: label, data: v.type_eff, borderColor: c, fill: false, tension: 0.3, pointRadius: 3, borderWidth: 1.5 });
-            vi++;
+    function buildLine(id, datasets) {
+        if (lineCharts[id]) { lineCharts[id].destroy(); }
+        lineCharts[id] = new Chart(document.getElementById(id), {
+            type: 'line',
+            data: { labels: dates, datasets: datasets },
+            options: lineOpts
         });
-    });
-    return out;
-}
+    }
 
-function setCmpMode(mode) {
-    ['overall','vehicle'].forEach(function(m) {
-        document.getElementById('cmp-btn-' + m).classList.toggle('active', m === mode);
-    });
-    var ds = (mode === 'overall') ? makeOverallDatasets() : makeVehicleDatasets();
-    buildCmpChart('cmpOutput',  ds.output);
-    buildCmpChart('cmpFuelEff', ds.fuel_eff);
-    buildCmpChart('cmpTypeEff', ds.type_eff);
-}
+    function dsOverall() {
+        var out = { output: [], fuel_eff: [], type_eff: [] };
+        for (var i = 0; i < sections.length; i++) {
+            var s = sections[i];
+            var c = s.color;
+            out.output.push({   label: s.name, data: s.overall.output,   borderColor: c, backgroundColor: c + '33', fill: false, tension: 0.3, pointRadius: 4, borderWidth: 2 });
+            out.fuel_eff.push({ label: s.name, data: s.overall.fuel_eff, borderColor: c, backgroundColor: c + '33', fill: false, tension: 0.3, pointRadius: 4, borderWidth: 2 });
+            out.type_eff.push({ label: s.name, data: s.overall.type_eff, borderColor: c, backgroundColor: c + '33', fill: false, tension: 0.3, pointRadius: 4, borderWidth: 2 });
+        }
+        return out;
+    }
 
-setCmpMode('overall');
-{% endif %}
+    function dsVehicle() {
+        var out = { output: [], fuel_eff: [], type_eff: [] };
+        var vi = 0;
+        for (var i = 0; i < sections.length; i++) {
+            var s = sections[i];
+            var vnames = Object.keys(s.vehicles).sort();
+            for (var j = 0; j < vnames.length; j++) {
+                var vname = vnames[j];
+                var v = s.vehicles[vname];
+                var c = col(vi);
+                var lbl = s.name + ' / ' + vname;
+                out.output.push({   label: lbl, data: v.output,   borderColor: c, backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 2, borderWidth: 1.5 });
+                out.fuel_eff.push({ label: lbl, data: v.fuel_eff, borderColor: c, backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 2, borderWidth: 1.5 });
+                out.type_eff.push({ label: lbl, data: v.type_eff, borderColor: c, backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 2, borderWidth: 1.5 });
+                vi++;
+            }
+        }
+        return out;
+    }
+
+    window.setCmpMode = function(mode) {
+        var btns = ['overall', 'vehicle'];
+        for (var i = 0; i < btns.length; i++) {
+            var btn = document.getElementById('cmp-btn-' + btns[i]);
+            if (btn) btn.classList.toggle('active', btns[i] === mode);
+        }
+        var ds = (mode === 'overall') ? dsOverall() : dsVehicle();
+        buildLine('cmpOutput',  ds.output);
+        buildLine('cmpFuelEff', ds.fuel_eff);
+        buildLine('cmpTypeEff', ds.type_eff);
+    };
+
+    setCmpMode('overall');
+    {% endif %}
+
+})();
 </script>
 {% endif %}
 {% endblock %}
