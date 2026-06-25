@@ -10,12 +10,12 @@
 <!-- Фильтры -->
 <div class="card mb-4">
     <div class="card-body">
-        <form method="get" class="row g-2 align-items-end">
-            <div class="col-md-3">
+        <form method="get" class="row g-3 align-items-start">
+            <div class="col-md-2">
                 <label class="form-label small fw-semibold mb-1">Дата от</label>
                 <input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm">
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label small fw-semibold mb-1">Дата до</label>
                 <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm">
             </div>
@@ -28,16 +28,20 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-2">
-                <label class="form-label small fw-semibold mb-1">Группа техники</label>
-                <select name="group" class="form-select form-select-sm">
-                    <option value="">Все группы</option>
+            <div class="col-md-4">
+                <label class="form-label small fw-semibold mb-1">Группы техники</label>
+                <div class="d-flex flex-wrap gap-2 pt-1">
                     {% for g in all_groups %}
-                    <option value="{{ g }}" {% if group_filter == g %}selected{% endif %}>{{ g }}</option>
+                    <div class="form-check form-check-inline m-0">
+                        <input class="form-check-input" type="checkbox" name="group"
+                               value="{{ g }}" id="grp_{{ forloop.counter }}"
+                               {% if g in group_filters %}checked{% endif %}>
+                        <label class="form-check-label small" for="grp_{{ forloop.counter }}">{{ g }}</label>
+                    </div>
                     {% endfor %}
-                </select>
+                </div>
             </div>
-            <div class="col-md-2 d-flex gap-2">
+            <div class="col-md-2 d-flex gap-2 align-items-end">
                 <button type="submit" class="btn btn-sm btn-primary flex-grow-1">
                     <i class="bi bi-funnel me-1"></i>Применить
                 </button>
@@ -77,9 +81,51 @@
     </div>
 </div>
 
+{% if has_trend %}
+<!-- ── Тренд-графики ── -->
+<div class="card mb-3">
+    <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <span class="fw-semibold"><i class="bi bi-graph-up me-2 text-primary"></i>Ежедневная динамика</span>
+        <div class="btn-group btn-group-sm" role="group">
+            <button type="button" class="btn btn-outline-primary active" id="btn-overall" onclick="setMode('overall')">По участку</button>
+            <button type="button" class="btn btn-outline-primary" id="btn-group"   onclick="setMode('group')">По группам</button>
+            <button type="button" class="btn btn-outline-primary" id="btn-vehicle" onclick="setMode('vehicle')">По единицам</button>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-12 col-lg-4">
+                <div class="card border-0 bg-light">
+                    <div class="card-body pb-2 pt-2 px-2">
+                        <div class="small fw-semibold text-muted mb-1"><i class="bi bi-bar-chart text-primary me-1"></i>Выход техники, %</div>
+                        <canvas id="trendOutput" style="height:200px"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-lg-4">
+                <div class="card border-0 bg-light">
+                    <div class="card-body pb-2 pt-2 px-2">
+                        <div class="small fw-semibold text-muted mb-1"><i class="bi bi-droplet text-danger me-1"></i>Расход к норме, %</div>
+                        <canvas id="trendFuelEff" style="height:200px"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-lg-4">
+                <div class="card border-0 bg-light">
+                    <div class="card-body pb-2 pt-2 px-2">
+                        <div class="small fw-semibold text-muted mb-1"><i class="bi bi-speedometer2 text-success me-1"></i>Эффективность, %</div>
+                        <canvas id="trendTypeEff" style="height:200px"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {% if group_stats %}
-<!-- По группам -->
-<h5 class="fw-bold mb-3">По группам техники</h5>
+<!-- По группам — сводные карточки -->
+<h5 class="fw-bold mb-3 mt-2">По группам техники</h5>
 <div class="row g-3 mb-4">
     {% for s in group_stats %}
     <div class="col-12 col-md-6 col-xl-3">
@@ -126,57 +172,7 @@
 </div>
 {% endif %}
 
-{% if daily_labels != "[]" %}
-<!-- Графики -->
-<div class="row g-3 mb-4">
-    <div class="col-12 col-lg-8">
-        <div class="card">
-            <div class="card-header fw-semibold bg-white border-bottom">
-                <i class="bi bi-fuel-pump me-2 text-info"></i>Расход топлива по дням
-            </div>
-            <div class="card-body">
-                <canvas id="fuelChart" style="height:220px"></canvas>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Bar charts by group -->
-{% if group_stats %}
-<div class="row g-3 mb-4">
-    <div class="col-12 col-lg-4">
-        <div class="card">
-            <div class="card-header fw-semibold bg-white border-bottom">
-                <i class="bi bi-bar-chart me-2 text-primary"></i>Выход техники по группам, %
-            </div>
-            <div class="card-body">
-                <canvas id="outputChart" style="height:200px"></canvas>
-            </div>
-        </div>
-    </div>
-    <div class="col-12 col-lg-4">
-        <div class="card">
-            <div class="card-header fw-semibold bg-white border-bottom">
-                <i class="bi bi-droplet me-2 text-danger"></i>Расход к норме по группам, %
-            </div>
-            <div class="card-body">
-                <canvas id="fuelEffChart" style="height:200px"></canvas>
-            </div>
-        </div>
-    </div>
-    <div class="col-12 col-lg-4">
-        <div class="card">
-            <div class="card-header fw-semibold bg-white border-bottom">
-                <i class="bi bi-speedometer2 me-2 text-success"></i>Эффективность по группам, %
-            </div>
-            <div class="card-body">
-                <canvas id="typeEffChart" style="height:200px"></canvas>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
-{% else %}
+{% if not has_trend %}
 <div class="card">
     <div class="card-body text-center py-5">
         <i class="bi bi-bar-chart display-4 text-muted d-block mb-3"></i>
@@ -188,106 +184,115 @@
 {% endblock %}
 
 {% block extra_js %}
-{% if daily_labels != "[]" %}
+{% if has_trend %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
-var labels = {{ daily_labels|safe }};
-var dailyFuel = {{ daily_fuel|safe }};
+var TREND = {{ trend_json|safe }};
+var dates = TREND.dates;
 
-new Chart(document.getElementById('fuelChart'), {
-    type: 'bar',
-    data: {
-        labels: labels,
-        datasets: [{
-            label: 'Расход топлива, л',
-            data: dailyFuel,
-            backgroundColor: 'rgba(13,110,253,0.65)',
-            borderColor: 'rgba(13,110,253,1)',
-            borderWidth: 1,
-            borderRadius: 4,
-        }]
-    },
-    options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true } }
-    }
-});
+/* ── color helpers ── */
+var GROUP_COLORS = {
+    'Бульдозеры':       '#0d6efd',
+    'Погрузчики':       '#198754',
+    'Экскаваторы':      '#fd7e14',
+    'Самосвалы':        '#6f42c1',
+    'ОП Немир':         '#dc3545',
+    'ОП Немир,Погрузчики': '#20c997',
+};
+function groupColor(name) {
+    return GROUP_COLORS[name] || '#adb5bd';
+}
+function vehicleColor(i, alpha) {
+    var hue = Math.round((i * 137.508) % 360);
+    return 'hsla(' + hue + ',65%,48%,' + alpha + ')';
+}
+function hexAlpha(hex, a) {
+    return hex + Math.round(a * 255).toString(16).padStart(2,'0');
+}
 
-{% if group_stats %}
-var groupLabels = [{% for s in group_stats %}'{{ s.group }}'{% if not forloop.last %},{% endif %}{% endfor %}];
-var outputData = [{% for s in group_stats %}{{ s.avg_output|default:"null" }}{% if not forloop.last %},{% endif %}{% endfor %}];
-var fuelEffData = [{% for s in group_stats %}{{ s.avg_fuel_eff|default:"null" }}{% if not forloop.last %},{% endif %}{% endfor %}];
-var typeEffData = [{% for s in group_stats %}{{ s.avg_type_eff|default:"null" }}{% if not forloop.last %},{% endif %}{% endfor %}];
+/* ── chart instances ── */
+var charts = {};
 
-var outputColors = outputData.map(function(v) {
-    return v === null ? 'rgba(200,200,200,0.6)' : (v >= 80 ? 'rgba(25,135,84,0.7)' : 'rgba(220,53,69,0.7)');
-});
+function lineOpts(showLegend) {
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        spanGaps: true,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+            legend: { display: showLegend, position: 'bottom',
+                      labels: { boxWidth: 12, font: { size: 11 } } },
+            tooltip: { callbacks: { label: function(ctx) {
+                return ctx.dataset.label + ': ' + (ctx.parsed.y !== null ? ctx.parsed.y + '%' : '—');
+            }}}
+        },
+        scales: {
+            x: { ticks: { font: { size: 10 } } },
+            y: { beginAtZero: false, ticks: { callback: function(v){ return v + '%'; }, font: { size: 10 } } }
+        }
+    };
+}
 
-new Chart(document.getElementById('outputChart'), {
-    type: 'bar',
-    data: {
-        labels: groupLabels,
-        datasets: [{
-            label: 'Выход техники, %',
-            data: outputData,
-            backgroundColor: outputColors,
-            borderRadius: 4,
-        }]
-    },
-    options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true, max: 120 } }
-    }
-});
+function makeDatasets_overall() {
+    var ov = TREND.overall;
+    return {
+        output:   [{ label: 'Выход техники',  data: ov.output,   borderColor:'#0d6efd', backgroundColor:'#0d6efd22', fill:true, tension:0.3, pointRadius:4 }],
+        fuel_eff: [{ label: 'Расход к норме', data: ov.fuel_eff, borderColor:'#dc3545', backgroundColor:'#dc354522', fill:true, tension:0.3, pointRadius:4 }],
+        type_eff: [{ label: 'Эффективность',  data: ov.type_eff, borderColor:'#198754', backgroundColor:'#19875422', fill:true, tension:0.3, pointRadius:4 }],
+    };
+}
 
-new Chart(document.getElementById('fuelEffChart'), {
-    type: 'bar',
-    data: {
-        labels: groupLabels,
-        datasets: [{
-            label: 'Расход к норме, %',
-            data: fuelEffData,
-            backgroundColor: fuelEffData.map(function(v) {
-                return v === null ? 'rgba(200,200,200,0.6)'
-                    : (v <= 100 ? 'rgba(25,135,84,0.7)'
-                    : (v <= 115 ? 'rgba(253,126,20,0.7)'
-                    : 'rgba(220,53,69,0.7)'));
-            }),
-            borderRadius: 4,
-        }]
-    },
-    options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true } }
-    }
-});
+function makeDatasets_group() {
+    var out = {output:[], fuel_eff:[], type_eff:[]};
+    Object.keys(TREND.by_group).sort().forEach(function(grp) {
+        var g = TREND.by_group[grp];
+        var c = groupColor(grp);
+        out.output.push({   label: grp, data: g.output,   borderColor: c, backgroundColor: hexAlpha(c, 0.12), fill:false, tension:0.3, pointRadius:3 });
+        out.fuel_eff.push({ label: grp, data: g.fuel_eff, borderColor: c, backgroundColor: hexAlpha(c, 0.12), fill:false, tension:0.3, pointRadius:3 });
+        out.type_eff.push({ label: grp, data: g.type_eff, borderColor: c, backgroundColor: hexAlpha(c, 0.12), fill:false, tension:0.3, pointRadius:3 });
+    });
+    return out;
+}
 
-new Chart(document.getElementById('typeEffChart'), {
-    type: 'bar',
-    data: {
-        labels: groupLabels,
-        datasets: [{
-            label: 'Эффективность, %',
-            data: typeEffData,
-            backgroundColor: typeEffData.map(function(v) {
-                return v === null ? 'rgba(200,200,200,0.6)'
-                    : (v <= 100 ? 'rgba(25,135,84,0.7)'
-                    : (v <= 130 ? 'rgba(253,126,20,0.7)'
-                    : 'rgba(220,53,69,0.7)'));
-            }),
-            borderRadius: 4,
-        }]
-    },
-    options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true } }
-    }
-});
-{% endif %}
+function makeDatasets_vehicle() {
+    var out = {output:[], fuel_eff:[], type_eff:[]};
+    var names = Object.keys(TREND.by_vehicle).sort();
+    names.forEach(function(vname, i) {
+        var v = TREND.by_vehicle[vname];
+        var c = vehicleColor(i, 1);
+        var cb = vehicleColor(i, 0.12);
+        out.output.push({   label: vname, data: v.output,   borderColor: c, backgroundColor: cb, fill:false, tension:0.3, pointRadius:3, borderWidth:1.5 });
+        out.fuel_eff.push({ label: vname, data: v.fuel_eff, borderColor: c, backgroundColor: cb, fill:false, tension:0.3, pointRadius:3, borderWidth:1.5 });
+        out.type_eff.push({ label: vname, data: v.type_eff, borderColor: c, backgroundColor: cb, fill:false, tension:0.3, pointRadius:3, borderWidth:1.5 });
+    });
+    return out;
+}
+
+function buildChart(id, datasets, showLegend) {
+    if (charts[id]) { charts[id].destroy(); }
+    charts[id] = new Chart(document.getElementById(id), {
+        type: 'line',
+        data: { labels: dates, datasets: datasets },
+        options: lineOpts(showLegend),
+    });
+}
+
+function setMode(mode) {
+    ['overall','group','vehicle'].forEach(function(m) {
+        document.getElementById('btn-' + m).classList.toggle('active', m === mode);
+    });
+    var ds;
+    if      (mode === 'overall') ds = makeDatasets_overall();
+    else if (mode === 'group')   ds = makeDatasets_group();
+    else                          ds = makeDatasets_vehicle();
+
+    var showLegend = (mode !== 'overall');
+    buildChart('trendOutput',  ds.output,   showLegend);
+    buildChart('trendFuelEff', ds.fuel_eff, showLegend);
+    buildChart('trendTypeEff', ds.type_eff, showLegend);
+}
+
+setMode('overall');
 </script>
 {% endif %}
 {% endblock %}

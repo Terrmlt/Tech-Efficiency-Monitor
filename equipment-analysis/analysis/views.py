@@ -628,10 +628,12 @@ def records(request):
 # ─── Analytics ────────────────────────────────────────────────────────────────
 
 def analytics(request):
-    date_from = request.GET.get('date_from', '')
-    date_to = request.GET.get('date_to', '')
+    from collections import defaultdict as _dd
+
+    date_from  = request.GET.get('date_from', '')
+    date_to    = request.GET.get('date_to', '')
     section_id = request.GET.get('section', '')
-    group_filter = request.GET.get('group', '')
+    group_filters = request.GET.getlist('group')
 
     qs = VehicleRecord.objects.select_related('report', 'report__section').all()
 
@@ -647,68 +649,119 @@ def analytics(request):
             pass
     if section_id:
         qs = qs.filter(report__section_id=section_id)
-    if group_filter:
-        qs = qs.filter(group=group_filter)
+    if group_filters:
+        qs = qs.filter(group__in=group_filters)
 
-    # All available groups (unfiltered by group) for the dropdown
+    # All available groups for checkboxes
     all_groups = list(VehicleRecord.objects.values_list('group', flat=True).distinct().order_by('group'))
 
-    # Group stats — iterate over groups present in the filtered qs
+    # ── helper ──────────────────────────────────────────────────────────────────
+    def _avg(recs):
+        fe = [r.fuel_efficiency * 100 for r in recs if r.fuel_efficiency is not None]
+        ou = [r.equipment_output * 100 for r in recs if r.equipment_output is not None]
+        te = [r.type_efficiency  * 100 for r in recs if r.type_efficiency  is not None]
+        return (
+            round(sum(fe) / len(fe), 1) if fe else None,
+            round(sum(ou) / len(ou), 1) if ou else None,
+            round(sum(te) / len(te), 1) if te else None,
+        )
+
+    # ── build daily indexes ──────────────────────────────────────────────────────
+    daily_recs    = _dd(list)   # date -> [rec]
+    vehicle_daily = _dd(lambda: _dd(list))  # vehicle -> date -> [rec]
+    group_daily   = _dd(lambda: _dd(list))  # group   -> date -> [rec]
+
+    rec_list = list(qs)
+    for rec in rec_list:
+        if rec.record_date:
+            d = rec.record_date.isoformat()
+            daily_recs[d].append(rec)
+            vehicle_daily[rec.name][d].append(rec)
+            group_daily[rec.group][d].append(rec)
+
+    all_dates = sorted(daily_recs.keys())
+
+    # ── overall daily ────────────────────────────────────────────────────────────
+    ov_fe, ov_ou, ov_te = [], [], []
+    for d in all_dates:
+        fe, ou, te = _avg(daily_recs[d])
+        ov_fe.append(fe); ov_ou.append(ou); ov_te.append(te)
+
+    # ── by group daily ───────────────────────────────────────────────────────────
+    by_group = {}
+    for grp in sorted(group_daily.keys()):
+        gfe, gou, gte = [], [], []
+        for d in all_dates:
+            recs = group_daily[grp].get(d, [])
+            fe, ou, te = _avg(recs) if recs else (None, None, None)
+            gfe.append(fe); gou.append(ou); gte.append(te)
+        by_group[grp] = {'fuel_eff': gfe, 'output': gou, 'type_eff': gte}
+
+    # ── by vehicle daily ─────────────────────────────────────────────────────────
+    by_vehicle = {}
+    for vname in sorted(vehicle_daily.keys()):
+        date_map = vehicle_daily[vname]
+        vfe, vou, vte, vgroup = [], [], [], None
+        for d in all_dates:
+            recs = date_map.get(d, [])
+            if recs:
+                if vgroup is None:
+                    vgroup = recs[0].group
+                fe, ou, te = _avg(recs)
+            else:
+                fe, ou, te = None, None, None
+            vfe.append(fe); vou.append(ou); vte.append(te)
+        by_vehicle[vname] = {'group': vgroup, 'fuel_eff': vfe, 'output': vou, 'type_eff': vte}
+
+    trend_json = json.dumps({
+        'dates':      all_dates,
+        'overall':    {'fuel_eff': ov_fe,  'output': ov_ou,  'type_eff': ov_te},
+        'by_group':   by_group,
+        'by_vehicle': by_vehicle,
+    })
+
+    # ── group summary cards ──────────────────────────────────────────────────────
     groups_in_qs = list(qs.values_list('group', flat=True).distinct().order_by('group'))
     group_stats = []
     for group in groups_in_qs:
-        gqs = qs.filter(group=group)
-        count = gqs.count()
-        if count == 0:
+        recs = [r for r in rec_list if r.group == group]
+        if not recs:
             continue
-        total_fuel = sum(r.fuel_actual for r in gqs if r.fuel_actual and r.fuel_actual > 0)
-        total_hours = sum(r.engine_time_sec for r in gqs) / 3600
-        fuel_eff_vals = [r.fuel_efficiency * 100 for r in gqs if r.fuel_efficiency is not None]
-        output_vals = [r.equipment_output * 100 for r in gqs if r.equipment_output is not None]
-        type_eff_vals = [r.type_efficiency * 100 for r in gqs if r.type_efficiency is not None]
-
+        total_fuel  = sum(r.fuel_actual for r in recs if r.fuel_actual and r.fuel_actual > 0)
+        total_hours = sum(r.engine_time_sec for r in recs) / 3600
+        fe_vals = [r.fuel_efficiency * 100 for r in recs if r.fuel_efficiency is not None]
+        ou_vals = [r.equipment_output * 100 for r in recs if r.equipment_output is not None]
+        te_vals = [r.type_efficiency  * 100 for r in recs if r.type_efficiency  is not None]
         group_stats.append({
-            'group': group,
-            'count': count,
-            'total_fuel': round(total_fuel, 1),
-            'total_hours': round(total_hours, 1),
-            'avg_fuel_eff': round(sum(fuel_eff_vals) / len(fuel_eff_vals), 1) if fuel_eff_vals else None,
-            'avg_output': round(sum(output_vals) / len(output_vals), 1) if output_vals else None,
-            'avg_type_eff': round(sum(type_eff_vals) / len(type_eff_vals), 1) if type_eff_vals else None,
+            'group':        group,
+            'count':        len(recs),
+            'total_fuel':   round(total_fuel, 1),
+            'total_hours':  round(total_hours, 1),
+            'avg_fuel_eff': round(sum(fe_vals) / len(fe_vals), 1) if fe_vals else None,
+            'avg_output':   round(sum(ou_vals) / len(ou_vals), 1) if ou_vals else None,
+            'avg_type_eff': round(sum(te_vals) / len(te_vals), 1) if te_vals else None,
         })
 
-    # Daily fuel trend (for chart)
-    from collections import defaultdict
-    daily = defaultdict(lambda: {'fuel': 0})
-    for rec in qs:
-        if rec.record_date:
-            key = rec.record_date.isoformat()
-            if rec.fuel_actual and rec.fuel_actual > 0:
-                daily[key]['fuel'] += rec.fuel_actual
-
-    daily_labels = sorted(daily.keys())
-    daily_fuel = [round(daily[d]['fuel'], 1) for d in daily_labels]
-
-    # Total stats
-    total_count = qs.count()
-    total_fuel = sum(r.fuel_actual for r in qs if r.fuel_actual and r.fuel_actual > 0)
-    total_hours = sum(r.engine_time_sec for r in qs) / 3600
+    # ── totals ───────────────────────────────────────────────────────────────────
+    total_count = len(rec_list)
+    total_fuel  = sum(r.fuel_actual for r in rec_list if r.fuel_actual and r.fuel_actual > 0)
+    total_hours = sum(r.engine_time_sec for r in rec_list) / 3600
 
     sections = Section.objects.all()
 
     context = {
-        'group_stats': group_stats,
-        'daily_labels': json.dumps(daily_labels),
-        'daily_fuel': json.dumps(daily_fuel),
-        'total_count': total_count,
-        'total_fuel': round(total_fuel, 1),
-        'total_hours': round(total_hours, 1),
-        'sections': sections,
-        'all_groups': all_groups,
-        'date_from': date_from,
-        'date_to': date_to,
-        'section_id': section_id,
-        'group_filter': group_filter,
+        'group_stats':    group_stats,
+        'trend_json':     trend_json,
+        'has_trend':      bool(all_dates),
+        'total_count':    total_count,
+        'total_fuel':     round(total_fuel, 1),
+        'total_hours':    round(total_hours, 1),
+        'sections':       sections,
+        'all_groups':     all_groups,
+        'date_from':      date_from,
+        'date_to':        date_to,
+        'section_id':     section_id,
+        'group_filters':  group_filters,
     }
     return render(request, 'analysis/analytics.html', context)
 
@@ -716,21 +769,35 @@ def analytics(request):
 # ─── Analytics Compare ────────────────────────────────────────────────────────
 
 def analytics_compare(request):
-    selected_ids = request.GET.getlist('sections')
-    date_from = request.GET.get('date_from', '')
-    date_to = request.GET.get('date_to', '')
-    group_filter = request.GET.get('group', '')
+    from collections import defaultdict as _dd
+
+    selected_ids  = request.GET.getlist('sections')
+    date_from     = request.GET.get('date_from', '')
+    date_to       = request.GET.get('date_to', '')
+    group_filters = request.GET.getlist('group')
 
     all_sections = list(Section.objects.all())
-    all_groups = list(VehicleRecord.objects.values_list('group', flat=True).distinct().order_by('group'))
+    all_groups   = list(VehicleRecord.objects.values_list('group', flat=True).distinct().order_by('group'))
     comparison_data = []
 
+    def _avg(recs):
+        fe = [r.fuel_efficiency * 100 for r in recs if r.fuel_efficiency is not None]
+        ou = [r.equipment_output * 100 for r in recs if r.equipment_output is not None]
+        te = [r.type_efficiency  * 100 for r in recs if r.type_efficiency  is not None]
+        return (
+            round(sum(fe) / len(fe), 1) if fe else None,
+            round(sum(ou) / len(ou), 1) if ou else None,
+            round(sum(te) / len(te), 1) if te else None,
+        )
+
+    # Collect all dates across all selected sections for alignment
+    all_dates_set = set()
+
+    section_recs_map = {}  # section.pk -> list[rec]
     if selected_ids:
-        from collections import defaultdict as _dd
         for section in all_sections:
             if str(section.pk) not in selected_ids:
                 continue
-
             qs = VehicleRecord.objects.select_related('report').filter(report__section=section)
             if date_from:
                 try:
@@ -742,17 +809,29 @@ def analytics_compare(request):
                     qs = qs.filter(record_date__lte=datetime.date.fromisoformat(date_to))
                 except ValueError:
                     pass
-            if group_filter:
-                qs = qs.filter(group=group_filter)
-
+            if group_filters:
+                qs = qs.filter(group__in=group_filters)
             recs = list(qs)
-            count = len(recs)
-            total_fuel = round(sum(r.fuel_actual for r in recs if r.fuel_actual and r.fuel_actual > 0), 1)
-            total_hours = round(sum(r.engine_time_sec for r in recs) / 3600, 1)
-            fuel_eff_vals = [r.fuel_efficiency * 100 for r in recs if r.fuel_efficiency is not None]
-            output_vals   = [r.equipment_output * 100 for r in recs if r.equipment_output is not None]
-            type_eff_vals = [r.type_efficiency  * 100 for r in recs if r.type_efficiency  is not None]
+            section_recs_map[section.pk] = recs
+            for r in recs:
+                if r.record_date:
+                    all_dates_set.add(r.record_date.isoformat())
 
+    all_dates = sorted(all_dates_set)
+
+    if selected_ids:
+        for section in all_sections:
+            if str(section.pk) not in selected_ids:
+                continue
+            recs = section_recs_map.get(section.pk, [])
+            count       = len(recs)
+            total_fuel  = round(sum(r.fuel_actual for r in recs if r.fuel_actual and r.fuel_actual > 0), 1)
+            total_hours = round(sum(r.engine_time_sec for r in recs) / 3600, 1)
+            fe_vals = [r.fuel_efficiency * 100 for r in recs if r.fuel_efficiency is not None]
+            ou_vals = [r.equipment_output * 100 for r in recs if r.equipment_output is not None]
+            te_vals = [r.type_efficiency  * 100 for r in recs if r.type_efficiency  is not None]
+
+            # Per-group breakdown
             groups_map = _dd(list)
             for rec in recs:
                 groups_map[rec.group].append(rec)
@@ -770,33 +849,70 @@ def analytics_compare(request):
                     'avg_type_eff': round(sum(gte)/len(gte), 1) if gte else None,
                 })
 
+            # Daily trend for this section
+            daily_map = _dd(list)
+            vehicle_daily = _dd(lambda: _dd(list))
+            for rec in recs:
+                if rec.record_date:
+                    d = rec.record_date.isoformat()
+                    daily_map[d].append(rec)
+                    vehicle_daily[rec.name][d].append(rec)
+
+            sec_ov_fe, sec_ov_ou, sec_ov_te = [], [], []
+            for d in all_dates:
+                r_d = daily_map.get(d, [])
+                fe, ou, te = _avg(r_d) if r_d else (None, None, None)
+                sec_ov_fe.append(fe); sec_ov_ou.append(ou); sec_ov_te.append(te)
+
+            # Per vehicle daily
+            sec_vehicles = {}
+            for vname in sorted(vehicle_daily.keys()):
+                vfe, vou, vte, vgroup = [], [], [], None
+                for d in all_dates:
+                    r_d = vehicle_daily[vname].get(d, [])
+                    if r_d:
+                        if vgroup is None:
+                            vgroup = r_d[0].group
+                        fe, ou, te = _avg(r_d)
+                    else:
+                        fe, ou, te = None, None, None
+                    vfe.append(fe); vou.append(ou); vte.append(te)
+                sec_vehicles[vname] = {'group': vgroup, 'fuel_eff': vfe, 'output': vou, 'type_eff': vte}
+
             comparison_data.append({
                 'section':      section,
                 'count':        count,
                 'total_fuel':   total_fuel,
                 'total_hours':  total_hours,
-                'avg_fuel_eff': round(sum(fuel_eff_vals)/len(fuel_eff_vals), 1) if fuel_eff_vals else None,
-                'avg_output':   round(sum(output_vals)/len(output_vals), 1)     if output_vals  else None,
-                'avg_type_eff': round(sum(type_eff_vals)/len(type_eff_vals), 1) if type_eff_vals else None,
+                'avg_fuel_eff': round(sum(fe_vals)/len(fe_vals), 1) if fe_vals else None,
+                'avg_output':   round(sum(ou_vals)/len(ou_vals), 1) if ou_vals else None,
+                'avg_type_eff': round(sum(te_vals)/len(te_vals), 1) if te_vals else None,
                 'group_stats':  group_stats,
+                'daily_overall': {'fuel_eff': sec_ov_fe, 'output': sec_ov_ou, 'type_eff': sec_ov_te},
+                'daily_vehicles': sec_vehicles,
             })
 
     PALETTE = ['#0d6efd','#198754','#fd7e14','#6f42c1','#dc3545','#0dcaf0','#ffc107','#20c997']
     for i, d in enumerate(comparison_data):
         d['color'] = PALETTE[i % len(PALETTE)]
 
-    compare_json = json.dumps([
-        {
-            'name':         d['section'].name,
-            'color':        d['color'],
-            'total_hours':  d['total_hours'],
-            'total_fuel':   d['total_fuel'],
-            'avg_fuel_eff': d['avg_fuel_eff'],
-            'avg_output':   d['avg_output'],
-            'avg_type_eff': d['avg_type_eff'],
-        }
-        for d in comparison_data
-    ]) if comparison_data else '[]'
+    compare_json = json.dumps({
+        'dates': all_dates,
+        'sections': [
+            {
+                'name':         d['section'].name,
+                'color':        d['color'],
+                'total_hours':  d['total_hours'],
+                'total_fuel':   d['total_fuel'],
+                'avg_fuel_eff': d['avg_fuel_eff'],
+                'avg_output':   d['avg_output'],
+                'avg_type_eff': d['avg_type_eff'],
+                'overall':      d['daily_overall'],
+                'vehicles':     d['daily_vehicles'],
+            }
+            for d in comparison_data
+        ],
+    }) if comparison_data else json.dumps({'dates': [], 'sections': []})
 
     context = {
         'all_sections':    all_sections,
@@ -805,8 +921,9 @@ def analytics_compare(request):
         'comparison_data': comparison_data,
         'date_from':       date_from,
         'date_to':         date_to,
-        'group_filter':    group_filter,
+        'group_filters':   group_filters,
         'compare_json':    compare_json,
+        'has_trend':       bool(all_dates),
     }
     return render(request, 'analysis/compare.html', context)
 
