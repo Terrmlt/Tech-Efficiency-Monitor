@@ -12,13 +12,22 @@
     <div class="card-body">
         <form method="get">
             <div class="row g-3 align-items-end">
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label small fw-semibold mb-1">Дата от</label>
                     <input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label small fw-semibold mb-1">Дата до</label>
                     <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-semibold mb-1">Группа техники</label>
+                    <select name="group" class="form-select form-select-sm">
+                        <option value="">Все группы</option>
+                        {% for g in all_groups %}
+                        <option value="{{ g }}" {% if group_filter == g %}selected{% endif %}>{{ g }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label small fw-semibold mb-1">
@@ -64,20 +73,13 @@
                     {{ d.section.name }}
                 </div>
                 <div class="row g-2 text-center mb-3">
-                    <div class="col-4">
+                    <div class="col-6">
                         <div class="small text-muted">Записей</div>
                         <div class="fw-bold text-primary">{{ d.count }}</div>
                     </div>
-                    <div class="col-4">
+                    <div class="col-6">
                         <div class="small text-muted">Часов</div>
                         <div class="fw-bold text-success">{{ d.total_hours }}</div>
-                    </div>
-                    <div class="col-4">
-                        <div class="small text-muted">Аномалий</div>
-                        <div class="fw-bold {% if d.anomaly_count > 0 %}text-warning{% else %}text-success{% endif %}">
-                            {{ d.anomaly_count }}
-                            {% if d.anomaly_pct > 0 %}<div class="fw-normal" style="font-size:.75rem">{{ d.anomaly_pct }}%</div>{% endif %}
-                        </div>
                     </div>
                 </div>
                 <hr class="my-2">
@@ -113,7 +115,7 @@
 
 <!-- Диаграммы -->
 <div class="row g-3 mb-4">
-    <div class="col-12 col-lg-6">
+    <div class="col-12 col-lg-4">
         <div class="card">
             <div class="card-header fw-semibold bg-white border-bottom small">
                 <i class="bi bi-bar-chart me-2 text-primary"></i>Выход техники, %
@@ -123,13 +125,23 @@
             </div>
         </div>
     </div>
-    <div class="col-12 col-lg-6">
+    <div class="col-12 col-lg-4">
         <div class="card">
             <div class="card-header fw-semibold bg-white border-bottom small">
                 <i class="bi bi-droplet me-2 text-danger"></i>Расход к норме, %
             </div>
             <div class="card-body">
                 <canvas id="chartFuelEff" style="height:220px"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-lg-4">
+        <div class="card">
+            <div class="card-header fw-semibold bg-white border-bottom small">
+                <i class="bi bi-speedometer2 me-2 text-success"></i>Эффективность, %
+            </div>
+            <div class="card-body">
+                <canvas id="chartTypeEff" style="height:220px"></canvas>
             </div>
         </div>
     </div>
@@ -140,16 +152,6 @@
             </div>
             <div class="card-body">
                 <canvas id="chartHours" style="height:220px"></canvas>
-            </div>
-        </div>
-    </div>
-    <div class="col-12 col-lg-6">
-        <div class="card">
-            <div class="card-header fw-semibold bg-white border-bottom small">
-                <i class="bi bi-exclamation-triangle me-2 text-warning"></i>% аномалий
-            </div>
-            <div class="card-body">
-                <canvas id="chartAnomaly" style="height:220px"></canvas>
             </div>
         </div>
     </div>
@@ -185,16 +187,6 @@
                     <tr>
                         <td class="ps-3 text-muted small">Расход топлива</td>
                         {% for d in comparison_data %}<td class="text-center fw-semibold">{{ d.total_fuel }} л</td>{% endfor %}
-                    </tr>
-                    <tr>
-                        <td class="ps-3 text-muted small">Аномалий</td>
-                        {% for d in comparison_data %}
-                        <td class="text-center">
-                            <span class="{% if d.anomaly_count > 0 %}text-warning fw-semibold{% else %}text-success{% endif %}">
-                                {{ d.anomaly_count }} ({{ d.anomaly_pct }}%)
-                            </span>
-                        </td>
-                        {% endfor %}
                     </tr>
                     <tr class="table-light">
                         <td class="ps-3 text-muted small fw-semibold">Расход к норме (ср.)</td>
@@ -308,27 +300,23 @@
 <script>
 var data = {{ compare_json|safe }};
 
-var labels  = data.map(function(d){ return d.name; });
-var colors  = data.map(function(d){ return d.color; });
+var labels     = data.map(function(d){ return d.name; });
+var colors     = data.map(function(d){ return d.color; });
 var colorsFill = data.map(function(d){ return d.color + 'BB'; });
 
 var scalesPct = { y: { beginAtZero: true, ticks: { callback: function(v){ return v + '%'; } } } };
 var scalesHrs = { y: { beginAtZero: true, ticks: { callback: function(v){ return v + ' ч'; } } } };
 var noLegend  = { legend: { display: false } };
 
-function makeBar(id, vals, scaleOpts, anomaly) {
+function makeBar(id, vals, scaleOpts) {
     new Chart(document.getElementById(id), {
         type: 'bar',
         data: {
             labels: labels,
             datasets: [{
                 data: vals,
-                backgroundColor: anomaly
-                    ? data.map(function(d){ return d.anomaly_pct === 0 ? 'rgba(25,135,84,.6)' : 'rgba(255,193,7,.75)'; })
-                    : colorsFill,
-                borderColor: anomaly
-                    ? data.map(function(d){ return d.anomaly_pct === 0 ? '#198754' : '#ffc107'; })
-                    : colors,
+                backgroundColor: colorsFill,
+                borderColor: colors,
                 borderWidth: 2,
                 borderRadius: 5,
             }]
@@ -342,10 +330,10 @@ function makeBar(id, vals, scaleOpts, anomaly) {
     });
 }
 
-makeBar('chartOutput',  data.map(function(d){ return d.avg_output;   }), scalesPct, false);
-makeBar('chartFuelEff', data.map(function(d){ return d.avg_fuel_eff; }), scalesPct, false);
-makeBar('chartHours',   data.map(function(d){ return d.total_hours;  }), scalesHrs, false);
-makeBar('chartAnomaly', data.map(function(d){ return d.anomaly_pct;  }), scalesPct, true);
+makeBar('chartOutput',  data.map(function(d){ return d.avg_output;   }), scalesPct);
+makeBar('chartFuelEff', data.map(function(d){ return d.avg_fuel_eff; }), scalesPct);
+makeBar('chartTypeEff', data.map(function(d){ return d.avg_type_eff; }), scalesPct);
+makeBar('chartHours',   data.map(function(d){ return d.total_hours;  }), scalesHrs);
 </script>
 {% endif %}
 {% endblock %}

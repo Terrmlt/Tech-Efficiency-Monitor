@@ -631,6 +631,7 @@ def analytics(request):
     date_from = request.GET.get('date_from', '')
     date_to = request.GET.get('date_to', '')
     section_id = request.GET.get('section', '')
+    group_filter = request.GET.get('group', '')
 
     qs = VehicleRecord.objects.select_related('report', 'report__section').all()
 
@@ -646,10 +647,16 @@ def analytics(request):
             pass
     if section_id:
         qs = qs.filter(report__section_id=section_id)
+    if group_filter:
+        qs = qs.filter(group=group_filter)
 
-    # Group stats
+    # All available groups (unfiltered by group) for the dropdown
+    all_groups = list(VehicleRecord.objects.values_list('group', flat=True).distinct().order_by('group'))
+
+    # Group stats — iterate over groups present in the filtered qs
+    groups_in_qs = list(qs.values_list('group', flat=True).distinct().order_by('group'))
     group_stats = []
-    for group in VehicleRecord.objects.values_list('group', flat=True).distinct().order_by('group'):
+    for group in groups_in_qs:
         gqs = qs.filter(group=group)
         count = gqs.count()
         if count == 0:
@@ -659,7 +666,6 @@ def analytics(request):
         fuel_eff_vals = [r.fuel_efficiency * 100 for r in gqs if r.fuel_efficiency is not None]
         output_vals = [r.equipment_output * 100 for r in gqs if r.equipment_output is not None]
         type_eff_vals = [r.type_efficiency * 100 for r in gqs if r.type_efficiency is not None]
-        anomaly_count = gqs.filter(has_anomaly=True).count()
 
         group_stats.append({
             'group': group,
@@ -669,31 +675,24 @@ def analytics(request):
             'avg_fuel_eff': round(sum(fuel_eff_vals) / len(fuel_eff_vals), 1) if fuel_eff_vals else None,
             'avg_output': round(sum(output_vals) / len(output_vals), 1) if output_vals else None,
             'avg_type_eff': round(sum(type_eff_vals) / len(type_eff_vals), 1) if type_eff_vals else None,
-            'anomaly_count': anomaly_count,
         })
 
-    # Daily output trend (for chart)
+    # Daily fuel trend (for chart)
     from collections import defaultdict
-    daily = defaultdict(lambda: {'engine_sec': 0, 'fuel': 0, 'count': 0, 'anomalies': 0})
+    daily = defaultdict(lambda: {'fuel': 0})
     for rec in qs:
         if rec.record_date:
             key = rec.record_date.isoformat()
-            daily[key]['engine_sec'] += rec.engine_time_sec
             if rec.fuel_actual and rec.fuel_actual > 0:
                 daily[key]['fuel'] += rec.fuel_actual
-            daily[key]['count'] += 1
-            if rec.has_anomaly:
-                daily[key]['anomalies'] += 1
 
     daily_labels = sorted(daily.keys())
     daily_fuel = [round(daily[d]['fuel'], 1) for d in daily_labels]
-    daily_anomalies = [daily[d]['anomalies'] for d in daily_labels]
 
     # Total stats
     total_count = qs.count()
     total_fuel = sum(r.fuel_actual for r in qs if r.fuel_actual and r.fuel_actual > 0)
     total_hours = sum(r.engine_time_sec for r in qs) / 3600
-    total_anomalies = qs.filter(has_anomaly=True).count()
 
     sections = Section.objects.all()
 
@@ -701,15 +700,15 @@ def analytics(request):
         'group_stats': group_stats,
         'daily_labels': json.dumps(daily_labels),
         'daily_fuel': json.dumps(daily_fuel),
-        'daily_anomalies': json.dumps(daily_anomalies),
         'total_count': total_count,
         'total_fuel': round(total_fuel, 1),
         'total_hours': round(total_hours, 1),
-        'total_anomalies': total_anomalies,
         'sections': sections,
+        'all_groups': all_groups,
         'date_from': date_from,
         'date_to': date_to,
         'section_id': section_id,
+        'group_filter': group_filter,
     }
     return render(request, 'analysis/analytics.html', context)
 
@@ -720,8 +719,10 @@ def analytics_compare(request):
     selected_ids = request.GET.getlist('sections')
     date_from = request.GET.get('date_from', '')
     date_to = request.GET.get('date_to', '')
+    group_filter = request.GET.get('group', '')
 
     all_sections = list(Section.objects.all())
+    all_groups = list(VehicleRecord.objects.values_list('group', flat=True).distinct().order_by('group'))
     comparison_data = []
 
     if selected_ids:
@@ -741,6 +742,8 @@ def analytics_compare(request):
                     qs = qs.filter(record_date__lte=datetime.date.fromisoformat(date_to))
                 except ValueError:
                     pass
+            if group_filter:
+                qs = qs.filter(group=group_filter)
 
             recs = list(qs)
             count = len(recs)
@@ -749,7 +752,6 @@ def analytics_compare(request):
             fuel_eff_vals = [r.fuel_efficiency * 100 for r in recs if r.fuel_efficiency is not None]
             output_vals   = [r.equipment_output * 100 for r in recs if r.equipment_output is not None]
             type_eff_vals = [r.type_efficiency  * 100 for r in recs if r.type_efficiency  is not None]
-            anomaly_count = sum(1 for r in recs if r.has_anomaly)
 
             groups_map = _dd(list)
             for rec in recs:
@@ -769,16 +771,14 @@ def analytics_compare(request):
                 })
 
             comparison_data.append({
-                'section':       section,
-                'count':         count,
-                'total_fuel':    total_fuel,
-                'total_hours':   total_hours,
-                'avg_fuel_eff':  round(sum(fuel_eff_vals)/len(fuel_eff_vals), 1) if fuel_eff_vals else None,
-                'avg_output':    round(sum(output_vals)/len(output_vals), 1)     if output_vals  else None,
-                'avg_type_eff':  round(sum(type_eff_vals)/len(type_eff_vals), 1) if type_eff_vals else None,
-                'anomaly_count': anomaly_count,
-                'anomaly_pct':   round(anomaly_count / count * 100, 1) if count > 0 else 0,
-                'group_stats':   group_stats,
+                'section':      section,
+                'count':        count,
+                'total_fuel':   total_fuel,
+                'total_hours':  total_hours,
+                'avg_fuel_eff': round(sum(fuel_eff_vals)/len(fuel_eff_vals), 1) if fuel_eff_vals else None,
+                'avg_output':   round(sum(output_vals)/len(output_vals), 1)     if output_vals  else None,
+                'avg_type_eff': round(sum(type_eff_vals)/len(type_eff_vals), 1) if type_eff_vals else None,
+                'group_stats':  group_stats,
             })
 
     PALETTE = ['#0d6efd','#198754','#fd7e14','#6f42c1','#dc3545','#0dcaf0','#ffc107','#20c997']
@@ -794,17 +794,18 @@ def analytics_compare(request):
             'avg_fuel_eff': d['avg_fuel_eff'],
             'avg_output':   d['avg_output'],
             'avg_type_eff': d['avg_type_eff'],
-            'anomaly_pct':  d['anomaly_pct'],
         }
         for d in comparison_data
     ]) if comparison_data else '[]'
 
     context = {
         'all_sections':    all_sections,
+        'all_groups':      all_groups,
         'selected_ids':    selected_ids,
         'comparison_data': comparison_data,
         'date_from':       date_from,
         'date_to':         date_to,
+        'group_filter':    group_filter,
         'compare_json':    compare_json,
     }
     return render(request, 'analysis/compare.html', context)
