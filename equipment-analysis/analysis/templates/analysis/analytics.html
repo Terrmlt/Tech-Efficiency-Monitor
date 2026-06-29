@@ -117,6 +117,7 @@
             <button type="button" class="btn btn-outline-primary active" id="btn-overall"  onclick="setMode('overall')">По участку</button>
             <button type="button" class="btn btn-outline-primary"        id="btn-group"    onclick="setMode('group')">По группам</button>
             <button type="button" class="btn btn-outline-primary"        id="btn-vehicle"  onclick="setMode('vehicle')">По единицам</button>
+            {% if has_shift_compare %}<button type="button" class="btn btn-outline-warning" id="btn-shift" onclick="setMode('shift')"><i class="bi bi-intersect me-1"></i>Смены</button>{% endif %}
         </div>
     </div>
     <div class="card-body">
@@ -180,6 +181,65 @@
 </div>
 {% endif %}
 
+{% endif %}
+
+{% if has_shift_compare %}
+<!-- ══ СРАВНЕНИЕ СМЕН ══ -->
+<div class="card mb-4">
+    <div class="card-header bg-white border-bottom">
+        <span class="fw-semibold"><i class="bi bi-intersect me-2 text-warning"></i>Сравнение смен — средние показатели по группам</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">Группа</th>
+                        <th class="text-center" colspan="2">Выход техники, %</th>
+                        <th class="text-center" colspan="2">Расход к норме, %</th>
+                        <th class="text-center" colspan="2">Эффективность, %</th>
+                    </tr>
+                    <tr class="table-secondary small">
+                        <th class="ps-3 text-muted"></th>
+                        <th class="text-center text-primary fw-semibold">Смена 1</th>
+                        <th class="text-center text-success fw-semibold">Смена 2</th>
+                        <th class="text-center text-primary fw-semibold">Смена 1</th>
+                        <th class="text-center text-success fw-semibold">Смена 2</th>
+                        <th class="text-center text-primary fw-semibold">Смена 1</th>
+                        <th class="text-center text-success fw-semibold">Смена 2</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for grp, data in shift_compare_groups.items %}
+                    <tr>
+                        <td class="ps-3 fw-semibold small">{{ grp }}</td>
+                        {% with s1=data.s1 s2=data.s2 %}
+                        <td class="text-center small">
+                            {% if s1.output is not None %}<span class="{% if s1.output >= 80 %}output-good{% else %}output-bad{% endif %}">{{ s1.output }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-center small">
+                            {% if s2.output is not None %}<span class="{% if s2.output >= 80 %}output-good{% else %}output-bad{% endif %}">{{ s2.output }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-center small">
+                            {% if s1.fuel_eff is not None %}<span class="{% if s1.fuel_eff <= 100 %}efficiency-good{% elif s1.fuel_eff <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s1.fuel_eff }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-center small">
+                            {% if s2.fuel_eff is not None %}<span class="{% if s2.fuel_eff <= 100 %}efficiency-good{% elif s2.fuel_eff <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s2.fuel_eff }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-center small">
+                            {% if s1.type_eff is not None %}<span class="{% if s1.type_eff <= 100 %}efficiency-good{% elif s1.type_eff <= 130 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s1.type_eff }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-center small">
+                            {% if s2.type_eff is not None %}<span class="{% if s2.type_eff <= 100 %}efficiency-good{% elif s2.type_eff <= 130 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s2.type_eff }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        {% endwith %}
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 {% endif %}
 
 {% if group_stats %}
@@ -389,14 +449,34 @@
         return out;
     }
 
+    function dsShift() {
+        var bs = TREND.by_shift;
+        if (!bs) return { output: [], fuel_eff: [], type_eff: [] };
+        return {
+            output: [
+                { label: 'Смена 1', data: bs.shift1.output,   borderColor: '#0d6efd', backgroundColor: '#0d6efd22', fill: true,  tension: 0.3, pointRadius: 4, borderWidth: 2.5, borderDash: [] },
+                { label: 'Смена 2', data: bs.shift2.output,   borderColor: '#198754', backgroundColor: '#19875422', fill: true,  tension: 0.3, pointRadius: 4, borderWidth: 2.5, borderDash: [6,3] }
+            ],
+            fuel_eff: [
+                { label: 'Смена 1', data: bs.shift1.fuel_eff, borderColor: '#dc3545', backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 4, borderWidth: 2.5, borderDash: [] },
+                { label: 'Смена 2', data: bs.shift2.fuel_eff, borderColor: '#fd7e14', backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 4, borderWidth: 2.5, borderDash: [6,3] }
+            ],
+            type_eff: [
+                { label: 'Смена 1', data: bs.shift1.type_eff, borderColor: '#6f42c1', backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 4, borderWidth: 2.5, borderDash: [] },
+                { label: 'Смена 2', data: bs.shift2.type_eff, borderColor: '#0dcaf0', backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 4, borderWidth: 2.5, borderDash: [6,3] }
+            ]
+        };
+    }
+
     window.setMode = function(mode) {
-        ['overall','group','vehicle'].forEach(function(m) {
+        ['overall','group','vehicle','shift'].forEach(function(m) {
             var b = document.getElementById('btn-' + m);
             if (b) b.classList.toggle('active', m === mode);
         });
         var ds;
         if (mode === 'overall')    ds = dsOverall();
         else if (mode === 'group') ds = dsGroup();
+        else if (mode === 'shift') ds = dsShift();
         else                        ds = dsVehicle();
         var sl = mode !== 'overall';
         buildLine('trendOutput',  ds.output,   sl);

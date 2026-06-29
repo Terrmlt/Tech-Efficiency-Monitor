@@ -802,11 +802,52 @@ def analytics(request):
             vfe.append(fe); vou.append(ou); vte.append(te)
         by_vehicle[vname] = {'group': vgroup, 'fuel_eff': vfe, 'output': vou, 'type_eff': vte}
 
+    # ── by shift daily + group comparison (only when no shift filter active) ─────
+    by_shift = None
+    shift_compare_groups = {}
+    if not shift_filter:
+        shift1_daily = _dd(list)
+        shift2_daily = _dd(list)
+        for rec in rec_list:
+            if rec.record_date and rec.shift in (1, 2):
+                d = rec.record_date.isoformat()
+                (shift1_daily if rec.shift == 1 else shift2_daily)[d].append(rec)
+
+        s1_fe, s1_ou, s1_te = [], [], []
+        s2_fe, s2_ou, s2_te = [], [], []
+        for d in all_dates:
+            fe, ou, te = _avg(shift1_daily[d]) if shift1_daily.get(d) else (None, None, None)
+            s1_fe.append(fe); s1_ou.append(ou); s1_te.append(te)
+            fe, ou, te = _avg(shift2_daily[d]) if shift2_daily.get(d) else (None, None, None)
+            s2_fe.append(fe); s2_ou.append(ou); s2_te.append(te)
+
+        has_shift_data = any(v is not None for v in s1_fe) or any(v is not None for v in s2_fe)
+        if has_shift_data:
+            by_shift = {
+                'shift1': {'fuel_eff': s1_fe, 'output': s1_ou, 'type_eff': s1_te},
+                'shift2': {'fuel_eff': s2_fe, 'output': s2_ou, 'type_eff': s2_te},
+            }
+
+        # per-group shift averages for comparison table
+        group_shift_recs = _dd(lambda: {1: [], 2: []})
+        for rec in rec_list:
+            if rec.shift in (1, 2):
+                group_shift_recs[rec.group][rec.shift].append(rec)
+        for grp in sorted(group_shift_recs.keys()):
+            sr = group_shift_recs[grp]
+            s1fe, s1ou, s1te = _avg(sr[1]) if sr[1] else (None, None, None)
+            s2fe, s2ou, s2te = _avg(sr[2]) if sr[2] else (None, None, None)
+            shift_compare_groups[grp] = {
+                's1': {'fuel_eff': s1fe, 'output': s1ou, 'type_eff': s1te},
+                's2': {'fuel_eff': s2fe, 'output': s2ou, 'type_eff': s2te},
+            }
+
     trend_json = json.dumps({
         'dates':      all_dates,
         'overall':    {'fuel_eff': ov_fe,  'output': ov_ou,  'type_eff': ov_te},
         'by_group':   by_group,
         'by_vehicle': by_vehicle,
+        'by_shift':   by_shift,
     })
 
     # ── group summary cards ──────────────────────────────────────────────────────
@@ -839,21 +880,23 @@ def analytics(request):
     sections = Section.objects.all()
 
     context = {
-        'group_stats':    group_stats,
-        'trend_json':     trend_json,
-        'has_trend':      bool(all_dates),
-        'total_count':    total_count,
-        'total_fuel':     round(total_fuel, 1),
-        'total_hours':    round(total_hours, 1),
-        'sections':       sections,
-        'all_groups':     all_groups,
-        'all_vehicles':   all_vehicles,
-        'vehicle_filter': vehicle_filter,
-        'shift_filter':   shift_filter,
-        'date_from':      date_from,
-        'date_to':        date_to,
-        'section_id':     section_id,
-        'group_filters':  group_filters,
+        'group_stats':         group_stats,
+        'trend_json':          trend_json,
+        'has_trend':           bool(all_dates),
+        'total_count':         total_count,
+        'total_fuel':          round(total_fuel, 1),
+        'total_hours':         round(total_hours, 1),
+        'sections':            sections,
+        'all_groups':          all_groups,
+        'all_vehicles':        all_vehicles,
+        'vehicle_filter':      vehicle_filter,
+        'shift_filter':        shift_filter,
+        'date_from':           date_from,
+        'date_to':             date_to,
+        'section_id':          section_id,
+        'group_filters':       group_filters,
+        'shift_compare_groups': shift_compare_groups,
+        'has_shift_compare':   bool(shift_compare_groups) and not shift_filter,
     }
     return render(request, 'analysis/analytics.html', context)
 
