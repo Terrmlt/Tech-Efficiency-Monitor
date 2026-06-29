@@ -10,44 +10,62 @@
 <!-- Фильтры -->
 <div class="card mb-4">
     <div class="card-body">
-        <form method="get" class="row g-3 align-items-start">
-            <div class="col-md-2">
-                <label class="form-label small fw-semibold mb-1">Дата от</label>
-                <input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small fw-semibold mb-1">Дата до</label>
-                <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small fw-semibold mb-1">Участок</label>
-                <select name="section" class="form-select form-select-sm">
-                    <option value="">Все участки</option>
-                    {% for s in sections %}
-                    <option value="{{ s.pk }}" {% if section_id == s.pk|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-4">
-                <label class="form-label small fw-semibold mb-1">Группы техники</label>
-                <div class="d-flex flex-wrap gap-2 pt-1">
-                    {% for g in all_groups %}
-                    <div class="form-check form-check-inline m-0">
-                        <input class="form-check-input" type="checkbox" name="group"
-                               value="{{ g }}" id="grp_{{ forloop.counter }}"
-                               {% if g in group_filters %}checked{% endif %}>
-                        <label class="form-check-label small" for="grp_{{ forloop.counter }}">{{ g }}</label>
+        <form method="get">
+            <div class="row g-3 align-items-end mb-2">
+                <div class="col-md-2">
+                    <label class="form-label small fw-semibold mb-1">Дата от</label>
+                    <input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-semibold mb-1">Дата до</label>
+                    <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-semibold mb-1">Участок</label>
+                    <select name="section" class="form-select form-select-sm">
+                        <option value="">Все участки</option>
+                        {% for s in sections %}
+                        <option value="{{ s.pk }}" {% if section_id == s.pk|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold mb-1">Группы техники</label>
+                    <div class="d-flex flex-wrap gap-2 pt-1">
+                        {% for g in all_groups %}
+                        <div class="form-check form-check-inline m-0">
+                            <input class="form-check-input" type="checkbox" name="group"
+                                   value="{{ g }}" id="grp_{{ forloop.counter }}"
+                                   {% if g in group_filters %}checked{% endif %}>
+                            <label class="form-check-label small" for="grp_{{ forloop.counter }}">{{ g }}</label>
+                        </div>
+                        {% endfor %}
                     </div>
-                    {% endfor %}
+                </div>
+                <div class="col-md-2 d-flex gap-2">
+                    <button type="submit" class="btn btn-sm btn-primary flex-grow-1">
+                        <i class="bi bi-funnel me-1"></i>Применить
+                    </button>
+                    <a href="{% url 'analytics' %}" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-x"></i>
+                    </a>
                 </div>
             </div>
-            <div class="col-md-2 d-flex gap-2 align-items-end">
-                <button type="submit" class="btn btn-sm btn-primary flex-grow-1">
-                    <i class="bi bi-funnel me-1"></i>Применить
-                </button>
-                <a href="{% url 'analytics' %}" class="btn btn-sm btn-outline-secondary">
-                    <i class="bi bi-x"></i>
-                </a>
+            <div class="row g-2 align-items-end border-top pt-2">
+                <div class="col-md-5">
+                    <label class="form-label small fw-semibold mb-1">Единица техники</label>
+                    {% regroup all_vehicles by group as vehicle_groups %}
+                    <select name="vehicle" class="form-select form-select-sm">
+                        <option value="">Все машины</option>
+                        {% for vg in vehicle_groups %}
+                        <optgroup label="{{ vg.grouper }}">
+                            {% for v in vg.list %}
+                            <option value="{{ v.name }}" {% if vehicle_filter == v.name %}selected{% endif %}>{{ v.name }}</option>
+                            {% endfor %}
+                        </optgroup>
+                        {% endfor %}
+                    </select>
+                </div>
             </div>
         </form>
     </div>

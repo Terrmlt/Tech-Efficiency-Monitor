@@ -709,6 +709,8 @@ def analytics(request):
     section_id = request.GET.get('section', '')
     group_filters = request.GET.getlist('group')
 
+    vehicle_filter = request.GET.get('vehicle', '')
+
     qs = VehicleRecord.objects.select_related('report', 'report__section').all()
 
     if date_from:
@@ -725,9 +727,17 @@ def analytics(request):
         qs = qs.filter(report__section_id=section_id)
     if group_filters:
         qs = qs.filter(group__in=group_filters)
+    if vehicle_filter:
+        qs = qs.filter(name=vehicle_filter)
 
     # All available groups for checkboxes
     all_groups = list(VehicleRecord.objects.values_list('group', flat=True).distinct().order_by('group'))
+
+    # Vehicles for dropdown — distinct (name, group) pairs, scoped to selected groups
+    vehicles_qs = VehicleRecord.objects.values('name', 'group').distinct().order_by('group', 'name')
+    if group_filters:
+        vehicles_qs = vehicles_qs.filter(group__in=group_filters)
+    all_vehicles = list(vehicles_qs)
 
     # ── helper ──────────────────────────────────────────────────────────────────
     def _avg(recs):
@@ -832,6 +842,8 @@ def analytics(request):
         'total_hours':    round(total_hours, 1),
         'sections':       sections,
         'all_groups':     all_groups,
+        'all_vehicles':   all_vehicles,
+        'vehicle_filter': vehicle_filter,
         'date_from':      date_from,
         'date_to':        date_to,
         'section_id':     section_id,
