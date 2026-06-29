@@ -2138,6 +2138,77 @@ def monitoring_analytics(request):
     all_breakdown_types = list(BreakdownType.objects.all())
     all_failure_causes = list(FailureCause.objects.all())
 
+    # ── Time-series trend aggregation ──────────────────────────────────────────
+    # Determine date range from explicit filters or from records
+    trend_labels = []
+    trend_values = []
+    trend_granularity = 'monthly'
+
+    fault_dates = [r.date for r in chart_fault_records if r.date is not None]
+    if fault_dates or (date_from and date_to):
+        try:
+            d_from = datetime.date.fromisoformat(date_from) if date_from else min(fault_dates)
+            d_to = datetime.date.fromisoformat(date_to) if date_to else max(fault_dates)
+        except (ValueError, TypeError):
+            d_from = d_to = None
+
+        if d_from and d_to and d_from <= d_to:
+            delta_days = (d_to - d_from).days
+            if delta_days < 30:
+                trend_granularity = 'daily'
+            elif delta_days < 120:
+                trend_granularity = 'weekly'
+            else:
+                trend_granularity = 'monthly'
+
+            bucket_counts = defaultdict(int)
+            for d in fault_dates:
+                if d < d_from or d > d_to:
+                    continue
+                if trend_granularity == 'daily':
+                    key = d.isoformat()
+                elif trend_granularity == 'weekly':
+                    key = (d - datetime.timedelta(days=d.weekday())).isoformat()
+                else:
+                    key = d.strftime('%Y-%m')
+                bucket_counts[key] += 1
+
+            # Build sorted list of all buckets in range (including zeros)
+            if trend_granularity == 'daily':
+                cur = d_from
+                while cur <= d_to:
+                    k = cur.isoformat()
+                    trend_labels.append(cur.strftime('%d.%m'))
+                    trend_values.append(bucket_counts.get(k, 0))
+                    cur += datetime.timedelta(days=1)
+            elif trend_granularity == 'weekly':
+                cur = d_from - datetime.timedelta(days=d_from.weekday())
+                while cur <= d_to:
+                    k = cur.isoformat()
+                    trend_labels.append(cur.strftime('%d.%m'))
+                    trend_values.append(bucket_counts.get(k, 0))
+                    cur += datetime.timedelta(weeks=1)
+            else:
+                # monthly
+                cur_year, cur_month = d_from.year, d_from.month
+                end_year, end_month = d_to.year, d_to.month
+                while (cur_year, cur_month) <= (end_year, end_month):
+                    k = f'{cur_year}-{cur_month:02d}'
+                    MONTHS_RU = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек']
+                    trend_labels.append(f'{MONTHS_RU[cur_month - 1]} {cur_year}')
+                    trend_values.append(bucket_counts.get(k, 0))
+                    if cur_month == 12:
+                        cur_year += 1
+                        cur_month = 1
+                    else:
+                        cur_month += 1
+
+    trend_granularity_label = {
+        'daily': 'по дням',
+        'weekly': 'по неделям',
+        'monthly': 'по месяцам',
+    }.get(trend_granularity, '')
+
     context = {
         'metric': metric,
         'date_from': date_from,
@@ -2155,6 +2226,11 @@ def monitoring_analytics(request):
         'group_table': group_table,
         'total_records': len(all_records),
         'total_faults': len(all_fault_records),
+        'trend_labels_json': _json.dumps(trend_labels, ensure_ascii=False),
+        'trend_values_json': _json.dumps(trend_values),
+        'trend_granularity': trend_granularity,
+        'trend_granularity_label': trend_granularity_label,
+        'has_trend': bool(trend_labels),
     }
     return render(request, 'analysis/monitoring/analytics.html', context)
 
