@@ -1,0 +1,28 @@
+{% extends 'analysis/base.html' %}
+
+{% block title %}Удалить пользователя — Анализ техники{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-5">
+        <div class="card border-danger">
+            <div class="card-body p-4 text-center">
+                <i class="bi bi-person-x display-4 text-danger mb-3 d-block"></i>
+                <h5 class="fw-bold mb-2">Удалить пользователя?</h5>
+                <p class="text-muted mb-1">
+                    Вы собираетесь удалить пользователя
+                    <strong>{{ edit_user.username }}</strong>{% if edit_user.get_full_name %} ({{ edit_user.get_full_name }}){% endif %}.
+                </p>
+                <p class="text-danger small mb-4">Это действие необратимо.</p>
+                <form method="post" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger me-2">
+                        <i class="bi bi-trash me-1"></i>Да, удалить
+                    </button>
+                </form>
+                <a href="{% url 'users_list' %}" class="btn btn-outline-secondary">Отмена</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,135 @@
+{% extends 'analysis/base.html' %}
+
+{% block title %}Пользователи — Анализ техники{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0 fw-bold"><i class="bi bi-people me-2"></i>Пользователи</h4>
+    <a href="{% url 'user_create' %}" class="btn btn-primary">
+        <i class="bi bi-person-plus me-1"></i>Создать пользователя
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0 align-middle">
+            <thead>
+                <tr>
+                    <th class="ps-4">Логин</th>
+                    <th>Имя</th>
+                    <th>Группа</th>
+                    <th style="min-width:200px;">Участок</th>
+                    <th>Статус</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr>
+                    <td class="ps-4 fw-semibold">
+                        {{ u.username }}
+                        {% if u == request.user %}
+                        <span class="badge bg-secondary ms-1" style="font-size:.7rem;">вы</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if u.get_full_name %}{{ u.get_full_name }}{% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
+                    <td>
+                        {% with g=u.groups.first %}
+                        {% if g %}
+                        <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle">{{ g.name }}</span>
+                        {% else %}
+                        <span class="text-muted small">—</span>
+                        {% endif %}
+                        {% endwith %}
+                    </td>
+                    <td>
+                        {% if u.is_staff %}
+                        <span class="text-muted small"><i class="bi bi-shield-check me-1"></i>Все участки</span>
+                        {% else %}
+                        <div class="d-flex align-items-center gap-2">
+                            <select class="form-select form-select-sm section-select"
+                                    style="max-width:180px;"
+                                    data-url="{% url 'user_set_section' u.pk %}"
+                                    data-username="{{ u.username }}">
+                                <option value="">— Не назначен —</option>
+                                {% for s in all_sections %}
+                                <option value="{{ s.pk }}"
+                                    {% if u.profile and u.profile.section_id == s.pk %}selected{% endif %}>
+                                    {{ s.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <span class="section-saved-{{ u.pk }} text-success small d-none">
+                                <i class="bi bi-check-circle"></i>
+                            </span>
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if u.is_staff %}
+                        <span class="badge bg-danger-subtle text-danger-emphasis border border-danger-subtle">Администратор</span>
+                        {% elif u.is_active %}
+                        <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">Активен</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Заблокирован</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end pe-3">
+                        <a href="{% url 'user_edit' u.pk %}" class="btn btn-sm btn-outline-secondary me-1">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        {% if u != request.user %}
+                        <a href="{% url 'user_delete' u.pk %}" class="btn btn-sm btn-outline-danger">
+                            <i class="bi bi-trash"></i>
+                        </a>
+                        {% else %}
+                        <button class="btn btn-sm btn-outline-danger" disabled title="Нельзя удалить собственный аккаунт">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center py-5 text-muted">
+                        <i class="bi bi-people display-4 d-block mb-3"></i>
+                        Пользователей пока нет
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.section-select').forEach(function(sel) {
+    sel.addEventListener('change', function() {
+        const url = this.dataset.url;
+        const username = this.dataset.username;
+        const sectionId = this.value;
+        const savedIcon = document.querySelector('.section-saved-' + url.match(/\/users\/(\d+)\//)[1]);
+
+        const formData = new FormData();
+        formData.append('section_id', sectionId);
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+        fetch(url, {method: 'POST', body: formData})
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ok && savedIcon) {
+                    savedIcon.classList.remove('d-none');
+                    setTimeout(function() { savedIcon.classList.add('d-none'); }, 2000);
+                }
+            })
+            .catch(function() {
+                alert('Ошибка при сохранении участка для ' + username);
+            });
+    });
+});
+</script>
+{% endblock %}

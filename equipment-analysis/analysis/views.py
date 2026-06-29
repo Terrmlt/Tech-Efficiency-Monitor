@@ -11,7 +11,7 @@ from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
 from django.db.models import Q, Avg, Count, Sum
 
-from .forms import ReportUploadForm, SectionForm
+from .forms import ReportUploadForm, SectionForm, UserCreateForm, UserEditForm
 from .models import Report, VehicleRecord, Section, VehicleNorm, secs_to_hhmmss, UserProfile
 from .utils import parse_excel_file, detect_anomalies, calculate_metrics, build_summary
 
@@ -1039,6 +1039,83 @@ def section_delete(request, pk):
         messages.success(request, 'Участок удалён.')
         return redirect('sections')
     return render(request, 'analysis/section_confirm_delete.html', {'section': section})
+
+
+# ─── User management ──────────────────────────────────────────────────────────
+
+@staff_required
+def users_list(request):
+    from django.contrib.auth.models import User
+    users = User.objects.select_related('profile', 'profile__section').prefetch_related('groups').order_by('username')
+    all_sections = Section.objects.all()
+    return render(request, 'analysis/users.html', {'users': users, 'all_sections': all_sections})
+
+
+@staff_required
+def user_create(request):
+    form = UserCreateForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        user = form.save()
+        messages.success(request, f'Пользователь «{user.username}» создан.')
+        return redirect('users_list')
+    return render(request, 'analysis/user_form.html', {'form': form, 'title': 'Создать пользователя'})
+
+
+@staff_required
+def user_edit(request, pk):
+    from django.contrib.auth.models import User
+    user_obj = get_object_or_404(User, pk=pk)
+    profile, _ = UserProfile.objects.get_or_create(user=user_obj)
+    current_group = user_obj.groups.first()
+
+    initial = {
+        'first_name': user_obj.first_name,
+        'last_name': user_obj.last_name,
+        'group': current_group,
+        'section': profile.section,
+    }
+    form = UserEditForm(request.POST or None, initial=initial)
+    if request.method == 'POST' and form.is_valid():
+        form.save(user_obj)
+        messages.success(request, f'Пользователь «{user_obj.username}» обновлён.')
+        return redirect('users_list')
+    return render(request, 'analysis/user_form.html', {
+        'form': form,
+        'title': f'Редактировать: {user_obj.username}',
+        'edit_user': user_obj,
+    })
+
+
+@staff_required
+def user_delete(request, pk):
+    from django.contrib.auth.models import User
+    user_obj = get_object_or_404(User, pk=pk)
+    if request.user.pk == user_obj.pk:
+        messages.error(request, 'Нельзя удалить собственный аккаунт.')
+        return redirect('users_list')
+    if request.method == 'POST':
+        username = user_obj.username
+        user_obj.delete()
+        messages.success(request, f'Пользователь «{username}» удалён.')
+        return redirect('users_list')
+    return render(request, 'analysis/user_confirm_delete.html', {'edit_user': user_obj})
+
+
+@staff_required
+@require_POST
+def user_set_section(request, pk):
+    """Inline section update from the users list (AJAX)."""
+    from django.contrib.auth.models import User
+    user_obj = get_object_or_404(User, pk=pk)
+    section_id = request.POST.get('section_id', '').strip()
+    profile, _ = UserProfile.objects.get_or_create(user=user_obj)
+    if section_id:
+        section = get_object_or_404(Section, pk=section_id)
+        profile.section = section
+    else:
+        profile.section = None
+    profile.save()
+    return JsonResponse({'ok': True})
 
 
 # ─── Export Excel ─────────────────────────────────────────────────────────────

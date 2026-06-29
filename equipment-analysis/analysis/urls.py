@@ -18,6 +18,12 @@ urlpatterns = [
     path('sections/<int:pk>/edit/', views.section_edit, name='section_edit'),
     path('sections/<int:pk>/delete/', views.section_delete, name='section_delete'),
 
+    path('users/', views.users_list, name='users_list'),
+    path('users/new/', views.user_create, name='user_create'),
+    path('users/<int:pk>/edit/', views.user_edit, name='user_edit'),
+    path('users/<int:pk>/delete/', views.user_delete, name='user_delete'),
+    path('users/<int:pk>/set-section/', views.user_set_section, name='user_set_section'),
+
     # ── Мониторинг Омникомм ──────────────────────────────────────────────────
     path('monitoring/', views.monitoring_index, name='monitoring_index'),
     path('monitoring/group/<str:group>/', views.monitoring_group, name='monitoring_group'),

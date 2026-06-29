@@ -1,7 +1,8 @@
 import re
 import datetime
 from django import forms
-from .models import Report, Section
+from django.contrib.auth.models import User, Group
+from .models import Report, Section, UserProfile
 
 
 def parse_hhmmss(value):
@@ -103,3 +104,111 @@ class ReportUploadForm(forms.ModelForm):
         if commit:
             report.save()
         return report
+
+
+class UserCreateForm(forms.Form):
+    username = forms.CharField(
+        label='Логин',
+        max_length=150,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
+    )
+    first_name = forms.CharField(
+        label='Имя',
+        max_length=150,
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    )
+    last_name = forms.CharField(
+        label='Фамилия',
+        max_length=150,
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    )
+    password = forms.CharField(
+        label='Пароль',
+        widget=forms.PasswordInput(attrs={'class': 'form-control', 'autocomplete': 'new-password'}),
+    )
+    group = forms.ModelChoiceField(
+        queryset=Group.objects.all(),
+        required=False,
+        empty_label='— Без группы —',
+        label='Группа',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    section = forms.ModelChoiceField(
+        queryset=Section.objects.all(),
+        required=False,
+        empty_label='— Без участка —',
+        label='Участок (для группы Мониторинг)',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    def clean_username(self):
+        username = self.cleaned_data['username'].strip()
+        if User.objects.filter(username=username).exists():
+            raise forms.ValidationError('Пользователь с таким логином уже существует.')
+        return username
+
+    def save(self):
+        data = self.cleaned_data
+        user = User.objects.create_user(
+            username=data['username'],
+            password=data['password'],
+            first_name=data.get('first_name', ''),
+            last_name=data.get('last_name', ''),
+        )
+        user.groups.set([data['group']] if data.get('group') else [])
+        user.save()
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        profile.section = data.get('section')
+        profile.save()
+        return user
+
+
+class UserEditForm(forms.Form):
+    first_name = forms.CharField(
+        label='Имя',
+        max_length=150,
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    )
+    last_name = forms.CharField(
+        label='Фамилия',
+        max_length=150,
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    )
+    group = forms.ModelChoiceField(
+        queryset=Group.objects.all(),
+        required=False,
+        empty_label='— Без группы —',
+        label='Группа',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    section = forms.ModelChoiceField(
+        queryset=Section.objects.all(),
+        required=False,
+        empty_label='— Без участка —',
+        label='Участок (для группы Мониторинг)',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    new_password = forms.CharField(
+        label='Новый пароль',
+        required=False,
+        widget=forms.PasswordInput(attrs={'class': 'form-control', 'autocomplete': 'new-password',
+                                          'placeholder': 'Оставьте пустым, чтобы не менять'}),
+        help_text='Оставьте пустым, чтобы не изменять пароль.',
+    )
+
+    def save(self, user):
+        data = self.cleaned_data
+        user.first_name = data.get('first_name', '')
+        user.last_name = data.get('last_name', '')
+        if data.get('new_password'):
+            user.set_password(data['new_password'])
+        user.groups.set([data['group']] if data.get('group') else [])
+        user.save()
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        profile.section = data.get('section')
+        profile.save()
+        return user
