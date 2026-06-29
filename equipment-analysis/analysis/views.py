@@ -1943,6 +1943,10 @@ def monitoring_save(request, group):
 
     with transaction.atomic():
         for v in vehicles:
+            # Defense-in-depth: skip any vehicle not belonging to the user's section
+            if not user.is_staff and user_section is not None and v.section != user_section:
+                continue
+
             prefix = f'v_{v.pk}_'
 
             def chk(field):
