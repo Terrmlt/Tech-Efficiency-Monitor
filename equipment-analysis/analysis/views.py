@@ -1721,6 +1721,8 @@ def monitoring_index(request):
         filled_today = MonitoringRecord.objects.filter(
             vehicle__in=base_qs, date=today
         ).count()
+        if not user.is_staff and total == 0:
+            continue  # Skip groups with no vehicles in this section
         group_stats.append({
             'name': group_name,
             'icon': GROUP_ICONS.get(group_name, 'bi-gear'),
@@ -1759,9 +1761,16 @@ def monitoring_group(request, group):
         vehicles_qs = vehicles_qs.filter(section=user_section) if user_section else vehicles_qs.none()
     vehicles = vehicles_qs.select_related('section').order_by('order', 'name')
 
-    # Dates that already have records (for navigation)
+    # Dates that already have records (for navigation) — scoped to section
+    records_base_qs = MonitoringRecord.objects.filter(vehicle__group=group)
+    if not user.is_staff:
+        if user_section is not None:
+            records_base_qs = records_base_qs.filter(vehicle__section=user_section)
+        else:
+            records_base_qs = records_base_qs.none()
+
     recorded_dates = list(
-        MonitoringRecord.objects.filter(vehicle__group=group)
+        records_base_qs
         .values_list('date', flat=True)
         .distinct()
         .order_by('-date')[:30]
@@ -1782,12 +1791,11 @@ def monitoring_group(request, group):
         except ValueError:
             pass
 
-    # Load existing records for selected date
+    # Load existing records for selected date — scoped to section
     existing = {
         r.vehicle_id: r
-        for r in MonitoringRecord.objects.filter(
-            vehicle__group=group, date=selected_date
-        ).select_related('breakdown_type', 'failure_cause')
+        for r in records_base_qs.filter(date=selected_date)
+        .select_related('breakdown_type', 'failure_cause')
     }
 
     breakdown_types = BreakdownType.objects.all()
@@ -1916,9 +1924,17 @@ def monitoring_analytics(request):
     date_to = request.GET.get('date_to', '')
     group_filter = request.GET.get('group', '')
 
+    user = request.user
+    user_section = None if user.is_staff else _get_user_section(user)
+
     qs = MonitoringRecord.objects.select_related(
         'vehicle', 'breakdown_type', 'failure_cause'
     )
+    if not user.is_staff:
+        if user_section is not None:
+            qs = qs.filter(vehicle__section=user_section)
+        else:
+            qs = qs.none()
 
     if date_from:
         try:

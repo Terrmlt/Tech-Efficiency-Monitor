@@ -20,15 +20,27 @@
     </div>
 </div>
 
-{% if not vehicles %}
+{% if no_section_warning %}
+<div class="alert alert-danger d-flex gap-3 align-items-start mb-4" role="alert">
+    <i class="bi bi-shield-exclamation fs-5 mt-1 flex-shrink-0"></i>
+    <div>
+        <div class="fw-semibold mb-1">Участок не назначен</div>
+        <div>Для вашей учётной записи не назначен участок. Обратитесь к администратору.</div>
+    </div>
+</div>
+{% elif not vehicles %}
 <div class="card">
     <div class="card-body text-center py-5">
         <i class="bi bi-truck display-4 text-muted d-block mb-3"></i>
-        <h5 class="text-muted">В группе нет активной техники</h5>
+        <h5 class="text-muted">Нет активной техники</h5>
+        {% if user_is_staff %}
         <p class="text-muted">Добавьте технику в справочнике, чтобы начать заполнять мониторинг.</p>
         <a href="{% url 'monitoring_vehicle_create' %}" class="btn btn-primary">
             <i class="bi bi-plus-lg me-1"></i>Добавить технику
         </a>
+        {% else %}
+        <p class="text-muted">В вашем участке нет активной техники в этой группе.</p>
+        {% endif %}
     </div>
 </div>
 {% else %}

@@ -9,6 +9,7 @@
         <a href="{% url 'monitoring_analytics' %}" class="btn btn-sm btn-outline-primary">
             <i class="bi bi-bar-chart me-1"></i>Аналитика
         </a>
+        {% if user_is_staff %}
         <div class="dropdown">
             <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
                 <i class="bi bi-gear me-1"></i>Справочники
@@ -19,10 +20,19 @@
                 <li><a class="dropdown-item" href="{% url 'monitoring_failures' %}"><i class="bi bi-wrench me-2"></i>Причины неисправности</a></li>
             </ul>
         </div>
+        {% endif %}
     </div>
 </div>
 
-{% if unfilled_groups %}
+{% if no_section_warning %}
+<div class="alert alert-danger d-flex gap-3 align-items-start mb-4" role="alert">
+    <i class="bi bi-shield-exclamation fs-5 mt-1 flex-shrink-0"></i>
+    <div>
+        <div class="fw-semibold mb-1">Участок не назначен</div>
+        <div>Для вашей учётной записи не назначен участок. Обратитесь к администратору.</div>
+    </div>
+</div>
+{% elif unfilled_groups %}
 <div class="alert alert-warning d-flex gap-3 align-items-start mb-4" role="alert">
     <i class="bi bi-exclamation-triangle-fill fs-5 mt-1 flex-shrink-0"></i>
     <div>
@@ -40,6 +50,12 @@
             {% endfor %}
         </ul>
     </div>
+</div>
+{% endif %}
+
+{% if user_section and not user_is_staff %}
+<div class="alert alert-info alert-sm py-2 px-3 mb-3 small" role="alert">
+    <i class="bi bi-geo-alt me-1"></i>Показывается техника участка: <strong>{{ user_section.name }}</strong>
 </div>
 {% endif %}
 
