@@ -4,6 +4,7 @@ import json
 import datetime
 from functools import wraps
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -2061,19 +2062,39 @@ def monitoring_analytics(request):
         ]
 
     if metric == 'breakdown':
-        counts = Counter(
-            r.breakdown_type.name if r.breakdown_type else '(не указан)'
-            for r in chart_fault_records
-        )
+        id_counts = Counter()
+        id_vehicles = defaultdict(set)
+        id_names = {}
+        for r in chart_fault_records:
+            pk = r.breakdown_type_id
+            name = r.breakdown_type.name if r.breakdown_type else '(не указан)'
+            id_counts[pk] += 1
+            id_vehicles[pk].add(r.vehicle_id)
+            id_names[pk] = name
     else:
-        counts = Counter(
-            r.failure_cause.name if r.failure_cause else '(не указана)'
-            for r in chart_fault_records
-        )
+        id_counts = Counter()
+        id_vehicles = defaultdict(set)
+        id_names = {}
+        for r in chart_fault_records:
+            pk = r.failure_cause_id
+            name = r.failure_cause.name if r.failure_cause else '(не указана)'
+            id_counts[pk] += 1
+            id_vehicles[pk].add(r.vehicle_id)
+            id_names[pk] = name
 
-    chart_data = sorted(counts.items(), key=lambda x: -x[1])
-    chart_labels = [x[0] for x in chart_data]
-    chart_values = [x[1] for x in chart_data]
+    chart_data_raw = sorted(id_counts.items(), key=lambda x: -x[1])
+    chart_table = [
+        {
+            'id': pk if pk is not None else 'none',
+            'name': id_names[pk],
+            'count': cnt,
+            'vehicle_count': len(id_vehicles[pk]),
+        }
+        for pk, cnt in chart_data_raw
+    ]
+    chart_labels = [id_names[pk] for pk, cnt in chart_data_raw]
+    chart_values = [cnt for pk, cnt in chart_data_raw]
+    chart_ids = [pk if pk is not None else 'none' for pk, cnt in chart_data_raw]
 
     # Group + per-vehicle summary
     group_summary = defaultdict(lambda: {'total': 0, 'faults': 0})
@@ -2129,12 +2150,99 @@ def monitoring_analytics(request):
         'all_failure_causes': all_failure_causes,
         'chart_labels_json': _json.dumps(chart_labels, ensure_ascii=False),
         'chart_values_json': _json.dumps(chart_values),
-        'chart_data': chart_data,
+        'chart_ids_json': _json.dumps(chart_ids),
+        'chart_table': chart_table,
         'group_table': group_table,
         'total_records': len(all_records),
         'total_faults': len(all_fault_records),
     }
     return render(request, 'analysis/monitoring/analytics.html', context)
+
+
+# ─── Drill-down: vehicles for a specific fault type ───────────────────────────
+
+@role_required(GROUP_MONITOR, GROUP_ANALYST)
+def monitoring_fault_drill(request):
+    metric = request.GET.get('metric', 'breakdown')
+    item_id = request.GET.get('item_id', '')
+    date_from = request.GET.get('date_from', '')
+    date_to = request.GET.get('date_to', '')
+    group_filter = request.GET.get('group', '')
+
+    user = request.user
+    user_section = None if user.is_staff else _get_user_section(user)
+
+    qs = MonitoringRecord.objects.select_related(
+        'vehicle', 'vehicle__section', 'breakdown_type', 'failure_cause'
+    )
+    if not user.is_staff:
+        if user_section is not None:
+            qs = qs.filter(vehicle__section=user_section)
+        else:
+            qs = qs.none()
+
+    if date_from:
+        try:
+            qs = qs.filter(date__gte=datetime.date.fromisoformat(date_from))
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            qs = qs.filter(date__lte=datetime.date.fromisoformat(date_to))
+        except ValueError:
+            pass
+    if group_filter:
+        qs = qs.filter(vehicle__group=group_filter)
+
+    item_name = ''
+    if metric == 'breakdown':
+        if item_id == 'none' or not item_id:
+            qs = qs.filter(breakdown_type__isnull=True)
+            item_name = '(не указан)'
+        else:
+            try:
+                bt = BreakdownType.objects.get(pk=int(item_id))
+                qs = qs.filter(breakdown_type=bt)
+                item_name = bt.name
+            except (BreakdownType.DoesNotExist, ValueError):
+                qs = qs.none()
+                item_name = '—'
+    else:
+        if item_id == 'none' or not item_id:
+            qs = qs.filter(failure_cause__isnull=True)
+            item_name = '(не указана)'
+        else:
+            try:
+                fc = FailureCause.objects.get(pk=int(item_id))
+                qs = qs.filter(failure_cause=fc)
+                item_name = fc.name
+            except (FailureCause.DoesNotExist, ValueError):
+                qs = qs.none()
+                item_name = '—'
+
+    records = [r for r in qs.order_by('-date', 'vehicle__name') if r.has_fault()]
+
+    back_params = [f'metric={metric}']
+    if date_from:
+        back_params.append(f'date_from={date_from}')
+    if date_to:
+        back_params.append(f'date_to={date_to}')
+    if group_filter:
+        back_params.append(f'group={group_filter}')
+    back_url = reverse('monitoring_analytics') + '?' + '&'.join(back_params)
+
+    context = {
+        'metric': metric,
+        'item_id': item_id,
+        'item_name': item_name,
+        'date_from': date_from,
+        'date_to': date_to,
+        'group_filter': group_filter,
+        'records': records,
+        'back_url': back_url,
+        'total': len(records),
+    }
+    return render(request, 'analysis/monitoring/fault_drill.html', context)
 
 
 # ─── Reference CRUD: MonitoringVehicle ───────────────────────────────────────

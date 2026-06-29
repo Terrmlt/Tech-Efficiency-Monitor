@@ -1,0 +1,102 @@
+{% extends 'analysis/base.html' %}
+
+{% block title %}Техника — {{ item_name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-0 fw-bold">
+            <i class="bi bi-truck me-2 text-primary"></i>Техника с неисправностью
+        </h4>
+        <div class="text-muted small mt-1">
+            {% if metric == 'breakdown' %}Вид поломки{% else %}Причина неисправности{% endif %}:
+            <span class="fw-semibold text-dark">{{ item_name }}</span>
+            {% if date_from or date_to %}
+            &nbsp;·&nbsp;
+            {% if date_from %}с {{ date_from }}{% endif %}
+            {% if date_to %}по {{ date_to }}{% endif %}
+            {% endif %}
+            {% if group_filter %}
+            &nbsp;·&nbsp; Группа: {{ group_filter }}
+            {% endif %}
+        </div>
+    </div>
+    <a href="{{ back_url }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>К аналитике
+    </a>
+</div>
+
+<!-- Итог -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="stat-value text-danger">{{ total }}</div>
+                <div class="stat-label">Записей с этой неисправностью</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if records %}
+<div class="card">
+    <div class="card-header bg-white border-bottom">
+        <span class="fw-semibold">
+            <i class="bi bi-list-ul me-2"></i>Список случаев
+        </span>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th class="ps-4">Техника</th>
+                    <th>Группа</th>
+                    <th>Дата</th>
+                    <th>Неисправные датчики</th>
+                    {% if metric == 'breakdown' %}
+                    <th>Причина неисправности</th>
+                    {% else %}
+                    <th>Вид поломки</th>
+                    {% endif %}
+                    <th>Примечание</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in records %}
+                <tr>
+                    <td class="ps-4 fw-semibold">{{ r.vehicle.name }}</td>
+                    <td class="text-muted small">{{ r.vehicle.group }}</td>
+                    <td>{{ r.date }}</td>
+                    <td>
+                        <span class="d-flex flex-wrap gap-1">
+                            {% if not r.sensor_rpm %}<span class="badge bg-danger">Обороты</span>{% endif %}
+                            {% if not r.sensor_dut %}<span class="badge bg-danger">ДУТ</span>{% endif %}
+                            {% if not r.sensor_gps %}<span class="badge bg-danger">GPS</span>{% endif %}
+                            {% if not r.sensor_gsm %}<span class="badge bg-danger">Связь</span>{% endif %}
+                            {% if r.sensor_arrow is not None and not r.sensor_arrow %}<span class="badge bg-danger">Стрела</span>{% endif %}
+                            {% if r.sensor_cube_port is not None and not r.sensor_cube_port %}<span class="badge bg-danger">Cube/port</span>{% endif %}
+                            {% if r.sensor_uss is not None and not r.sensor_uss %}<span class="badge bg-danger">УСС</span>{% endif %}
+                        </span>
+                    </td>
+                    {% if metric == 'breakdown' %}
+                    <td class="text-muted small">{{ r.failure_cause.name|default:"—" }}</td>
+                    {% else %}
+                    <td class="text-muted small">{{ r.breakdown_type.name|default:"—" }}</td>
+                    {% endif %}
+                    <td class="text-muted small">{{ r.note|default:"—" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-check-circle display-4 text-success d-block mb-3"></i>
+        <h5 class="text-muted">Нет записей</h5>
+        <p class="text-muted">Не найдено случаев с этим типом неисправности за указанный период.</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

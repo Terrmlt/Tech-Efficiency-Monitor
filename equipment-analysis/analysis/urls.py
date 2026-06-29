@@ -29,6 +29,7 @@ urlpatterns = [
     path('monitoring/group/<str:group>/', views.monitoring_group, name='monitoring_group'),
     path('monitoring/group/<str:group>/save/', views.monitoring_save, name='monitoring_save'),
     path('monitoring/analytics/', views.monitoring_analytics, name='monitoring_analytics'),
+    path('monitoring/analytics/drill/', views.monitoring_fault_drill, name='monitoring_fault_drill'),
 
     # Reference: vehicles
     path('monitoring/vehicles/', views.monitoring_vehicles, name='monitoring_vehicles'),

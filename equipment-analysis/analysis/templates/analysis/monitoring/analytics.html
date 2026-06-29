@@ -125,14 +125,14 @@
     <div class="col-6 col-md-3">
         <div class="card text-center">
             <div class="card-body py-3">
-                <div class="stat-value text-warning">{{ chart_data|length }}</div>
+                <div class="stat-value text-warning">{{ chart_table|length }}</div>
                 <div class="stat-label">Уникальных значений</div>
             </div>
         </div>
     </div>
 </div>
 
-{% if chart_data %}
+{% if chart_table %}
 <!-- Диаграмма -->
 <div class="card mb-4">
     <div class="card-header bg-white border-bottom">
@@ -143,10 +143,11 @@
         {% if selected_breakdown_ids or selected_failure_ids %}
         <span class="badge bg-primary ms-2">фильтр применён</span>
         {% endif %}
+        <span class="text-muted small ms-3"><i class="bi bi-hand-index me-1"></i>Нажмите на столбец для просмотра техники</span>
     </div>
     <div class="card-body">
         <div style="position:relative;height:320px">
-            <canvas id="mainChart"></canvas>
+            <canvas id="mainChart" style="cursor:pointer"></canvas>
         </div>
     </div>
 </div>
@@ -166,15 +167,22 @@
                     <th class="ps-4">{% if metric == 'breakdown' %}Вид поломки{% else %}Причина неисправности{% endif %}</th>
                     <th class="text-end pe-4">Кол-во случаев</th>
                     <th class="text-end pe-4">Доля</th>
+                    <th class="text-end pe-4">Единиц техники</th>
                 </tr>
             </thead>
             <tbody>
-                {% for name, cnt in chart_data %}
+                {% for row in chart_table %}
                 <tr>
-                    <td class="ps-4">{{ name }}</td>
-                    <td class="text-end pe-4 fw-semibold">{{ cnt }}</td>
+                    <td class="ps-4">{{ row.name }}</td>
+                    <td class="text-end pe-4 fw-semibold">{{ row.count }}</td>
                     <td class="text-end pe-4 text-muted">
-                        {% if total_faults > 0 %}{{ cnt }}/{{ total_faults }}{% endif %}
+                        {% if total_faults > 0 %}{{ row.count }}/{{ total_faults }}{% endif %}
+                    </td>
+                    <td class="text-end pe-4">
+                        <a href="{% url 'monitoring_fault_drill' %}?metric={{ metric }}&item_id={{ row.id }}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if group_filter %}&group={{ group_filter }}{% endif %}"
+                           class="btn btn-sm btn-outline-primary py-0 px-2" title="Посмотреть список техники">
+                            <i class="bi bi-truck me-1"></i>{{ row.vehicle_count }}
+                        </a>
                     </td>
                 </tr>
                 {% endfor %}
@@ -249,7 +257,7 @@
 </div>
 {% endif %}
 
-{% if not chart_data and not group_table %}
+{% if not chart_table and not group_table %}
 <div class="card">
     <div class="card-body text-center py-5">
         <i class="bi bi-bar-chart display-4 text-muted d-block mb-3"></i>
@@ -320,17 +328,24 @@ function toggleAllVehicles(btn) {
 }
 </script>
 
-{% if chart_data %}
+{% if chart_table %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 (function() {
     var labels = {{ chart_labels_json|safe }};
     var values = {{ chart_values_json|safe }};
+    var itemIds = {{ chart_ids_json|safe }};
+    var currentMetric = '{{ metric }}';
+    var dateFrom = '{{ date_from }}';
+    var dateTo = '{{ date_to }}';
+    var groupFilter = '{{ group_filter }}';
+    var drillBase = '{% url "monitoring_fault_drill" %}';
+
     var PAL = ['#0d6efd','#dc3545','#198754','#fd7e14','#6f42c1','#0dcaf0','#ffc107','#20c997','#6c757d','#343a40'];
     var colors = labels.map(function(_, i){ return PAL[i % PAL.length]; });
     var colorsA = colors.map(function(c){ return c + '99'; });
 
-    new Chart(document.getElementById('mainChart'), {
+    var chart = new Chart(document.getElementById('mainChart'), {
         type: 'bar',
         data: {
             labels: labels,
@@ -349,6 +364,16 @@ function toggleAllVehicles(btn) {
             scales: {
                 y: { beginAtZero: true, ticks: { stepSize: 1 } },
                 x: { ticks: { font: { size: 11 } } }
+            },
+            onClick: function(evt, elements) {
+                if (!elements || !elements.length) return;
+                var idx = elements[0].index;
+                var itemId = itemIds[idx];
+                var params = 'metric=' + currentMetric + '&item_id=' + itemId;
+                if (dateFrom) params += '&date_from=' + dateFrom;
+                if (dateTo) params += '&date_to=' + dateTo;
+                if (groupFilter) params += '&group=' + groupFilter;
+                window.location.href = drillBase + '?' + params;
             }
         }
     });
