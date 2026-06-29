@@ -187,14 +187,17 @@
 <!-- ══ СРАВНЕНИЕ СМЕН ══ -->
 <div class="card mb-4">
     <div class="card-header bg-white border-bottom">
-        <span class="fw-semibold"><i class="bi bi-intersect me-2 text-warning"></i>Сравнение смен — средние показатели по группам</span>
+        <span class="fw-semibold"><i class="bi bi-intersect me-2 text-warning"></i>
+        Сравнение смен — средние показатели
+        {% if shift_compare_vehicle %}для: <span class="text-dark">{{ shift_compare_vehicle.name }}</span>{% else %}по группам{% endif %}
+        </span>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-sm table-hover mb-0 align-middle">
                 <thead class="table-light">
                     <tr>
-                        <th class="ps-3">Группа</th>
+                        <th class="ps-3">{% if shift_compare_vehicle %}Техника{% else %}Группа{% endif %}</th>
                         <th class="text-center" colspan="2">Выход техники, %</th>
                         <th class="text-center" colspan="2">Расход к норме, %</th>
                         <th class="text-center" colspan="2">Эффективность, %</th>
@@ -210,6 +213,35 @@
                     </tr>
                 </thead>
                 <tbody>
+                {% if shift_compare_vehicle %}
+                    {% if shift_compare_vehicle.has_data %}
+                    {% with s1=shift_compare_vehicle.s1 s2=shift_compare_vehicle.s2 %}
+                    <tr>
+                        <td class="ps-3 fw-semibold small">{{ shift_compare_vehicle.name }}</td>
+                        <td class="text-center small">
+                            {% if s1.output is not None %}<span class="{% if s1.output >= 80 %}output-good{% else %}output-bad{% endif %}">{{ s1.output }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-center small">
+                            {% if s2.output is not None %}<span class="{% if s2.output >= 80 %}output-good{% else %}output-bad{% endif %}">{{ s2.output }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-center small">
+                            {% if s1.fuel_eff is not None %}<span class="{% if s1.fuel_eff <= 100 %}efficiency-good{% elif s1.fuel_eff <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s1.fuel_eff }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-center small">
+                            {% if s2.fuel_eff is not None %}<span class="{% if s2.fuel_eff <= 100 %}efficiency-good{% elif s2.fuel_eff <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s2.fuel_eff }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-center small">
+                            {% if s1.type_eff is not None %}<span class="{% if s1.type_eff <= 100 %}efficiency-good{% elif s1.type_eff <= 130 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s1.type_eff }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-center small">
+                            {% if s2.type_eff is not None %}<span class="{% if s2.type_eff <= 100 %}efficiency-good{% elif s2.type_eff <= 130 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s2.type_eff }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                    </tr>
+                    {% endwith %}
+                    {% else %}
+                    <tr><td colspan="7" class="text-center text-muted py-3 small">Для выбранной техники нет данных по сменам</td></tr>
+                    {% endif %}
+                {% else %}
                 {% for grp, data in shift_compare_groups.items %}
                     <tr>
                         <td class="ps-3 fw-semibold small">{{ grp }}</td>
@@ -235,6 +267,7 @@
                         {% endwith %}
                     </tr>
                 {% endfor %}
+                {% endif %}
                 </tbody>
             </table>
         </div>
