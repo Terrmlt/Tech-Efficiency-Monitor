@@ -802,10 +802,9 @@ def analytics(request):
             vfe.append(fe); vou.append(ou); vte.append(te)
         by_vehicle[vname] = {'group': vgroup, 'fuel_eff': vfe, 'output': vou, 'type_eff': vte}
 
-    # ── by shift daily + group/vehicle comparison (only when no shift filter) ─────
+    # ── by shift daily + group comparison (only when no shift filter active) ─────
     by_shift = None
     shift_compare_groups = {}
-    shift_compare_vehicle = None  # set when vehicle_filter is active
     if not shift_filter:
         shift1_daily = _dd(list)
         shift2_daily = _dd(list)
@@ -829,34 +828,19 @@ def analytics(request):
                 'shift2': {'fuel_eff': s2_fe, 'output': s2_ou, 'type_eff': s2_te},
             }
 
-        if vehicle_filter:
-            # single-vehicle mode: build per-vehicle shift averages
-            vsh = {1: [], 2: []}
-            for rec in rec_list:
-                if rec.shift in (1, 2):
-                    vsh[rec.shift].append(rec)
-            s1fe, s1ou, s1te = _avg(vsh[1]) if vsh[1] else (None, None, None)
-            s2fe, s2ou, s2te = _avg(vsh[2]) if vsh[2] else (None, None, None)
-            shift_compare_vehicle = {
-                'name': vehicle_filter,
+        # per-group shift averages for comparison table
+        group_shift_recs = _dd(lambda: {1: [], 2: []})
+        for rec in rec_list:
+            if rec.shift in (1, 2):
+                group_shift_recs[rec.group][rec.shift].append(rec)
+        for grp in sorted(group_shift_recs.keys()):
+            sr = group_shift_recs[grp]
+            s1fe, s1ou, s1te = _avg(sr[1]) if sr[1] else (None, None, None)
+            s2fe, s2ou, s2te = _avg(sr[2]) if sr[2] else (None, None, None)
+            shift_compare_groups[grp] = {
                 's1': {'fuel_eff': s1fe, 'output': s1ou, 'type_eff': s1te},
                 's2': {'fuel_eff': s2fe, 'output': s2ou, 'type_eff': s2te},
-                'has_data': bool(vsh[1] or vsh[2]),
             }
-        else:
-            # multi-vehicle mode: per-group shift averages for comparison table
-            group_shift_recs = _dd(lambda: {1: [], 2: []})
-            for rec in rec_list:
-                if rec.shift in (1, 2):
-                    group_shift_recs[rec.group][rec.shift].append(rec)
-            for grp in sorted(group_shift_recs.keys()):
-                sr = group_shift_recs[grp]
-                s1fe, s1ou, s1te = _avg(sr[1]) if sr[1] else (None, None, None)
-                s2fe, s2ou, s2te = _avg(sr[2]) if sr[2] else (None, None, None)
-                shift_compare_groups[grp] = {
-                    's1': {'fuel_eff': s1fe, 'output': s1ou, 'type_eff': s1te},
-                    's2': {'fuel_eff': s2fe, 'output': s2ou, 'type_eff': s2te},
-                }
 
     trend_json = json.dumps({
         'dates':      all_dates,
@@ -911,9 +895,8 @@ def analytics(request):
         'date_to':             date_to,
         'section_id':          section_id,
         'group_filters':       group_filters,
-        'shift_compare_groups':  shift_compare_groups,
-        'shift_compare_vehicle': shift_compare_vehicle,
-        'has_shift_compare':     (bool(shift_compare_groups) or bool(shift_compare_vehicle)) and not shift_filter,
+        'shift_compare_groups': shift_compare_groups,
+        'has_shift_compare':   bool(shift_compare_groups) and not shift_filter,
     }
     return render(request, 'analysis/analytics.html', context)
 
