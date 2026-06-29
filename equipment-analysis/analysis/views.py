@@ -1647,26 +1647,9 @@ def monitoring_group(request, group):
 
     today = datetime.date.today()
 
-    # Determine which date to show
-    date_str = request.GET.get('date', '')
-    selected_date = today
-    if date_str:
-        try:
-            selected_date = datetime.date.fromisoformat(date_str)
-        except ValueError:
-            selected_date = today
-
     vehicles = MonitoringVehicle.objects.filter(
         group=group, is_active=True
     ).select_related('section').order_by('order', 'name')
-
-    # Load existing records for selected date
-    existing = {
-        r.vehicle_id: r
-        for r in MonitoringRecord.objects.filter(
-            vehicle__group=group, date=selected_date
-        ).select_related('breakdown_type', 'failure_cause')
-    }
 
     # Dates that already have records (for navigation)
     recorded_dates = list(
@@ -1675,6 +1658,29 @@ def monitoring_group(request, group):
         .distinct()
         .order_by('-date')[:30]
     )
+
+    # Allowed dates: today always + existing record dates
+    allowed_dates = set(recorded_dates) | {today}
+
+    # Determine which date to show — only today or an existing record date
+    date_str = request.GET.get('date', '')
+    selected_date = today
+    if date_str:
+        try:
+            candidate = datetime.date.fromisoformat(date_str)
+            if candidate in allowed_dates:
+                selected_date = candidate
+            # else silently fall back to today
+        except ValueError:
+            pass
+
+    # Load existing records for selected date
+    existing = {
+        r.vehicle_id: r
+        for r in MonitoringRecord.objects.filter(
+            vehicle__group=group, date=selected_date
+        ).select_related('breakdown_type', 'failure_cause')
+    }
 
     breakdown_types = BreakdownType.objects.all()
     failure_causes = FailureCause.objects.all()
@@ -1707,11 +1713,22 @@ def monitoring_save(request, group):
     if group not in MONITORING_GROUP_LIST:
         return redirect('monitoring_index')
 
+    today = datetime.date.today()
     date_str = request.POST.get('date', '')
     try:
         record_date = datetime.date.fromisoformat(date_str)
     except ValueError:
         messages.error(request, 'Неверная дата.')
+        return redirect('monitoring_group', group=group)
+
+    # Only allow saving for today or dates that already have records
+    existing_dates = set(
+        MonitoringRecord.objects.filter(vehicle__group=group)
+        .values_list('date', flat=True)
+        .distinct()
+    )
+    if record_date != today and record_date not in existing_dates:
+        messages.error(request, 'Нельзя создавать записи задним числом.')
         return redirect('monitoring_group', group=group)
 
     author = request.POST.get('author', '').strip()

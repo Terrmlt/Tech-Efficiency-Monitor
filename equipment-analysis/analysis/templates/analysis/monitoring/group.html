@@ -36,13 +36,19 @@
 <!-- Date selector bar -->
 <div class="card mb-3">
     <div class="card-body py-2 px-3 d-flex align-items-center flex-wrap gap-3">
-        <div class="d-flex align-items-center gap-2">
-            <label class="form-label mb-0 fw-semibold small text-nowrap">Дата заполнения:</label>
-            <input type="date" id="datePicker" value="{{ selected_date|date:'Y-m-d' }}"
-                   max="{{ today|date:'Y-m-d' }}"
-                   class="form-control form-control-sm" style="width:160px"
-                   onchange="goToDate(this.value)">
-        </div>
+        <label class="form-label mb-0 fw-semibold small text-nowrap">Дата заполнения:</label>
+        <select class="form-select form-select-sm" style="width:auto" onchange="goToDate(this.value)">
+            <option value="{{ today|date:'Y-m-d' }}" {% if selected_date == today %}selected{% endif %}>
+                {{ today|date:'d.m.Y' }} — сегодня
+            </option>
+            {% for d in recorded_dates %}
+            {% if d != today %}
+            <option value="{{ d|date:'Y-m-d' }}" {% if d == selected_date %}selected{% endif %}>
+                {{ d|date:'d.m.Y' }}
+            </option>
+            {% endif %}
+            {% endfor %}
+        </select>
         {% if selected_date == today %}
         <span class="badge bg-success"><i class="bi bi-calendar-check me-1"></i>Сегодня</span>
         {% else %}
@@ -50,18 +56,6 @@
         <a href="?date={{ today|date:'Y-m-d' }}" class="btn btn-sm btn-outline-primary">
             <i class="bi bi-calendar-day me-1"></i>Сегодня
         </a>
-        {% endif %}
-        {% if recorded_dates %}
-        <div class="ms-auto">
-            <select class="form-select form-select-sm" style="width:auto" onchange="goToDate(this.value)">
-                <option value="">— история записей —</option>
-                {% for d in recorded_dates %}
-                <option value="{{ d|date:'Y-m-d' }}" {% if d == selected_date %}selected{% endif %}>
-                    {{ d|date:'d.m.Y' }}
-                </option>
-                {% endfor %}
-            </select>
-        </div>
         {% endif %}
     </div>
 </div>
@@ -123,57 +117,57 @@
 
                         {% if is_excavator %}
                         <td class="text-center">
-                            <input type="hidden" name="v_{{ v.pk }}_arrow" class="sensor-hidden" value="{{ r.sensor_arrow|yesno:'1,0,1' }}">
-                            <span class="sensor-badge {% if r.sensor_arrow is None or r.sensor_arrow %}badge bg-success{% else %}badge bg-danger{% endif %}"
+                            <input type="hidden" name="v_{{ v.pk }}_arrow" class="sensor-hidden" value="{% if not r or r.sensor_arrow %}1{% else %}0{% endif %}">
+                            <span class="sensor-badge {% if not r or r.sensor_arrow %}badge bg-success{% else %}badge bg-danger{% endif %}"
                                   onclick="toggleSensor(this)" title="Нажмите для переключения">
-                                {% if r.sensor_arrow is None or r.sensor_arrow %}<i class="bi bi-check-lg"></i>{% else %}<i class="bi bi-x-lg"></i>{% endif %}
+                                {% if not r or r.sensor_arrow %}<i class="bi bi-check-lg"></i>{% else %}<i class="bi bi-x-lg"></i>{% endif %}
                             </span>
                         </td>
                         {% endif %}
 
                         {% if is_atz %}
                         <td class="text-center">
-                            <input type="hidden" name="v_{{ v.pk }}_cube_port" class="sensor-hidden" value="{{ r.sensor_cube_port|yesno:'1,0,1' }}">
-                            <span class="sensor-badge {% if r.sensor_cube_port is None or r.sensor_cube_port %}badge bg-success{% else %}badge bg-danger{% endif %}"
+                            <input type="hidden" name="v_{{ v.pk }}_cube_port" class="sensor-hidden" value="{% if not r or r.sensor_cube_port %}1{% else %}0{% endif %}">
+                            <span class="sensor-badge {% if not r or r.sensor_cube_port %}badge bg-success{% else %}badge bg-danger{% endif %}"
                                   onclick="toggleSensor(this)" title="Нажмите для переключения">
-                                {% if r.sensor_cube_port is None or r.sensor_cube_port %}<i class="bi bi-check-lg"></i>{% else %}<i class="bi bi-x-lg"></i>{% endif %}
+                                {% if not r or r.sensor_cube_port %}<i class="bi bi-check-lg"></i>{% else %}<i class="bi bi-x-lg"></i>{% endif %}
                             </span>
                         </td>
                         <td class="text-center">
-                            <input type="hidden" name="v_{{ v.pk }}_uss" class="sensor-hidden" value="{{ r.sensor_uss|yesno:'1,0,1' }}">
-                            <span class="sensor-badge {% if r.sensor_uss is None or r.sensor_uss %}badge bg-success{% else %}badge bg-danger{% endif %}"
+                            <input type="hidden" name="v_{{ v.pk }}_uss" class="sensor-hidden" value="{% if not r or r.sensor_uss %}1{% else %}0{% endif %}">
+                            <span class="sensor-badge {% if not r or r.sensor_uss %}badge bg-success{% else %}badge bg-danger{% endif %}"
                                   onclick="toggleSensor(this)" title="Нажмите для переключения">
-                                {% if r.sensor_uss is None or r.sensor_uss %}<i class="bi bi-check-lg"></i>{% else %}<i class="bi bi-x-lg"></i>{% endif %}
+                                {% if not r or r.sensor_uss %}<i class="bi bi-check-lg"></i>{% else %}<i class="bi bi-x-lg"></i>{% endif %}
                             </span>
                         </td>
                         {% endif %}
 
                         <td class="text-center">
-                            <input type="hidden" name="v_{{ v.pk }}_rpm" class="sensor-hidden" value="{{ r.sensor_rpm|yesno:'1,0,1' }}">
-                            <span class="sensor-badge {% if r.sensor_rpm is None or r.sensor_rpm %}badge bg-success{% else %}badge bg-danger{% endif %}"
+                            <input type="hidden" name="v_{{ v.pk }}_rpm" class="sensor-hidden" value="{% if not r or r.sensor_rpm %}1{% else %}0{% endif %}">
+                            <span class="sensor-badge {% if not r or r.sensor_rpm %}badge bg-success{% else %}badge bg-danger{% endif %}"
                                   onclick="toggleSensor(this)" title="Нажмите для переключения">
-                                {% if r.sensor_rpm is None or r.sensor_rpm %}<i class="bi bi-check-lg"></i>{% else %}<i class="bi bi-x-lg"></i>{% endif %}
+                                {% if not r or r.sensor_rpm %}<i class="bi bi-check-lg"></i>{% else %}<i class="bi bi-x-lg"></i>{% endif %}
                             </span>
                         </td>
                         <td class="text-center">
-                            <input type="hidden" name="v_{{ v.pk }}_dut" class="sensor-hidden" value="{{ r.sensor_dut|yesno:'1,0,1' }}">
-                            <span class="sensor-badge {% if r.sensor_dut is None or r.sensor_dut %}badge bg-success{% else %}badge bg-danger{% endif %}"
+                            <input type="hidden" name="v_{{ v.pk }}_dut" class="sensor-hidden" value="{% if not r or r.sensor_dut %}1{% else %}0{% endif %}">
+                            <span class="sensor-badge {% if not r or r.sensor_dut %}badge bg-success{% else %}badge bg-danger{% endif %}"
                                   onclick="toggleSensor(this)" title="Нажмите для переключения">
-                                {% if r.sensor_dut is None or r.sensor_dut %}<i class="bi bi-check-lg"></i>{% else %}<i class="bi bi-x-lg"></i>{% endif %}
+                                {% if not r or r.sensor_dut %}<i class="bi bi-check-lg"></i>{% else %}<i class="bi bi-x-lg"></i>{% endif %}
                             </span>
                         </td>
                         <td class="text-center">
-                            <input type="hidden" name="v_{{ v.pk }}_gps" class="sensor-hidden" value="{{ r.sensor_gps|yesno:'1,0,1' }}">
-                            <span class="sensor-badge {% if r.sensor_gps is None or r.sensor_gps %}badge bg-success{% else %}badge bg-danger{% endif %}"
+                            <input type="hidden" name="v_{{ v.pk }}_gps" class="sensor-hidden" value="{% if not r or r.sensor_gps %}1{% else %}0{% endif %}">
+                            <span class="sensor-badge {% if not r or r.sensor_gps %}badge bg-success{% else %}badge bg-danger{% endif %}"
                                   onclick="toggleSensor(this)" title="Нажмите для переключения">
-                                {% if r.sensor_gps is None or r.sensor_gps %}<i class="bi bi-check-lg"></i>{% else %}<i class="bi bi-x-lg"></i>{% endif %}
+                                {% if not r or r.sensor_gps %}<i class="bi bi-check-lg"></i>{% else %}<i class="bi bi-x-lg"></i>{% endif %}
                             </span>
                         </td>
                         <td class="text-center">
-                            <input type="hidden" name="v_{{ v.pk }}_gsm" class="sensor-hidden" value="{{ r.sensor_gsm|yesno:'1,0,1' }}">
-                            <span class="sensor-badge {% if r.sensor_gsm is None or r.sensor_gsm %}badge bg-success{% else %}badge bg-danger{% endif %}"
+                            <input type="hidden" name="v_{{ v.pk }}_gsm" class="sensor-hidden" value="{% if not r or r.sensor_gsm %}1{% else %}0{% endif %}">
+                            <span class="sensor-badge {% if not r or r.sensor_gsm %}badge bg-success{% else %}badge bg-danger{% endif %}"
                                   onclick="toggleSensor(this)" title="Нажмите для переключения">
-                                {% if r.sensor_gsm is None or r.sensor_gsm %}<i class="bi bi-check-lg"></i>{% else %}<i class="bi bi-x-lg"></i>{% endif %}
+                                {% if not r or r.sensor_gsm %}<i class="bi bi-check-lg"></i>{% else %}<i class="bi bi-x-lg"></i>{% endif %}
                             </span>
                         </td>
 
