@@ -38,12 +38,26 @@
                     <label class="form-label small fw-semibold mb-1">Дата до</label>
                     <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label small fw-semibold mb-1">Группа техники</label>
                     <select name="group" class="form-select form-select-sm">
                         <option value="">Все группы</option>
                         {% for g in group_list %}
                         <option value="{{ g }}" {% if group_filter == g %}selected{% endif %}>{{ g }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold mb-1">Единица техники</label>
+                    {% regroup all_vehicles by group as vehicle_groups %}
+                    <select name="vehicle_id" class="form-select form-select-sm">
+                        <option value="">Все машины</option>
+                        {% for vg in vehicle_groups %}
+                        <optgroup label="{{ vg.grouper }}">
+                            {% for v in vg.list %}
+                            <option value="{{ v.pk }}" {% if selected_vehicle_id == v.pk %}selected{% endif %}>{{ v.name }}</option>
+                            {% endfor %}
+                        </optgroup>
                         {% endfor %}
                     </select>
                 </div>
@@ -199,7 +213,7 @@
                         {% if total_faults > 0 %}{{ row.count }}/{{ total_faults }}{% endif %}
                     </td>
                     <td class="text-end pe-4">
-                        <a href="{% url 'monitoring_fault_drill' %}?metric={{ metric }}&item_id={{ row.id }}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if group_filter %}&group={{ group_filter }}{% endif %}"
+                        <a href="{% url 'monitoring_fault_drill' %}?metric={{ metric }}&item_id={{ row.id }}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if group_filter %}&group={{ group_filter }}{% endif %}{% if selected_vehicle_id %}&vehicle_id={{ selected_vehicle_id }}{% endif %}"
                            class="btn btn-sm btn-outline-primary py-0 px-2" title="Посмотреть список техники">
                             <i class="bi bi-truck me-1"></i>{{ row.vehicle_count }}
                         </a>
@@ -359,6 +373,7 @@ function toggleAllVehicles(btn) {
     var dateFrom = '{{ date_from }}';
     var dateTo = '{{ date_to }}';
     var groupFilter = '{{ group_filter }}';
+    var vehicleId = '{{ selected_vehicle_id|default:"" }}';
     var drillBase = '{% url "monitoring_fault_drill" %}';
 
     var PAL = ['#0d6efd','#dc3545','#198754','#fd7e14','#6f42c1','#0dcaf0','#ffc107','#20c997','#6c757d','#343a40'];
@@ -393,6 +408,7 @@ function toggleAllVehicles(btn) {
                 if (dateFrom) params += '&date_from=' + dateFrom;
                 if (dateTo) params += '&date_to=' + dateTo;
                 if (groupFilter) params += '&group=' + groupFilter;
+                if (vehicleId) params += '&vehicle_id=' + vehicleId;
                 window.location.href = drillBase + '?' + params;
             }
         }

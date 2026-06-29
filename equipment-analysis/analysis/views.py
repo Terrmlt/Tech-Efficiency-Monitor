@@ -2009,6 +2009,10 @@ def monitoring_analytics(request):
     date_to = request.GET.get('date_to', '')
     group_filter = request.GET.get('group', '')
 
+    # Vehicle filter
+    _vid_raw = request.GET.get('vehicle_id', '')
+    selected_vehicle_id = int(_vid_raw) if _vid_raw.isdigit() and int(_vid_raw) > 0 else None
+
     # Checkbox filters
     selected_breakdown_ids = [
         int(x) for x in request.GET.getlist('breakdown_ids') if x.isdigit()
@@ -2041,6 +2045,14 @@ def monitoring_analytics(request):
             pass
     if group_filter:
         qs = qs.filter(vehicle__group=group_filter)
+    if selected_vehicle_id:
+        qs = qs.filter(vehicle__pk=selected_vehicle_id)
+
+    # Vehicles for dropdown (scoped to group if selected)
+    all_vehicles_qs = MonitoringVehicle.objects.filter(is_active=True)
+    if group_filter:
+        all_vehicles_qs = all_vehicles_qs.filter(group=group_filter)
+    all_vehicles = list(all_vehicles_qs)
 
     # Evaluate once — reuse for group/vehicle summaries
     all_records = list(qs)
@@ -2215,6 +2227,8 @@ def monitoring_analytics(request):
         'date_to': date_to,
         'group_filter': group_filter,
         'group_list': MONITORING_GROUP_LIST,
+        'selected_vehicle_id': selected_vehicle_id,
+        'all_vehicles': all_vehicles,
         'selected_breakdown_ids': selected_breakdown_ids,
         'selected_failure_ids': selected_failure_ids,
         'all_breakdown_types': all_breakdown_types,
@@ -2244,6 +2258,8 @@ def monitoring_fault_drill(request):
     date_from = request.GET.get('date_from', '')
     date_to = request.GET.get('date_to', '')
     group_filter = request.GET.get('group', '')
+    _vid_raw = request.GET.get('vehicle_id', '')
+    selected_vehicle_id = int(_vid_raw) if _vid_raw.isdigit() and int(_vid_raw) > 0 else None
 
     user = request.user
     user_section = None if user.is_staff else _get_user_section(user)
@@ -2269,6 +2285,8 @@ def monitoring_fault_drill(request):
             pass
     if group_filter:
         qs = qs.filter(vehicle__group=group_filter)
+    if selected_vehicle_id:
+        qs = qs.filter(vehicle__pk=selected_vehicle_id)
 
     item_name = ''
     if metric == 'breakdown':
@@ -2305,7 +2323,16 @@ def monitoring_fault_drill(request):
         back_params.append(f'date_to={date_to}')
     if group_filter:
         back_params.append(f'group={group_filter}')
+    if selected_vehicle_id:
+        back_params.append(f'vehicle_id={selected_vehicle_id}')
     back_url = reverse('monitoring_analytics') + '?' + '&'.join(back_params)
+
+    selected_vehicle_name = ''
+    if selected_vehicle_id:
+        try:
+            selected_vehicle_name = MonitoringVehicle.objects.get(pk=selected_vehicle_id).name
+        except MonitoringVehicle.DoesNotExist:
+            pass
 
     context = {
         'metric': metric,
@@ -2314,6 +2341,8 @@ def monitoring_fault_drill(request):
         'date_from': date_from,
         'date_to': date_to,
         'group_filter': group_filter,
+        'selected_vehicle_id': selected_vehicle_id,
+        'selected_vehicle_name': selected_vehicle_name,
         'records': records,
         'back_url': back_url,
         'total': len(records),

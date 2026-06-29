@@ -19,6 +19,9 @@
             {% if group_filter %}
             &nbsp;·&nbsp; Группа: {{ group_filter }}
             {% endif %}
+            {% if selected_vehicle_name %}
+            &nbsp;·&nbsp; Техника: <span class="fw-semibold text-dark">{{ selected_vehicle_name }}</span>
+            {% endif %}
         </div>
     </div>
     <a href="{{ back_url }}" class="btn btn-sm btn-outline-secondary">
