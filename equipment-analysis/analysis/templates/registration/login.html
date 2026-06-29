@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вход — Анализ техники</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f4f6f9; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+        .login-card { width: 100%; max-width: 400px; }
+        .login-header { background: #212529; color: #fff; border-radius: 10px 10px 0 0; padding: 1.5rem; text-align: center; }
+    </style>
+</head>
+<body>
+<div class="login-card">
+    <div class="login-header">
+        <i class="bi bi-speedometer2 fs-2 d-block mb-1"></i>
+        <div class="fw-bold fs-5">Анализ техники</div>
+        <div class="small text-secondary">Система мониторинга и аналитики</div>
+    </div>
+    <div class="card border-0 shadow rounded-top-0">
+        <div class="card-body p-4">
+            <h5 class="mb-3 fw-semibold">Вход в систему</h5>
+
+            {% if form.errors %}
+            <div class="alert alert-danger py-2 small">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                Неверное имя пользователя или пароль.
+            </div>
+            {% endif %}
+
+            <form method="post">
+                {% csrf_token %}
+                {% if next %}
+                <input type="hidden" name="next" value="{{ next }}">
+                {% endif %}
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small">Имя пользователя</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-person"></i></span>
+                        <input type="text" name="username" autofocus required
+                               class="form-control" placeholder="Логин">
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="form-label fw-semibold small">Пароль</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                        <input type="password" name="password" required
+                               class="form-control" placeholder="Пароль">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-box-arrow-in-right me-1"></i>Войти
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

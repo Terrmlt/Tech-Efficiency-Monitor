@@ -2,27 +2,94 @@ import io
 import re
 import json
 import datetime
+from functools import wraps
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
 from django.db.models import Q, Avg, Count, Sum
 
 from .forms import ReportUploadForm, SectionForm
-from .models import Report, VehicleRecord, Section, VehicleNorm, secs_to_hhmmss
+from .models import Report, VehicleRecord, Section, VehicleNorm, secs_to_hhmmss, UserProfile
 from .utils import parse_excel_file, detect_anomalies, calculate_metrics, build_summary
+
+
+# ─── Role helpers & decorators ────────────────────────────────────────────────
+
+GROUP_ANALYST = 'Аналитика'
+GROUP_MONITOR = 'Мониторинг'
+
+
+def is_monitor(user):
+    return user.groups.filter(name=GROUP_MONITOR).exists()
+
+
+def is_analyst(user):
+    return user.groups.filter(name=GROUP_ANALYST).exists()
+
+
+def _get_user_section(user):
+    try:
+        return user.profile.section
+    except Exception:
+        return None
+
+
+def role_required(*allowed_groups):
+    """Allow access if user.is_staff OR user is in any of allowed_groups."""
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped(request, *args, **kwargs):
+            if not request.user.is_authenticated:
+                return redirect(f'/login/?next={request.path}')
+            if request.user.is_staff:
+                return view_func(request, *args, **kwargs)
+            if any(request.user.groups.filter(name=g).exists() for g in allowed_groups):
+                return view_func(request, *args, **kwargs)
+            if is_monitor(request.user):
+                return redirect('monitoring_index')
+            if is_analyst(request.user):
+                return redirect('analytics')
+            return redirect('login')
+        return _wrapped
+    return decorator
+
+
+def staff_required(view_func):
+    """Allow access only to staff/admin users."""
+    @wraps(view_func)
+    def _wrapped(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect(f'/login/?next={request.path}')
+        if request.user.is_staff:
+            return view_func(request, *args, **kwargs)
+        if is_monitor(request.user):
+            return redirect('monitoring_index')
+        if is_analyst(request.user):
+            return redirect('analytics')
+        return redirect('login')
+    return _wrapped
 
 
 # ─── Index ────────────────────────────────────────────────────────────────────
 
+@login_required
 def index(request):
+    user = request.user
+    if not user.is_staff:
+        if is_monitor(user):
+            return redirect('monitoring_index')
+        if is_analyst(user):
+            return redirect('analytics')
     reports = Report.objects.select_related('section').all()
     return render(request, 'analysis/index.html', {'reports': reports})
 
 
 # ─── Upload ───────────────────────────────────────────────────────────────────
 
+@staff_required
 def upload(request):
     if request.method == 'POST':
         form = ReportUploadForm(request.POST, request.FILES)
@@ -212,6 +279,7 @@ def _build_daily_view(records, report):
 
 # ─── Report detail ────────────────────────────────────────────────────────────
 
+@staff_required
 def report_detail(request, pk):
     report = get_object_or_404(Report, pk=pk)
     all_records = report.vehiclerecord_set.all()
@@ -333,6 +401,7 @@ def _parse_hhmmss_to_sec(value):
     return None
 
 
+@staff_required
 @require_POST
 def set_vehicle_norms(request, pk):
     """Save per-day per-shift dump truck norms and recalculate efficiency.
@@ -410,6 +479,7 @@ def set_vehicle_norms(request, pk):
 
 # ─── Delete report ────────────────────────────────────────────────────────────
 
+@staff_required
 def delete_report(request, pk):
     report = get_object_or_404(Report, pk=pk)
     if request.method == 'POST':
@@ -421,6 +491,7 @@ def delete_report(request, pk):
 
 # ─── Save comment (AJAX) ──────────────────────────────────────────────────────
 
+@staff_required
 @require_POST
 def save_comment(request, pk):
     rec = get_object_or_404(VehicleRecord, pk=pk)
@@ -566,6 +637,7 @@ def _build_daily_view_records(records):
     return rows
 
 
+@staff_required
 def records(request):
     qs = VehicleRecord.objects.select_related('report', 'report__section').all()
 
@@ -627,6 +699,7 @@ def records(request):
 
 # ─── Analytics ────────────────────────────────────────────────────────────────
 
+@role_required(GROUP_ANALYST)
 def analytics(request):
     from collections import defaultdict as _dd
 
@@ -768,6 +841,7 @@ def analytics(request):
 
 # ─── Analytics Compare ────────────────────────────────────────────────────────
 
+@role_required(GROUP_ANALYST)
 def analytics_compare(request):
     from collections import defaultdict as _dd
 
@@ -930,11 +1004,13 @@ def analytics_compare(request):
 
 # ─── Sections CRUD ────────────────────────────────────────────────────────────
 
+@staff_required
 def sections(request):
     all_sections = Section.objects.annotate(report_count=Count('report'))
     return render(request, 'analysis/sections.html', {'sections': all_sections})
 
 
+@staff_required
 def section_create(request):
     form = SectionForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
@@ -944,6 +1020,7 @@ def section_create(request):
     return render(request, 'analysis/section_form.html', {'form': form, 'title': 'Добавить участок'})
 
 
+@staff_required
 def section_edit(request, pk):
     section = get_object_or_404(Section, pk=pk)
     form = SectionForm(request.POST or None, instance=section)
@@ -954,6 +1031,7 @@ def section_edit(request, pk):
     return render(request, 'analysis/section_form.html', {'form': form, 'title': 'Изменить участок'})
 
 
+@staff_required
 def section_delete(request, pk):
     section = get_object_or_404(Section, pk=pk)
     if request.method == 'POST':
@@ -965,6 +1043,7 @@ def section_delete(request, pk):
 
 # ─── Export Excel ─────────────────────────────────────────────────────────────
 
+@staff_required
 def export_excel(request, pk):
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -991,6 +1070,7 @@ def export_excel(request, pk):
     return response
 
 
+@staff_required
 def export_records_excel(request):
     """Export filtered records — grouped by equipment type, shifts hierarchically."""
     import openpyxl
@@ -1624,14 +1704,22 @@ GROUP_ICONS = {
 }
 
 
+@role_required(GROUP_MONITOR)
 def monitoring_index(request):
     today = datetime.date.today()
+    user = request.user
+    user_section = None if user.is_staff else _get_user_section(user)
+    no_section_warning = not user.is_staff and user_section is None
+
     group_stats = []
     unfilled_groups = []
     for group_name in MONITORING_GROUP_LIST:
-        total = MonitoringVehicle.objects.filter(group=group_name, is_active=True).count()
+        base_qs = MonitoringVehicle.objects.filter(group=group_name, is_active=True)
+        if not user.is_staff:
+            base_qs = base_qs.filter(section=user_section) if user_section else base_qs.none()
+        total = base_qs.count()
         filled_today = MonitoringRecord.objects.filter(
-            vehicle__group=group_name, date=today
+            vehicle__in=base_qs, date=today
         ).count()
         group_stats.append({
             'name': group_name,
@@ -1650,18 +1738,26 @@ def monitoring_index(request):
         'group_stats': group_stats,
         'unfilled_groups': unfilled_groups,
         'today': today,
+        'no_section_warning': no_section_warning,
+        'user_section': user_section,
     })
 
 
+@role_required(GROUP_MONITOR)
 def monitoring_group(request, group):
     if group not in MONITORING_GROUP_LIST:
         return redirect('monitoring_index')
 
     today = datetime.date.today()
 
-    vehicles = MonitoringVehicle.objects.filter(
-        group=group, is_active=True
-    ).select_related('section').order_by('order', 'name')
+    user = request.user
+    user_section = None if user.is_staff else _get_user_section(user)
+    no_section_warning = not user.is_staff and user_section is None
+
+    vehicles_qs = MonitoringVehicle.objects.filter(group=group, is_active=True)
+    if not user.is_staff:
+        vehicles_qs = vehicles_qs.filter(section=user_section) if user_section else vehicles_qs.none()
+    vehicles = vehicles_qs.select_related('section').order_by('order', 'name')
 
     # Dates that already have records (for navigation)
     recorded_dates = list(
@@ -1701,11 +1797,12 @@ def monitoring_group(request, group):
     is_atz = group == 'АТЗ'
 
     first_record = next(iter(existing.values()), None)
-    prefill_author = first_record.author if first_record else ''
+    prefill_author = (first_record.author if first_record else '') or request.user.username
 
     context = {
         'group': group,
         'group_icon': GROUP_ICONS.get(group, 'bi-gear'),
+        'no_section_warning': no_section_warning,
         'vehicles': vehicles,
         'existing': existing,
         'selected_date': selected_date,
@@ -1720,6 +1817,7 @@ def monitoring_group(request, group):
     return render(request, 'analysis/monitoring/group.html', context)
 
 
+@role_required(GROUP_MONITOR)
 @require_POST
 def monitoring_save(request, group):
     if group not in MONITORING_GROUP_LIST:
@@ -1743,11 +1841,19 @@ def monitoring_save(request, group):
         messages.error(request, 'Нельзя создавать записи задним числом.')
         return redirect('monitoring_group', group=group)
 
-    author = request.POST.get('author', '').strip()
+    user = request.user
+    user_section = None if user.is_staff else _get_user_section(user)
+    if not user.is_staff and user_section is None:
+        messages.error(request, 'Вам не назначен участок. Обратитесь к администратору.')
+        return redirect('monitoring_group', group=group)
+
+    author = (request.POST.get('author', '').strip()) or request.user.username
     is_excavator = group == 'Экскаваторы'
     is_atz = group == 'АТЗ'
 
     vehicles = MonitoringVehicle.objects.filter(group=group, is_active=True)
+    if not user.is_staff and user_section is not None:
+        vehicles = vehicles.filter(section=user_section)
     saved_count = 0
 
     with transaction.atomic():
@@ -1803,6 +1909,7 @@ def monitoring_save(request, group):
     return redirect(f'{request.path_info.replace("save/", "")}?date={record_date.isoformat()}')
 
 
+@role_required(GROUP_MONITOR)
 def monitoring_analytics(request):
     metric = request.GET.get('metric', 'breakdown')
     date_from = request.GET.get('date_from', '')
@@ -1885,6 +1992,7 @@ def monitoring_analytics(request):
 
 # ─── Reference CRUD: MonitoringVehicle ───────────────────────────────────────
 
+@staff_required
 def monitoring_vehicles(request):
     vehicles = MonitoringVehicle.objects.select_related('section').order_by('group', 'order', 'name')
     sections = Section.objects.all()
@@ -1895,6 +2003,7 @@ def monitoring_vehicles(request):
     })
 
 
+@staff_required
 def monitoring_vehicle_create(request):
     sections = Section.objects.all()
     if request.method == 'POST':
@@ -1918,6 +2027,7 @@ def monitoring_vehicle_create(request):
     })
 
 
+@staff_required
 def monitoring_vehicle_edit(request, pk):
     v = get_object_or_404(MonitoringVehicle, pk=pk)
     sections = Section.objects.all()
@@ -1937,6 +2047,7 @@ def monitoring_vehicle_edit(request, pk):
     })
 
 
+@staff_required
 def monitoring_vehicle_delete(request, pk):
     v = get_object_or_404(MonitoringVehicle, pk=pk)
     if request.method == 'POST':
@@ -1949,11 +2060,13 @@ def monitoring_vehicle_delete(request, pk):
 
 # ─── Reference CRUD: BreakdownType ───────────────────────────────────────────
 
+@staff_required
 def monitoring_breakdowns(request):
     items = BreakdownType.objects.all()
     return render(request, 'analysis/monitoring/breakdowns.html', {'items': items})
 
 
+@staff_required
 def monitoring_breakdown_create(request):
     if request.method == 'POST':
         name = request.POST.get('name', '').strip()
@@ -1965,6 +2078,7 @@ def monitoring_breakdown_create(request):
     return render(request, 'analysis/monitoring/breakdown_form.html', {'obj': None})
 
 
+@staff_required
 def monitoring_breakdown_edit(request, pk):
     obj = get_object_or_404(BreakdownType, pk=pk)
     if request.method == 'POST':
@@ -1975,6 +2089,7 @@ def monitoring_breakdown_edit(request, pk):
     return render(request, 'analysis/monitoring/breakdown_form.html', {'obj': obj})
 
 
+@staff_required
 def monitoring_breakdown_delete(request, pk):
     obj = get_object_or_404(BreakdownType, pk=pk)
     if request.method == 'POST':
@@ -1986,11 +2101,13 @@ def monitoring_breakdown_delete(request, pk):
 
 # ─── Reference CRUD: FailureCause ────────────────────────────────────────────
 
+@staff_required
 def monitoring_failures(request):
     items = FailureCause.objects.all()
     return render(request, 'analysis/monitoring/failures.html', {'items': items})
 
 
+@staff_required
 def monitoring_failure_create(request):
     if request.method == 'POST':
         name = request.POST.get('name', '').strip()
@@ -2002,6 +2119,7 @@ def monitoring_failure_create(request):
     return render(request, 'analysis/monitoring/failure_form.html', {'obj': None})
 
 
+@staff_required
 def monitoring_failure_edit(request, pk):
     obj = get_object_or_404(FailureCause, pk=pk)
     if request.method == 'POST':
@@ -2012,6 +2130,7 @@ def monitoring_failure_edit(request, pk):
     return render(request, 'analysis/monitoring/failure_form.html', {'obj': obj})
 
 
+@staff_required
 def monitoring_failure_delete(request, pk):
     obj = get_object_or_404(FailureCause, pk=pk)
     if request.method == 'POST':
