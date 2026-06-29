@@ -158,6 +158,108 @@ class VehicleRecord(models.Model):
         return self.group == self.GROUP_DUMPTRUCK
 
 
+MONITORING_GROUPS = [
+    ('Самосвалы', 'Самосвалы'),
+    ('Экскаваторы', 'Экскаваторы'),
+    ('Бульдозеры', 'Бульдозеры'),
+    ('Погрузчики', 'Погрузчики'),
+    ('АТЗ', 'АТЗ'),
+    ('Вспомогательная техника', 'Вспомогательная техника'),
+]
+
+
+class BreakdownType(models.Model):
+    name = models.CharField(max_length=200, verbose_name='Вид поломки')
+
+    class Meta:
+        verbose_name = 'Вид поломки'
+        verbose_name_plural = 'Виды поломок'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class FailureCause(models.Model):
+    name = models.CharField(max_length=200, verbose_name='Причина неисправности')
+
+    class Meta:
+        verbose_name = 'Причина неисправности'
+        verbose_name_plural = 'Причины неисправности'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class MonitoringVehicle(models.Model):
+    name = models.CharField(max_length=200, verbose_name='Название техники')
+    group = models.CharField(max_length=100, choices=MONITORING_GROUPS, verbose_name='Группа')
+    section = models.ForeignKey(
+        Section, null=True, blank=True, on_delete=models.SET_NULL, verbose_name='Участок'
+    )
+    is_active = models.BooleanField(default=True, verbose_name='Активна')
+    order = models.PositiveIntegerField(default=0, verbose_name='Порядок')
+
+    class Meta:
+        verbose_name = 'Единица техники (мониторинг)'
+        verbose_name_plural = 'Техника (мониторинг)'
+        ordering = ['group', 'order', 'name']
+
+    def __str__(self):
+        return f'{self.name} ({self.group})'
+
+
+class MonitoringRecord(models.Model):
+    vehicle = models.ForeignKey(
+        MonitoringVehicle, on_delete=models.CASCADE,
+        related_name='records', verbose_name='Техника'
+    )
+    date = models.DateField(verbose_name='Дата')
+    author = models.CharField(max_length=200, blank=True, verbose_name='Автор')
+
+    sensor_rpm = models.BooleanField(default=True, verbose_name='Обороты двигателя')
+    sensor_dut = models.BooleanField(default=True, verbose_name='ДУТ')
+    sensor_gps = models.BooleanField(default=True, verbose_name='GPS')
+    sensor_gsm = models.BooleanField(default=True, verbose_name='Связь')
+
+    sensor_arrow = models.BooleanField(null=True, blank=True, verbose_name='Стрела')
+    sensor_cube_port = models.BooleanField(null=True, blank=True, verbose_name='Cube/port')
+    sensor_uss = models.BooleanField(null=True, blank=True, verbose_name='УСС')
+
+    breakdown_type = models.ForeignKey(
+        BreakdownType, null=True, blank=True, on_delete=models.SET_NULL,
+        verbose_name='Вид поломки'
+    )
+    failure_cause = models.ForeignKey(
+        FailureCause, null=True, blank=True, on_delete=models.SET_NULL,
+        verbose_name='Причина неисправности'
+    )
+    note = models.TextField(blank=True, verbose_name='Примечание')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Запись мониторинга'
+        verbose_name_plural = 'Записи мониторинга'
+        unique_together = ('vehicle', 'date')
+        ordering = ['-date', 'vehicle__order', 'vehicle__name']
+
+    def __str__(self):
+        return f'{self.vehicle.name} — {self.date}'
+
+    def has_fault(self):
+        sensors = [self.sensor_rpm, self.sensor_dut, self.sensor_gps, self.sensor_gsm]
+        if self.sensor_arrow is not None:
+            sensors.append(self.sensor_arrow)
+        if self.sensor_cube_port is not None:
+            sensors.append(self.sensor_cube_port)
+        if self.sensor_uss is not None:
+            sensors.append(self.sensor_uss)
+        return any(not s for s in sensors)
+
+
 class VehicleNorm(models.Model):
     report = models.ForeignKey(
         Report, on_delete=models.CASCADE,

@@ -1,0 +1,27 @@
+{% extends 'analysis/base.html' %}
+{% block title %}{% if obj %}Изменить{% else %}Добавить{% endif %} причину неисправности{% endblock %}
+{% block content %}
+<div class="mb-3">
+    <a href="{% url 'monitoring_failures' %}" class="text-muted text-decoration-none small">
+        <i class="bi bi-chevron-left"></i> Причины неисправности
+    </a>
+</div>
+<div class="card" style="max-width:420px">
+    <div class="card-header bg-white border-bottom">
+        <h5 class="mb-0 fw-bold">{% if obj %}Изменить причину{% else %}Добавить причину неисправности{% endif %}</h5>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            <div class="mb-4">
+                <label class="form-label fw-semibold">Название <span class="text-danger">*</span></label>
+                <input type="text" name="name" value="{{ obj.name|default:'' }}" class="form-control" required autofocus>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>{% if obj %}Сохранить{% else %}Добавить{% endif %}</button>
+                <a href="{% url 'monitoring_failures' %}" class="btn btn-outline-secondary">Отмена</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

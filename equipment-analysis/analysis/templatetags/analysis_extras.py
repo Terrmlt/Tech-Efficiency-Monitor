@@ -11,3 +11,8 @@ PALETTE = [
 def section_color(counter):
     idx = (int(counter) - 1) % len(PALETTE)
     return PALETTE[idx]
+
+
+@register.filter
+def get_item(dictionary, key):
+    return dictionary.get(key)

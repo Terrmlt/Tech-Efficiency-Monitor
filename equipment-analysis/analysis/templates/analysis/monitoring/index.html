@@ -1,0 +1,63 @@
+{% extends 'analysis/base.html' %}
+
+{% block title %}Мониторинг Омникомм{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0 fw-bold"><i class="bi bi-activity me-2 text-primary"></i>Мониторинг Омникомм</h4>
+    <div class="d-flex gap-2">
+        <a href="{% url 'monitoring_analytics' %}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-bar-chart me-1"></i>Аналитика
+        </a>
+        <div class="dropdown">
+            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                <i class="bi bi-gear me-1"></i>Справочники
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" href="{% url 'monitoring_vehicles' %}"><i class="bi bi-truck me-2"></i>Техника</a></li>
+                <li><a class="dropdown-item" href="{% url 'monitoring_breakdowns' %}"><i class="bi bi-exclamation-triangle me-2"></i>Виды поломок</a></li>
+                <li><a class="dropdown-item" href="{% url 'monitoring_failures' %}"><i class="bi bi-wrench me-2"></i>Причины неисправности</a></li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    {% for g in group_stats %}
+    <div class="col-12 col-sm-6 col-lg-4">
+        <a href="{% url 'monitoring_group' g.name %}" class="text-decoration-none">
+            <div class="card h-100 card-hover">
+                <div class="card-body d-flex align-items-center gap-3 py-4">
+                    <div class="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center" style="width:52px;height:52px;flex-shrink:0">
+                        <i class="bi {{ g.icon }} fs-4 text-primary"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="fw-bold fs-6">{{ g.name }}</div>
+                        <div class="text-muted small mt-1">
+                            <span class="me-3"><i class="bi bi-truck me-1"></i>{{ g.total }} ед.</span>
+                            {% if g.total > 0 %}
+                            <span>
+                                {% if g.filled_today == g.total %}
+                                <span class="text-success"><i class="bi bi-check-circle me-1"></i>Сегодня заполнено</span>
+                                {% elif g.filled_today > 0 %}
+                                <span class="text-warning"><i class="bi bi-dash-circle me-1"></i>{{ g.filled_today }}/{{ g.total }} сегодня</span>
+                                {% else %}
+                                <span class="text-danger"><i class="bi bi-x-circle me-1"></i>Не заполнено</span>
+                                {% endif %}
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <i class="bi bi-chevron-right text-muted"></i>
+                </div>
+            </div>
+        </a>
+    </div>
+    {% endfor %}
+</div>
+
+<style>
+.card-hover { transition: box-shadow .15s, transform .15s; cursor: pointer; }
+.card-hover:hover { box-shadow: 0 4px 16px rgba(0,0,0,.13) !important; transform: translateY(-2px); }
+</style>
+{% endblock %}

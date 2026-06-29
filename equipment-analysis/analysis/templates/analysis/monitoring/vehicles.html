@@ -1,0 +1,81 @@
+{% extends 'analysis/base.html' %}
+
+{% block title %}Техника — Мониторинг{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <a href="{% url 'monitoring_index' %}" class="text-muted text-decoration-none small">
+            <i class="bi bi-chevron-left"></i> Мониторинг
+        </a>
+        <h4 class="mb-0 fw-bold mt-1"><i class="bi bi-truck me-2"></i>Техника</h4>
+    </div>
+    <a href="{% url 'monitoring_vehicle_create' %}" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>Добавить технику
+    </a>
+</div>
+
+<div class="mb-3 d-flex gap-2 flex-wrap">
+    <a href="{% url 'monitoring_breakdowns' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-exclamation-triangle me-1"></i>Виды поломок
+    </a>
+    <a href="{% url 'monitoring_failures' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-wrench me-1"></i>Причины неисправности
+    </a>
+</div>
+
+{% if vehicles %}
+<div class="card">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th class="ps-4">Название</th>
+                    <th>Группа</th>
+                    <th>Участок</th>
+                    <th class="text-center">Порядок</th>
+                    <th class="text-center">Активна</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for v in vehicles %}
+                <tr>
+                    <td class="ps-4 fw-semibold">{{ v.name }}</td>
+                    <td><span class="badge bg-light text-dark">{{ v.group }}</span></td>
+                    <td class="text-muted">{{ v.section.name|default:"—" }}</td>
+                    <td class="text-center text-muted">{{ v.order }}</td>
+                    <td class="text-center">
+                        {% if v.is_active %}
+                        <i class="bi bi-check-circle-fill text-success"></i>
+                        {% else %}
+                        <i class="bi bi-x-circle text-muted"></i>
+                        {% endif %}
+                    </td>
+                    <td class="text-end pe-3">
+                        <a href="{% url 'monitoring_vehicle_edit' v.pk %}" class="btn btn-sm btn-outline-secondary me-1">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        <a href="{% url 'monitoring_vehicle_delete' v.pk %}" class="btn btn-sm btn-outline-danger">
+                            <i class="bi bi-trash"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-truck display-4 text-muted d-block mb-3"></i>
+        <h5 class="text-muted">Техника ещё не добавлена</h5>
+        <p class="text-muted">Добавьте единицы техники, чтобы начать заполнять мониторинг.</p>
+        <a href="{% url 'monitoring_vehicle_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>Добавить технику
+        </a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

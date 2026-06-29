@@ -1,0 +1,63 @@
+{% extends 'analysis/base.html' %}
+
+{% block title %}{% if obj %}Изменить технику{% else %}Добавить технику{% endif %} — Мониторинг{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{% url 'monitoring_vehicles' %}" class="text-muted text-decoration-none small">
+        <i class="bi bi-chevron-left"></i> Техника
+    </a>
+</div>
+<div class="card" style="max-width:520px">
+    <div class="card-header bg-white border-bottom">
+        <h5 class="mb-0 fw-bold">{% if obj %}Изменить технику{% else %}Добавить технику{% endif %}</h5>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Название <span class="text-danger">*</span></label>
+                <input type="text" name="name" value="{{ obj.name|default:'' }}"
+                       class="form-control" placeholder="Например: КАМАЗ 65115" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Группа <span class="text-danger">*</span></label>
+                <select name="group" class="form-select" required>
+                    <option value="">— выберите группу —</option>
+                    {% for g in group_list %}
+                    <option value="{{ g }}" {% if obj and obj.group == g %}selected{% endif %}>{{ g }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Участок</label>
+                <select name="section" class="form-select">
+                    <option value="">— не указан —</option>
+                    {% for s in sections %}
+                    <option value="{{ s.pk }}" {% if obj and obj.section_id == s.pk %}selected{% endif %}>{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Порядок отображения</label>
+                <input type="number" name="order" value="{{ obj.order|default:0 }}"
+                       class="form-control" style="max-width:120px" min="0">
+                <div class="form-text">Меньший номер — выше в списке.</div>
+            </div>
+            <div class="mb-4">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="is_active" value="1" id="chkActive"
+                           {% if not obj or obj.is_active %}checked{% endif %}>
+                    <label class="form-check-label" for="chkActive">Активна (отображается в мониторинге)</label>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg me-1"></i>{% if obj %}Сохранить{% else %}Добавить{% endif %}
+                </button>
+                <a href="{% url 'monitoring_vehicles' %}" class="btn btn-outline-secondary">Отмена</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

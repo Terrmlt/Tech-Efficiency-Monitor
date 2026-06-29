@@ -1,0 +1,231 @@
+{% extends 'analysis/base.html' %}
+
+{% block title %}Аналитика мониторинга{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0 fw-bold"><i class="bi bi-bar-chart me-2 text-primary"></i>Аналитика мониторинга</h4>
+    <a href="{% url 'monitoring_index' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>К группам
+    </a>
+</div>
+
+<!-- Фильтры -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold mb-1">Метрика</label>
+                <div class="d-flex gap-3 pt-1">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="metric" value="breakdown" id="m1"
+                               {% if metric == 'breakdown' %}checked{% endif %}>
+                        <label class="form-check-label small" for="m1">Вид поломки</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="metric" value="failure" id="m2"
+                               {% if metric == 'failure' %}checked{% endif %}>
+                        <label class="form-check-label small" for="m2">Причина неисправности</label>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold mb-1">Дата от</label>
+                <input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold mb-1">Дата до</label>
+                <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold mb-1">Группа техники</label>
+                <select name="group" class="form-select form-select-sm">
+                    <option value="">Все группы</option>
+                    {% for g in group_list %}
+                    <option value="{{ g }}" {% if group_filter == g %}selected{% endif %}>{{ g }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-sm btn-primary flex-grow-1">
+                    <i class="bi bi-funnel me-1"></i>Применить
+                </button>
+                <a href="{% url 'monitoring_analytics' %}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-x"></i>
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Итоговые карточки -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="stat-value text-primary">{{ total_records }}</div>
+                <div class="stat-label">Всего записей</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="stat-value text-danger">{{ total_faults }}</div>
+                <div class="stat-label">Записей с неисправностью</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="stat-value text-success">{{ total_records|add:"-"|add:total_faults }}</div>
+                <div class="stat-label">Без неисправностей</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="stat-value text-warning">{{ chart_data|length }}</div>
+                <div class="stat-label">Уникальных значений</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if chart_data %}
+<!-- Диаграмма -->
+<div class="card mb-4">
+    <div class="card-header bg-white border-bottom">
+        <span class="fw-semibold">
+            <i class="bi bi-bar-chart-fill me-2 text-primary"></i>
+            {% if metric == 'breakdown' %}Частота по виду поломки{% else %}Частота по причине неисправности{% endif %}
+        </span>
+    </div>
+    <div class="card-body">
+        <div style="position:relative;height:320px">
+            <canvas id="mainChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Таблица значений -->
+<div class="card mb-4">
+    <div class="card-header bg-white border-bottom">
+        <span class="fw-semibold">
+            <i class="bi bi-table me-2"></i>
+            {% if metric == 'breakdown' %}Виды поломок{% else %}Причины неисправности{% endif %} — сводка
+        </span>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th class="ps-4">{% if metric == 'breakdown' %}Вид поломки{% else %}Причина неисправности{% endif %}</th>
+                    <th class="text-end pe-4">Кол-во случаев</th>
+                    <th class="text-end pe-4">Доля</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for name, cnt in chart_data %}
+                <tr>
+                    <td class="ps-4">{{ name }}</td>
+                    <td class="text-end pe-4 fw-semibold">{{ cnt }}</td>
+                    <td class="text-end pe-4 text-muted">
+                        {% if total_faults > 0 %}{{ cnt|floatformat:0 }}{% endif %}
+                        {% if total_faults > 0 %}/{{ total_faults }}{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Сводка по группам -->
+{% if group_table %}
+<div class="card">
+    <div class="card-header bg-white border-bottom">
+        <span class="fw-semibold"><i class="bi bi-grid me-2"></i>По группам техники</span>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th class="ps-4">Группа</th>
+                    <th class="text-center">Всего записей</th>
+                    <th class="text-center">Исправно</th>
+                    <th class="text-center">С неисправностью</th>
+                    <th class="text-center">% неисправностей</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in group_table %}
+                <tr>
+                    <td class="ps-4 fw-semibold">{{ row.group }}</td>
+                    <td class="text-center">{{ row.total }}</td>
+                    <td class="text-center text-success fw-semibold">{{ row.ok }}</td>
+                    <td class="text-center text-danger fw-semibold">{{ row.faults }}</td>
+                    <td class="text-center">
+                        <span class="badge {% if row.fault_pct == 0 %}bg-success{% elif row.fault_pct < 20 %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                            {{ row.fault_pct }}%
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if not chart_data and not group_table %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-bar-chart display-4 text-muted d-block mb-3"></i>
+        <h5 class="text-muted">Нет данных для отображения</h5>
+        <p class="text-muted">Заполните данные мониторинга или измените фильтры.</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if chart_data %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    var labels = {{ chart_labels_json|safe }};
+    var values = {{ chart_values_json|safe }};
+    var PAL = ['#0d6efd','#dc3545','#198754','#fd7e14','#6f42c1','#0dcaf0','#ffc107','#20c997','#6c757d','#343a40'];
+    var colors = labels.map(function(_, i){ return PAL[i % PAL.length]; });
+    var colorsA = colors.map(function(c){ return c + '99'; });
+
+    new Chart(document.getElementById('mainChart'), {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: values,
+                backgroundColor: colorsA,
+                borderColor: colors,
+                borderWidth: 2,
+                borderRadius: 6,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, ticks: { stepSize: 1 } },
+                x: { ticks: { font: { size: 11 } } }
+            }
+        }
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

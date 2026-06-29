@@ -1601,3 +1601,392 @@ def _build_excel_workbook(report, all_records, summary):
         ws.column_dimensions[get_column_letter(i)].width = w
 
     return wb
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ─── Мониторинг Омникомм ──────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+
+from .models import (
+    BreakdownType, FailureCause, MonitoringVehicle, MonitoringRecord,
+    MONITORING_GROUPS,
+)
+
+MONITORING_GROUP_LIST = [g[0] for g in MONITORING_GROUPS]
+
+GROUP_ICONS = {
+    'Самосвалы': 'bi-truck',
+    'Экскаваторы': 'bi-tools',
+    'Бульдозеры': 'bi-joystick',
+    'Погрузчики': 'bi-box-seam',
+    'АТЗ': 'bi-fuel-pump',
+    'Вспомогательная техника': 'bi-wrench-adjustable',
+}
+
+
+def monitoring_index(request):
+    group_stats = []
+    for group_name in MONITORING_GROUP_LIST:
+        total = MonitoringVehicle.objects.filter(group=group_name, is_active=True).count()
+        today = datetime.date.today()
+        filled_today = MonitoringRecord.objects.filter(
+            vehicle__group=group_name, date=today
+        ).count()
+        group_stats.append({
+            'name': group_name,
+            'icon': GROUP_ICONS.get(group_name, 'bi-gear'),
+            'total': total,
+            'filled_today': filled_today,
+        })
+    return render(request, 'analysis/monitoring/index.html', {'group_stats': group_stats})
+
+
+def monitoring_group(request, group):
+    if group not in MONITORING_GROUP_LIST:
+        return redirect('monitoring_index')
+
+    today = datetime.date.today()
+
+    # Determine which date to show
+    date_str = request.GET.get('date', '')
+    selected_date = today
+    if date_str:
+        try:
+            selected_date = datetime.date.fromisoformat(date_str)
+        except ValueError:
+            selected_date = today
+
+    vehicles = MonitoringVehicle.objects.filter(
+        group=group, is_active=True
+    ).select_related('section').order_by('order', 'name')
+
+    # Load existing records for selected date
+    existing = {
+        r.vehicle_id: r
+        for r in MonitoringRecord.objects.filter(
+            vehicle__group=group, date=selected_date
+        ).select_related('breakdown_type', 'failure_cause')
+    }
+
+    # Dates that already have records (for navigation)
+    recorded_dates = list(
+        MonitoringRecord.objects.filter(vehicle__group=group)
+        .values_list('date', flat=True)
+        .distinct()
+        .order_by('-date')[:30]
+    )
+
+    breakdown_types = BreakdownType.objects.all()
+    failure_causes = FailureCause.objects.all()
+
+    is_excavator = group == 'Экскаваторы'
+    is_atz = group == 'АТЗ'
+
+    first_record = next(iter(existing.values()), None)
+    prefill_author = first_record.author if first_record else ''
+
+    context = {
+        'group': group,
+        'group_icon': GROUP_ICONS.get(group, 'bi-gear'),
+        'vehicles': vehicles,
+        'existing': existing,
+        'selected_date': selected_date,
+        'today': today,
+        'recorded_dates': recorded_dates,
+        'breakdown_types': breakdown_types,
+        'failure_causes': failure_causes,
+        'is_excavator': is_excavator,
+        'is_atz': is_atz,
+        'prefill_author': prefill_author,
+    }
+    return render(request, 'analysis/monitoring/group.html', context)
+
+
+@require_POST
+def monitoring_save(request, group):
+    if group not in MONITORING_GROUP_LIST:
+        return redirect('monitoring_index')
+
+    date_str = request.POST.get('date', '')
+    try:
+        record_date = datetime.date.fromisoformat(date_str)
+    except ValueError:
+        messages.error(request, 'Неверная дата.')
+        return redirect('monitoring_group', group=group)
+
+    author = request.POST.get('author', '').strip()
+    is_excavator = group == 'Экскаваторы'
+    is_atz = group == 'АТЗ'
+
+    vehicles = MonitoringVehicle.objects.filter(group=group, is_active=True)
+    saved_count = 0
+
+    with transaction.atomic():
+        for v in vehicles:
+            prefix = f'v_{v.pk}_'
+
+            def chk(field):
+                return request.POST.get(prefix + field) == '1'
+
+            sensor_rpm = chk('rpm')
+            sensor_dut = chk('dut')
+            sensor_gps = chk('gps')
+            sensor_gsm = chk('gsm')
+            sensor_arrow = chk('arrow') if is_excavator else None
+            sensor_cube_port = chk('cube_port') if is_atz else None
+            sensor_uss = chk('uss') if is_atz else None
+
+            bd_id = request.POST.get(prefix + 'breakdown_type') or None
+            fc_id = request.POST.get(prefix + 'failure_cause') or None
+            note = request.POST.get(prefix + 'note', '').strip()
+
+            # Check if any sensor is faulty
+            sensors = [sensor_rpm, sensor_dut, sensor_gps, sensor_gsm]
+            if is_excavator:
+                sensors.append(sensor_arrow)
+            if is_atz:
+                sensors += [sensor_cube_port, sensor_uss]
+            any_fault = any(s is False for s in sensors)
+            if not any_fault:
+                bd_id = None
+                fc_id = None
+
+            MonitoringRecord.objects.update_or_create(
+                vehicle=v,
+                date=record_date,
+                defaults={
+                    'author': author,
+                    'sensor_rpm': sensor_rpm,
+                    'sensor_dut': sensor_dut,
+                    'sensor_gps': sensor_gps,
+                    'sensor_gsm': sensor_gsm,
+                    'sensor_arrow': sensor_arrow,
+                    'sensor_cube_port': sensor_cube_port,
+                    'sensor_uss': sensor_uss,
+                    'breakdown_type_id': int(bd_id) if bd_id else None,
+                    'failure_cause_id': int(fc_id) if fc_id else None,
+                    'note': note,
+                }
+            )
+            saved_count += 1
+
+    messages.success(request, f'Сохранено записей: {saved_count} за {record_date.strftime("%d.%m.%Y")}.')
+    return redirect(f'{request.path_info.replace("save/", "")}?date={record_date.isoformat()}')
+
+
+def monitoring_analytics(request):
+    metric = request.GET.get('metric', 'breakdown')
+    date_from = request.GET.get('date_from', '')
+    date_to = request.GET.get('date_to', '')
+    group_filter = request.GET.get('group', '')
+
+    qs = MonitoringRecord.objects.select_related(
+        'vehicle', 'breakdown_type', 'failure_cause'
+    )
+
+    if date_from:
+        try:
+            qs = qs.filter(date__gte=datetime.date.fromisoformat(date_from))
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            qs = qs.filter(date__lte=datetime.date.fromisoformat(date_to))
+        except ValueError:
+            pass
+    if group_filter:
+        qs = qs.filter(vehicle__group=group_filter)
+
+    # Only records with at least one fault
+    fault_qs = [r for r in qs if r.has_fault()]
+
+    if metric == 'breakdown':
+        from collections import Counter
+        counts = Counter(
+            r.breakdown_type.name if r.breakdown_type else '(не указан)'
+            for r in fault_qs
+        )
+    else:
+        from collections import Counter
+        counts = Counter(
+            r.failure_cause.name if r.failure_cause else '(не указана)'
+            for r in fault_qs
+        )
+
+    chart_data = sorted(counts.items(), key=lambda x: -x[1])
+    chart_labels = [x[0] for x in chart_data]
+    chart_values = [x[1] for x in chart_data]
+
+    # Summary table by group
+    from collections import defaultdict
+    group_summary = defaultdict(lambda: {'total': 0, 'faults': 0})
+    for r in qs:
+        grp = r.vehicle.group
+        group_summary[grp]['total'] += 1
+        if r.has_fault():
+            group_summary[grp]['faults'] += 1
+
+    group_table = [
+        {
+            'group': grp,
+            'total': data['total'],
+            'faults': data['faults'],
+            'ok': data['total'] - data['faults'],
+            'fault_pct': round(data['faults'] / data['total'] * 100, 1) if data['total'] else 0,
+        }
+        for grp, data in sorted(group_summary.items())
+    ]
+
+    import json as _json
+    context = {
+        'metric': metric,
+        'date_from': date_from,
+        'date_to': date_to,
+        'group_filter': group_filter,
+        'group_list': MONITORING_GROUP_LIST,
+        'chart_labels_json': _json.dumps(chart_labels, ensure_ascii=False),
+        'chart_values_json': _json.dumps(chart_values),
+        'chart_data': chart_data,
+        'group_table': group_table,
+        'total_records': len(list(qs)),
+        'total_faults': len(fault_qs),
+    }
+    return render(request, 'analysis/monitoring/analytics.html', context)
+
+
+# ─── Reference CRUD: MonitoringVehicle ───────────────────────────────────────
+
+def monitoring_vehicles(request):
+    vehicles = MonitoringVehicle.objects.select_related('section').order_by('group', 'order', 'name')
+    sections = Section.objects.all()
+    return render(request, 'analysis/monitoring/vehicles.html', {
+        'vehicles': vehicles,
+        'sections': sections,
+        'group_list': MONITORING_GROUP_LIST,
+    })
+
+
+def monitoring_vehicle_create(request):
+    sections = Section.objects.all()
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        group = request.POST.get('group', '')
+        section_id = request.POST.get('section') or None
+        order = int(request.POST.get('order', 0) or 0)
+        is_active = request.POST.get('is_active') == '1'
+        if name and group in MONITORING_GROUP_LIST:
+            MonitoringVehicle.objects.create(
+                name=name, group=group,
+                section_id=section_id, order=order, is_active=is_active,
+            )
+            messages.success(request, f'Техника «{name}» добавлена.')
+            return redirect('monitoring_vehicles')
+        messages.error(request, 'Заполните название и выберите группу.')
+    return render(request, 'analysis/monitoring/vehicle_form.html', {
+        'sections': sections,
+        'group_list': MONITORING_GROUP_LIST,
+        'obj': None,
+    })
+
+
+def monitoring_vehicle_edit(request, pk):
+    v = get_object_or_404(MonitoringVehicle, pk=pk)
+    sections = Section.objects.all()
+    if request.method == 'POST':
+        v.name = request.POST.get('name', '').strip()
+        v.group = request.POST.get('group', v.group)
+        v.section_id = request.POST.get('section') or None
+        v.order = int(request.POST.get('order', 0) or 0)
+        v.is_active = request.POST.get('is_active') == '1'
+        v.save()
+        messages.success(request, f'Техника «{v.name}» обновлена.')
+        return redirect('monitoring_vehicles')
+    return render(request, 'analysis/monitoring/vehicle_form.html', {
+        'sections': sections,
+        'group_list': MONITORING_GROUP_LIST,
+        'obj': v,
+    })
+
+
+def monitoring_vehicle_delete(request, pk):
+    v = get_object_or_404(MonitoringVehicle, pk=pk)
+    if request.method == 'POST':
+        name = v.name
+        v.delete()
+        messages.success(request, f'Техника «{name}» удалена.')
+        return redirect('monitoring_vehicles')
+    return render(request, 'analysis/monitoring/vehicle_confirm_delete.html', {'obj': v})
+
+
+# ─── Reference CRUD: BreakdownType ───────────────────────────────────────────
+
+def monitoring_breakdowns(request):
+    items = BreakdownType.objects.all()
+    return render(request, 'analysis/monitoring/breakdowns.html', {'items': items})
+
+
+def monitoring_breakdown_create(request):
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        if name:
+            BreakdownType.objects.create(name=name)
+            messages.success(request, f'Вид поломки «{name}» добавлен.')
+            return redirect('monitoring_breakdowns')
+        messages.error(request, 'Введите название.')
+    return render(request, 'analysis/monitoring/breakdown_form.html', {'obj': None})
+
+
+def monitoring_breakdown_edit(request, pk):
+    obj = get_object_or_404(BreakdownType, pk=pk)
+    if request.method == 'POST':
+        obj.name = request.POST.get('name', '').strip()
+        obj.save()
+        messages.success(request, f'Обновлено: «{obj.name}».')
+        return redirect('monitoring_breakdowns')
+    return render(request, 'analysis/monitoring/breakdown_form.html', {'obj': obj})
+
+
+def monitoring_breakdown_delete(request, pk):
+    obj = get_object_or_404(BreakdownType, pk=pk)
+    if request.method == 'POST':
+        obj.delete()
+        messages.success(request, 'Вид поломки удалён.')
+        return redirect('monitoring_breakdowns')
+    return render(request, 'analysis/monitoring/breakdown_confirm_delete.html', {'obj': obj})
+
+
+# ─── Reference CRUD: FailureCause ────────────────────────────────────────────
+
+def monitoring_failures(request):
+    items = FailureCause.objects.all()
+    return render(request, 'analysis/monitoring/failures.html', {'items': items})
+
+
+def monitoring_failure_create(request):
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        if name:
+            FailureCause.objects.create(name=name)
+            messages.success(request, f'Причина «{name}» добавлена.')
+            return redirect('monitoring_failures')
+        messages.error(request, 'Введите название.')
+    return render(request, 'analysis/monitoring/failure_form.html', {'obj': None})
+
+
+def monitoring_failure_edit(request, pk):
+    obj = get_object_or_404(FailureCause, pk=pk)
+    if request.method == 'POST':
+        obj.name = request.POST.get('name', '').strip()
+        obj.save()
+        messages.success(request, f'Обновлено: «{obj.name}».')
+        return redirect('monitoring_failures')
+    return render(request, 'analysis/monitoring/failure_form.html', {'obj': obj})
+
+
+def monitoring_failure_delete(request, pk):
+    obj = get_object_or_404(FailureCause, pk=pk)
+    if request.method == 'POST':
+        obj.delete()
+        messages.success(request, 'Причина неисправности удалена.')
+        return redirect('monitoring_failures')
+    return render(request, 'analysis/monitoring/failure_confirm_delete.html', {'obj': obj})

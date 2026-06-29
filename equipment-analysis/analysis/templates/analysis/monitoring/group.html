@@ -1,0 +1,278 @@
+{% extends 'analysis/base.html' %}
+{% load analysis_extras %}
+
+{% block title %}{{ group }} — Мониторинг{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <a href="{% url 'monitoring_index' %}" class="text-muted text-decoration-none small">
+            <i class="bi bi-chevron-left"></i> Мониторинг
+        </a>
+        <h4 class="mb-0 fw-bold mt-1">
+            <i class="bi {{ group_icon }} me-2 text-primary"></i>{{ group }}
+        </h4>
+    </div>
+    <div class="d-flex gap-2 align-items-center">
+        <a href="{% url 'monitoring_analytics' %}?group={{ group }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-bar-chart me-1"></i>Аналитика группы
+        </a>
+    </div>
+</div>
+
+{% if not vehicles %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-truck display-4 text-muted d-block mb-3"></i>
+        <h5 class="text-muted">В группе нет активной техники</h5>
+        <p class="text-muted">Добавьте технику в справочнике, чтобы начать заполнять мониторинг.</p>
+        <a href="{% url 'monitoring_vehicle_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>Добавить технику
+        </a>
+    </div>
+</div>
+{% else %}
+
+<!-- Date selector bar -->
+<div class="card mb-3">
+    <div class="card-body py-2 px-3 d-flex align-items-center flex-wrap gap-3">
+        <div class="d-flex align-items-center gap-2">
+            <label class="form-label mb-0 fw-semibold small text-nowrap">Дата заполнения:</label>
+            <input type="date" id="datePicker" value="{{ selected_date|date:'Y-m-d' }}"
+                   max="{{ today|date:'Y-m-d' }}"
+                   class="form-control form-control-sm" style="width:160px"
+                   onchange="goToDate(this.value)">
+        </div>
+        {% if selected_date == today %}
+        <span class="badge bg-success"><i class="bi bi-calendar-check me-1"></i>Сегодня</span>
+        {% else %}
+        <span class="badge bg-secondary"><i class="bi bi-calendar-event me-1"></i>{{ selected_date|date:'d.m.Y' }}</span>
+        <a href="?date={{ today|date:'Y-m-d' }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-calendar-day me-1"></i>Сегодня
+        </a>
+        {% endif %}
+        {% if recorded_dates %}
+        <div class="ms-auto">
+            <select class="form-select form-select-sm" style="width:auto" onchange="goToDate(this.value)">
+                <option value="">— история записей —</option>
+                {% for d in recorded_dates %}
+                <option value="{{ d|date:'Y-m-d' }}" {% if d == selected_date %}selected{% endif %}>
+                    {{ d|date:'d.m.Y' }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<form method="post" action="{% url 'monitoring_save' group %}">
+    {% csrf_token %}
+    <input type="hidden" name="date" value="{{ selected_date|date:'Y-m-d' }}">
+
+    <!-- Author row -->
+    <div class="card mb-3">
+        <div class="card-body py-2 px-3 d-flex align-items-center gap-3">
+            <label class="form-label mb-0 fw-semibold small text-nowrap">
+                <i class="bi bi-person me-1"></i>Автор записи:
+            </label>
+            <input type="text" name="author"
+                   value="{{ prefill_author }}"
+                   class="form-control form-control-sm" style="max-width:260px"
+                   placeholder="Введите имя">
+        </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="d-flex gap-3 mb-2 small align-items-center">
+        <span class="fw-semibold text-muted">Датчик:</span>
+        <span><span class="badge bg-success"><i class="bi bi-check-lg"></i></span> — работает</span>
+        <span><span class="badge bg-danger"><i class="bi bi-x-lg"></i></span> — неисправен</span>
+        <span class="text-muted ms-2"><i class="bi bi-info-circle me-1"></i>Нажмите на бейдж чтобы переключить</span>
+    </div>
+
+    <!-- Main table (horizontal scroll on small screens) -->
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" id="monitoringTable">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3" style="min-width:180px">Техника</th>
+                        {% if is_excavator %}<th class="text-center" style="min-width:80px">Стрела</th>{% endif %}
+                        {% if is_atz %}
+                        <th class="text-center" style="min-width:90px">Cube/port</th>
+                        <th class="text-center" style="min-width:80px">УСС</th>
+                        {% endif %}
+                        <th class="text-center" style="min-width:90px">Обороты двиг.</th>
+                        <th class="text-center" style="min-width:70px">ДУТ</th>
+                        <th class="text-center" style="min-width:70px">GPS</th>
+                        <th class="text-center" style="min-width:70px">Связь</th>
+                        <th style="min-width:160px">Вид поломки</th>
+                        <th style="min-width:160px">Причина неисправн.</th>
+                        <th style="min-width:180px">Примечание</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for v in vehicles %}
+                    {% with r=existing|get_item:v.pk %}
+                    <tr class="vehicle-row" data-vid="{{ v.pk }}">
+                        <td class="ps-3">
+                            <div class="fw-semibold">{{ v.name }}</div>
+                            {% if v.section %}<div class="text-muted" style="font-size:.78rem">{{ v.section.name }}</div>{% endif %}
+                        </td>
+
+                        {% if is_excavator %}
+                        <td class="text-center">
+                            <input type="hidden" name="v_{{ v.pk }}_arrow" class="sensor-hidden" value="{{ r.sensor_arrow|yesno:'1,0,1' }}">
+                            <span class="sensor-badge {% if r.sensor_arrow is None or r.sensor_arrow %}badge bg-success{% else %}badge bg-danger{% endif %}"
+                                  onclick="toggleSensor(this)" title="Нажмите для переключения">
+                                {% if r.sensor_arrow is None or r.sensor_arrow %}<i class="bi bi-check-lg"></i>{% else %}<i class="bi bi-x-lg"></i>{% endif %}
+                            </span>
+                        </td>
+                        {% endif %}
+
+                        {% if is_atz %}
+                        <td class="text-center">
+                            <input type="hidden" name="v_{{ v.pk }}_cube_port" class="sensor-hidden" value="{{ r.sensor_cube_port|yesno:'1,0,1' }}">
+                            <span class="sensor-badge {% if r.sensor_cube_port is None or r.sensor_cube_port %}badge bg-success{% else %}badge bg-danger{% endif %}"
+                                  onclick="toggleSensor(this)" title="Нажмите для переключения">
+                                {% if r.sensor_cube_port is None or r.sensor_cube_port %}<i class="bi bi-check-lg"></i>{% else %}<i class="bi bi-x-lg"></i>{% endif %}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            <input type="hidden" name="v_{{ v.pk }}_uss" class="sensor-hidden" value="{{ r.sensor_uss|yesno:'1,0,1' }}">
+                            <span class="sensor-badge {% if r.sensor_uss is None or r.sensor_uss %}badge bg-success{% else %}badge bg-danger{% endif %}"
+                                  onclick="toggleSensor(this)" title="Нажмите для переключения">
+                                {% if r.sensor_uss is None or r.sensor_uss %}<i class="bi bi-check-lg"></i>{% else %}<i class="bi bi-x-lg"></i>{% endif %}
+                            </span>
+                        </td>
+                        {% endif %}
+
+                        <td class="text-center">
+                            <input type="hidden" name="v_{{ v.pk }}_rpm" class="sensor-hidden" value="{{ r.sensor_rpm|yesno:'1,0,1' }}">
+                            <span class="sensor-badge {% if r.sensor_rpm is None or r.sensor_rpm %}badge bg-success{% else %}badge bg-danger{% endif %}"
+                                  onclick="toggleSensor(this)" title="Нажмите для переключения">
+                                {% if r.sensor_rpm is None or r.sensor_rpm %}<i class="bi bi-check-lg"></i>{% else %}<i class="bi bi-x-lg"></i>{% endif %}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            <input type="hidden" name="v_{{ v.pk }}_dut" class="sensor-hidden" value="{{ r.sensor_dut|yesno:'1,0,1' }}">
+                            <span class="sensor-badge {% if r.sensor_dut is None or r.sensor_dut %}badge bg-success{% else %}badge bg-danger{% endif %}"
+                                  onclick="toggleSensor(this)" title="Нажмите для переключения">
+                                {% if r.sensor_dut is None or r.sensor_dut %}<i class="bi bi-check-lg"></i>{% else %}<i class="bi bi-x-lg"></i>{% endif %}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            <input type="hidden" name="v_{{ v.pk }}_gps" class="sensor-hidden" value="{{ r.sensor_gps|yesno:'1,0,1' }}">
+                            <span class="sensor-badge {% if r.sensor_gps is None or r.sensor_gps %}badge bg-success{% else %}badge bg-danger{% endif %}"
+                                  onclick="toggleSensor(this)" title="Нажмите для переключения">
+                                {% if r.sensor_gps is None or r.sensor_gps %}<i class="bi bi-check-lg"></i>{% else %}<i class="bi bi-x-lg"></i>{% endif %}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            <input type="hidden" name="v_{{ v.pk }}_gsm" class="sensor-hidden" value="{{ r.sensor_gsm|yesno:'1,0,1' }}">
+                            <span class="sensor-badge {% if r.sensor_gsm is None or r.sensor_gsm %}badge bg-success{% else %}badge bg-danger{% endif %}"
+                                  onclick="toggleSensor(this)" title="Нажмите для переключения">
+                                {% if r.sensor_gsm is None or r.sensor_gsm %}<i class="bi bi-check-lg"></i>{% else %}<i class="bi bi-x-lg"></i>{% endif %}
+                            </span>
+                        </td>
+
+                        <td>
+                            <select name="v_{{ v.pk }}_breakdown_type" class="form-select form-select-sm fault-select">
+                                <option value="">— не указан —</option>
+                                {% for bt in breakdown_types %}
+                                <option value="{{ bt.pk }}" {% if r and r.breakdown_type_id == bt.pk %}selected{% endif %}>{{ bt.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                        <td>
+                            <select name="v_{{ v.pk }}_failure_cause" class="form-select form-select-sm fault-select">
+                                <option value="">— не указана —</option>
+                                {% for fc in failure_causes %}
+                                <option value="{{ fc.pk }}" {% if r and r.failure_cause_id == fc.pk %}selected{% endif %}>{{ fc.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                        <td>
+                            <input type="text" name="v_{{ v.pk }}_note"
+                                   value="{{ r.note|default:'' }}"
+                                   class="form-control form-control-sm"
+                                   placeholder="Примечание">
+                        </td>
+                    </tr>
+                    {% endwith %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Save button -->
+    <div class="d-flex justify-content-between align-items-center mt-3">
+        <div class="text-muted small">
+            <i class="bi bi-info-circle me-1"></i>
+            Данные за <strong>{{ selected_date|date:'d.m.Y' }}</strong> — {{ vehicles|length }} ед. техники
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'monitoring_index' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-grid me-1"></i>К группам
+            </a>
+            <button type="submit" class="btn btn-primary px-4">
+                <i class="bi bi-floppy me-1"></i>Сохранить
+            </button>
+        </div>
+    </div>
+</form>
+{% endif %}
+
+<style>
+.sensor-badge {
+    cursor: pointer;
+    font-size: .85rem;
+    padding: 4px 10px;
+    border-radius: 6px;
+    user-select: none;
+    transition: opacity .15s;
+}
+.sensor-badge:hover { opacity: .8; }
+.fault-select { min-width: 140px; }
+.fault-select:disabled { background: #f8f9fa; opacity: .7; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function goToDate(val) {
+    if (val) window.location.href = '?date=' + val;
+}
+
+function toggleSensor(badge) {
+    var isOk = badge.classList.contains('bg-success');
+    badge.classList.toggle('bg-success', !isOk);
+    badge.classList.toggle('bg-danger', isOk);
+    badge.innerHTML = isOk ? '<i class="bi bi-x-lg"></i>' : '<i class="bi bi-check-lg"></i>';
+    // Update hidden input
+    var hidden = badge.previousElementSibling;
+    hidden.value = isOk ? '0' : '1';
+    // Update fault selects for this row
+    updateFaultSelects(badge.closest('tr'));
+}
+
+function updateFaultSelects(row) {
+    var hiddens = row.querySelectorAll('.sensor-hidden');
+    var anyFault = false;
+    hiddens.forEach(function(h) { if (h.value === '0') anyFault = true; });
+    row.querySelectorAll('.fault-select').forEach(function(sel) {
+        sel.disabled = !anyFault;
+        if (!anyFault) sel.value = '';
+    });
+}
+
+// Init: apply disabled state based on current sensor values
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.vehicle-row').forEach(function(row) {
+        updateFaultSelects(row);
+    });
+});
+</script>
+{% endblock %}

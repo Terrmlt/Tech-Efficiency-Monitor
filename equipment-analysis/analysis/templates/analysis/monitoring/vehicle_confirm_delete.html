@@ -1,0 +1,16 @@
+{% extends 'analysis/base.html' %}
+{% block title %}Удалить технику — Мониторинг{% endblock %}
+{% block content %}
+<div class="card" style="max-width:480px">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-exclamation-triangle-fill display-4 text-danger mb-3 d-block"></i>
+        <h5 class="fw-bold">Удалить «{{ obj.name }}»?</h5>
+        <p class="text-muted">Все записи мониторинга по этой технике также будут удалены. Это действие необратимо.</p>
+        <form method="post" class="d-flex gap-2 justify-content-center mt-4">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>Удалить</button>
+            <a href="{% url 'monitoring_vehicles' %}" class="btn btn-outline-secondary">Отмена</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

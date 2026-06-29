@@ -17,4 +17,28 @@ urlpatterns = [
     path('sections/new/', views.section_create, name='section_create'),
     path('sections/<int:pk>/edit/', views.section_edit, name='section_edit'),
     path('sections/<int:pk>/delete/', views.section_delete, name='section_delete'),
+
+    # ── Мониторинг Омникомм ──────────────────────────────────────────────────
+    path('monitoring/', views.monitoring_index, name='monitoring_index'),
+    path('monitoring/group/<str:group>/', views.monitoring_group, name='monitoring_group'),
+    path('monitoring/group/<str:group>/save/', views.monitoring_save, name='monitoring_save'),
+    path('monitoring/analytics/', views.monitoring_analytics, name='monitoring_analytics'),
+
+    # Reference: vehicles
+    path('monitoring/vehicles/', views.monitoring_vehicles, name='monitoring_vehicles'),
+    path('monitoring/vehicles/new/', views.monitoring_vehicle_create, name='monitoring_vehicle_create'),
+    path('monitoring/vehicles/<int:pk>/edit/', views.monitoring_vehicle_edit, name='monitoring_vehicle_edit'),
+    path('monitoring/vehicles/<int:pk>/delete/', views.monitoring_vehicle_delete, name='monitoring_vehicle_delete'),
+
+    # Reference: breakdown types
+    path('monitoring/breakdowns/', views.monitoring_breakdowns, name='monitoring_breakdowns'),
+    path('monitoring/breakdowns/new/', views.monitoring_breakdown_create, name='monitoring_breakdown_create'),
+    path('monitoring/breakdowns/<int:pk>/edit/', views.monitoring_breakdown_edit, name='monitoring_breakdown_edit'),
+    path('monitoring/breakdowns/<int:pk>/delete/', views.monitoring_breakdown_delete, name='monitoring_breakdown_delete'),
+
+    # Reference: failure causes
+    path('monitoring/failures/', views.monitoring_failures, name='monitoring_failures'),
+    path('monitoring/failures/new/', views.monitoring_failure_create, name='monitoring_failure_create'),
+    path('monitoring/failures/<int:pk>/edit/', views.monitoring_failure_edit, name='monitoring_failure_edit'),
+    path('monitoring/failures/<int:pk>/delete/', views.monitoring_failure_delete, name='monitoring_failure_delete'),
 ]
