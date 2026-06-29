@@ -872,6 +872,32 @@ def analytics(request):
             'avg_type_eff': round(sum(te_vals) / len(te_vals), 1) if te_vals else None,
         })
 
+    # ── per-vehicle stats ────────────────────────────────────────────────────────
+    vehicle_name_group = {}
+    vehicle_recs_map = _dd(list)
+    for rec in rec_list:
+        vehicle_recs_map[rec.name].append(rec)
+        if rec.name not in vehicle_name_group:
+            vehicle_name_group[rec.name] = rec.group
+
+    vehicle_stats = []
+    for vname in sorted(vehicle_recs_map.keys(), key=lambda n: (vehicle_name_group[n], n)):
+        vrecs = vehicle_recs_map[vname]
+        vfuel  = sum(r.fuel_actual for r in vrecs if r.fuel_actual and r.fuel_actual > 0)
+        vhours = sum(r.engine_time_sec for r in vrecs) / 3600
+        vfe = [r.fuel_efficiency * 100 for r in vrecs if r.fuel_efficiency is not None]
+        vou = [r.equipment_output * 100 for r in vrecs if r.equipment_output is not None]
+        vte = [r.type_efficiency  * 100 for r in vrecs if r.type_efficiency  is not None]
+        vehicle_stats.append({
+            'name':         vname,
+            'group':        vehicle_name_group[vname],
+            'total_hours':  round(vhours, 1),
+            'total_fuel':   round(vfuel, 1),
+            'avg_fuel_eff': round(sum(vfe) / len(vfe), 1) if vfe else None,
+            'avg_output':   round(sum(vou) / len(vou), 1) if vou else None,
+            'avg_type_eff': round(sum(vte) / len(vte), 1) if vte else None,
+        })
+
     # ── totals ───────────────────────────────────────────────────────────────────
     total_count = len(rec_list)
     total_fuel  = sum(r.fuel_actual for r in rec_list if r.fuel_actual and r.fuel_actual > 0)
@@ -897,6 +923,7 @@ def analytics(request):
         'group_filters':       group_filters,
         'shift_compare_groups': shift_compare_groups,
         'has_shift_compare':   bool(shift_compare_groups) and not shift_filter,
+        'vehicle_stats':       vehicle_stats,
     }
     return render(request, 'analysis/analytics.html', context)
 

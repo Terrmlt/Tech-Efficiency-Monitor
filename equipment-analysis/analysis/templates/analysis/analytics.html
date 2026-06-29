@@ -291,6 +291,59 @@
 </div>
 {% endif %}
 
+{% if vehicle_stats %}
+<!-- ══ ДЕТАЛЬНАЯ ТАБЛИЦА ПО ЕДИНИЦАМ ТЕХНИКИ ══ -->
+<h5 class="fw-bold mb-3 mt-2">По единицам техники</h5>
+<div class="card mb-4">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">Единица техники</th>
+                        <th class="text-end">Часов работы</th>
+                        <th class="text-end">Расход топлива, л</th>
+                        <th class="text-center">Расход к норме, %</th>
+                        <th class="text-center">Выход техники, %</th>
+                        <th class="text-center">Эффективность, %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% regroup vehicle_stats by group as vstat_groups %}
+                {% for vg in vstat_groups %}
+                    <tr class="table-secondary">
+                        <td colspan="6" class="ps-3 fw-semibold small text-muted">{{ vg.grouper }}</td>
+                    </tr>
+                    {% for v in vg.list %}
+                    <tr>
+                        <td class="ps-4 small">{{ v.name }}</td>
+                        <td class="text-end small">{{ v.total_hours }} ч</td>
+                        <td class="text-end small">{{ v.total_fuel }} л</td>
+                        <td class="text-center small">
+                            {% if v.avg_fuel_eff is not None %}
+                            <span class="{% if v.avg_fuel_eff <= 100 %}efficiency-good{% elif v.avg_fuel_eff <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ v.avg_fuel_eff }}%</span>
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-center small">
+                            {% if v.avg_output is not None %}
+                            <span class="{% if v.avg_output >= 80 %}output-good{% else %}output-bad{% endif %}">{{ v.avg_output }}%</span>
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-center small">
+                            {% if v.avg_type_eff is not None %}
+                            <span class="{% if v.avg_type_eff <= 100 %}efficiency-good{% elif v.avg_type_eff <= 130 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ v.avg_type_eff }}%</span>
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {% if not has_trend %}
 <div class="card">
     <div class="card-body text-center py-5">
