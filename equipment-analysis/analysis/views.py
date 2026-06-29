@@ -1625,10 +1625,11 @@ GROUP_ICONS = {
 
 
 def monitoring_index(request):
+    today = datetime.date.today()
     group_stats = []
+    unfilled_groups = []
     for group_name in MONITORING_GROUP_LIST:
         total = MonitoringVehicle.objects.filter(group=group_name, is_active=True).count()
-        today = datetime.date.today()
         filled_today = MonitoringRecord.objects.filter(
             vehicle__group=group_name, date=today
         ).count()
@@ -1638,7 +1639,18 @@ def monitoring_index(request):
             'total': total,
             'filled_today': filled_today,
         })
-    return render(request, 'analysis/monitoring/index.html', {'group_stats': group_stats})
+        if total > 0 and filled_today < total:
+            unfilled_groups.append({
+                'name': group_name,
+                'filled_today': filled_today,
+                'total': total,
+                'partial': filled_today > 0,
+            })
+    return render(request, 'analysis/monitoring/index.html', {
+        'group_stats': group_stats,
+        'unfilled_groups': unfilled_groups,
+        'today': today,
+    })
 
 
 def monitoring_group(request, group):
