@@ -805,6 +805,7 @@ def analytics(request):
     # ── by shift daily + group comparison (only when no shift filter active) ─────
     by_shift = None
     shift_compare_groups = {}
+    shift_compare_vehicles_list = []
     if not shift_filter:
         shift1_daily = _dd(list)
         shift2_daily = _dd(list)
@@ -830,9 +831,13 @@ def analytics(request):
 
         # per-group shift averages for comparison table
         group_shift_recs = _dd(lambda: {1: [], 2: []})
+        vehicle_shift_recs = _dd(lambda: {'group': None, 1: [], 2: []})
         for rec in rec_list:
             if rec.shift in (1, 2):
                 group_shift_recs[rec.group][rec.shift].append(rec)
+                vehicle_shift_recs[rec.name][rec.shift].append(rec)
+                if vehicle_shift_recs[rec.name]['group'] is None:
+                    vehicle_shift_recs[rec.name]['group'] = rec.group
         for grp in sorted(group_shift_recs.keys()):
             sr = group_shift_recs[grp]
             s1fe, s1ou, s1te = _avg(sr[1]) if sr[1] else (None, None, None)
@@ -841,6 +846,20 @@ def analytics(request):
                 's1': {'fuel_eff': s1fe, 'output': s1ou, 'type_eff': s1te},
                 's2': {'fuel_eff': s2fe, 'output': s2ou, 'type_eff': s2te},
             }
+
+        # per-vehicle shift averages for comparison table
+        shift_compare_vehicles_list = []
+        for vname in sorted(vehicle_shift_recs.keys(),
+                            key=lambda n: (vehicle_shift_recs[n]['group'] or '', n)):
+            vr = vehicle_shift_recs[vname]
+            s1fe, s1ou, s1te = _avg(vr[1]) if vr[1] else (None, None, None)
+            s2fe, s2ou, s2te = _avg(vr[2]) if vr[2] else (None, None, None)
+            shift_compare_vehicles_list.append({
+                'name':  vname,
+                'group': vr['group'] or '',
+                's1': {'fuel_eff': s1fe, 'output': s1ou, 'type_eff': s1te},
+                's2': {'fuel_eff': s2fe, 'output': s2ou, 'type_eff': s2te},
+            })
 
     trend_json = json.dumps({
         'dates':      all_dates,
@@ -921,9 +940,11 @@ def analytics(request):
         'date_to':             date_to,
         'section_id':          section_id,
         'group_filters':       group_filters,
-        'shift_compare_groups': shift_compare_groups,
-        'has_shift_compare':   bool(shift_compare_groups) and not shift_filter,
-        'vehicle_stats':       vehicle_stats,
+        'shift_compare_groups':        shift_compare_groups,
+        'has_shift_compare':           bool(shift_compare_groups) and not shift_filter,
+        'shift_compare_vehicles':      shift_compare_vehicles_list,
+        'has_shift_compare_vehicles':  bool(shift_compare_vehicles_list) and not shift_filter,
+        'vehicle_stats':               vehicle_stats,
     }
     return render(request, 'analysis/analytics.html', context)
 

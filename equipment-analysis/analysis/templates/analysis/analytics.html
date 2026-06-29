@@ -242,6 +242,70 @@
 </div>
 {% endif %}
 
+{% if has_shift_compare_vehicles %}
+<!-- ══ СРАВНЕНИЕ СМЕН ПО ЕДИНИЦАМ ══ -->
+<div class="card mb-4">
+    <div class="card-header bg-white border-bottom">
+        <span class="fw-semibold"><i class="bi bi-intersect me-2 text-warning"></i>Сравнение смен — по единицам техники</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3" rowspan="2">Единица техники</th>
+                        <th class="text-center" colspan="2">Выход техники, %</th>
+                        <th class="text-center" colspan="2">Расход к норме, %</th>
+                        <th class="text-center" colspan="2">Эффективность, %</th>
+                    </tr>
+                    <tr class="table-secondary small">
+                        <th class="text-center text-primary fw-semibold">Смена 1</th>
+                        <th class="text-center text-success fw-semibold">Смена 2</th>
+                        <th class="text-center text-primary fw-semibold">Смена 1</th>
+                        <th class="text-center text-success fw-semibold">Смена 2</th>
+                        <th class="text-center text-primary fw-semibold">Смена 1</th>
+                        <th class="text-center text-success fw-semibold">Смена 2</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% regroup shift_compare_vehicles by group as scv_groups %}
+                {% for vg in scv_groups %}
+                    <tr class="table-secondary">
+                        <td colspan="7" class="ps-3 fw-semibold small text-muted">{{ vg.grouper }}</td>
+                    </tr>
+                    {% for v in vg.list %}
+                    <tr>
+                        <td class="ps-4 small">{{ v.name }}</td>
+                        {% with s1=v.s1 s2=v.s2 %}
+                        <td class="text-center small">
+                            {% if s1.output is not None %}<span class="{% if s1.output >= 80 %}output-good{% else %}output-bad{% endif %}">{{ s1.output }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-center small">
+                            {% if s2.output is not None %}<span class="{% if s2.output >= 80 %}output-good{% else %}output-bad{% endif %}">{{ s2.output }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-center small">
+                            {% if s1.fuel_eff is not None %}<span class="{% if s1.fuel_eff <= 100 %}efficiency-good{% elif s1.fuel_eff <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s1.fuel_eff }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-center small">
+                            {% if s2.fuel_eff is not None %}<span class="{% if s2.fuel_eff <= 100 %}efficiency-good{% elif s2.fuel_eff <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s2.fuel_eff }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-center small">
+                            {% if s1.type_eff is not None %}<span class="{% if s1.type_eff <= 100 %}efficiency-good{% elif s1.type_eff <= 130 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s1.type_eff }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-center small">
+                            {% if s2.type_eff is not None %}<span class="{% if s2.type_eff <= 100 %}efficiency-good{% elif s2.type_eff <= 130 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s2.type_eff }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        {% endwith %}
+                    </tr>
+                    {% endfor %}
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {% if group_stats %}
 <!-- Сводные карточки по группам -->
 <h5 class="fw-bold mb-3 mt-2">По группам техники</h5>
