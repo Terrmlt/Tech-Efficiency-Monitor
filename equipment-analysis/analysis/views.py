@@ -2000,16 +2000,27 @@ def monitoring_save(request, group):
 
 @role_required(GROUP_MONITOR)
 def monitoring_analytics(request):
+    import json as _json
+    from collections import Counter, defaultdict
+
     metric = request.GET.get('metric', 'breakdown')
     date_from = request.GET.get('date_from', '')
     date_to = request.GET.get('date_to', '')
     group_filter = request.GET.get('group', '')
 
+    # Checkbox filters
+    selected_breakdown_ids = [
+        int(x) for x in request.GET.getlist('breakdown_ids') if x.isdigit()
+    ]
+    selected_failure_ids = [
+        int(x) for x in request.GET.getlist('failure_ids') if x.isdigit()
+    ]
+
     user = request.user
     user_section = None if user.is_staff else _get_user_section(user)
 
     qs = MonitoringRecord.objects.select_related(
-        'vehicle', 'breakdown_type', 'failure_cause'
+        'vehicle', 'vehicle__section', 'breakdown_type', 'failure_cause'
     )
     if not user.is_staff:
         if user_section is not None:
@@ -2030,59 +2041,98 @@ def monitoring_analytics(request):
     if group_filter:
         qs = qs.filter(vehicle__group=group_filter)
 
-    # Only records with at least one fault
-    fault_qs = [r for r in qs if r.has_fault()]
+    # Evaluate once — reuse for group/vehicle summaries
+    all_records = list(qs)
+
+    # All fault records (no checkbox filter) — for group/vehicle table
+    all_fault_records = [r for r in all_records if r.has_fault()]
+
+    # Fault records filtered by checkbox selection — for chart/metric table
+    chart_fault_records = all_fault_records
+    if metric == 'breakdown' and selected_breakdown_ids:
+        chart_fault_records = [
+            r for r in all_fault_records
+            if r.breakdown_type_id in selected_breakdown_ids
+        ]
+    elif metric == 'failure' and selected_failure_ids:
+        chart_fault_records = [
+            r for r in all_fault_records
+            if r.failure_cause_id in selected_failure_ids
+        ]
 
     if metric == 'breakdown':
-        from collections import Counter
         counts = Counter(
             r.breakdown_type.name if r.breakdown_type else '(не указан)'
-            for r in fault_qs
+            for r in chart_fault_records
         )
     else:
-        from collections import Counter
         counts = Counter(
             r.failure_cause.name if r.failure_cause else '(не указана)'
-            for r in fault_qs
+            for r in chart_fault_records
         )
 
     chart_data = sorted(counts.items(), key=lambda x: -x[1])
     chart_labels = [x[0] for x in chart_data]
     chart_values = [x[1] for x in chart_data]
 
-    # Summary table by group
-    from collections import defaultdict
+    # Group + per-vehicle summary
     group_summary = defaultdict(lambda: {'total': 0, 'faults': 0})
-    for r in qs:
+    vehicle_summary = defaultdict(lambda: {'total': 0, 'faults': 0})
+
+    for r in all_records:
         grp = r.vehicle.group
+        key = (grp, r.vehicle.pk, r.vehicle.name)
         group_summary[grp]['total'] += 1
+        vehicle_summary[key]['total'] += 1
         if r.has_fault():
             group_summary[grp]['faults'] += 1
+            vehicle_summary[key]['faults'] += 1
 
-    group_table = [
-        {
+    group_table = []
+    for grp, gdata in sorted(group_summary.items()):
+        gt = gdata['total']
+        gf = gdata['faults']
+        vehicle_rows = []
+        for (g, vpk, vname), vdata in sorted(vehicle_summary.items(), key=lambda x: x[0][2]):
+            if g != grp:
+                continue
+            vt = vdata['total']
+            vf = vdata['faults']
+            vehicle_rows.append({
+                'name': vname,
+                'total': vt,
+                'faults': vf,
+                'ok': vt - vf,
+                'fault_pct': round(vf / vt * 100, 1) if vt else 0,
+            })
+        group_table.append({
             'group': grp,
-            'total': data['total'],
-            'faults': data['faults'],
-            'ok': data['total'] - data['faults'],
-            'fault_pct': round(data['faults'] / data['total'] * 100, 1) if data['total'] else 0,
-        }
-        for grp, data in sorted(group_summary.items())
-    ]
+            'total': gt,
+            'faults': gf,
+            'ok': gt - gf,
+            'fault_pct': round(gf / gt * 100, 1) if gt else 0,
+            'vehicles': vehicle_rows,
+        })
 
-    import json as _json
+    all_breakdown_types = list(BreakdownType.objects.all())
+    all_failure_causes = list(FailureCause.objects.all())
+
     context = {
         'metric': metric,
         'date_from': date_from,
         'date_to': date_to,
         'group_filter': group_filter,
         'group_list': MONITORING_GROUP_LIST,
+        'selected_breakdown_ids': selected_breakdown_ids,
+        'selected_failure_ids': selected_failure_ids,
+        'all_breakdown_types': all_breakdown_types,
+        'all_failure_causes': all_failure_causes,
         'chart_labels_json': _json.dumps(chart_labels, ensure_ascii=False),
         'chart_values_json': _json.dumps(chart_values),
         'chart_data': chart_data,
         'group_table': group_table,
-        'total_records': len(list(qs)),
-        'total_faults': len(fault_qs),
+        'total_records': len(all_records),
+        'total_faults': len(all_fault_records),
     }
     return render(request, 'analysis/monitoring/analytics.html', context)
 
