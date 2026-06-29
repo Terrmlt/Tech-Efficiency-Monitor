@@ -66,6 +66,14 @@
                         {% endfor %}
                     </select>
                 </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-semibold mb-1">Смена</label>
+                    <select name="shift" class="form-select form-select-sm">
+                        <option value="">Все смены</option>
+                        <option value="1" {% if shift_filter == '1' %}selected{% endif %}>Смена 1</option>
+                        <option value="2" {% if shift_filter == '2' %}selected{% endif %}>Смена 2</option>
+                    </select>
+                </div>
             </div>
         </form>
     </div>

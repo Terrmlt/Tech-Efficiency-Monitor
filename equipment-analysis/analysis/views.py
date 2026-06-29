@@ -710,6 +710,9 @@ def analytics(request):
     group_filters = request.GET.getlist('group')
 
     vehicle_filter = request.GET.get('vehicle', '')
+    shift_filter = request.GET.get('shift', '')
+    if shift_filter not in ('1', '2'):
+        shift_filter = ''
 
     qs = VehicleRecord.objects.select_related('report', 'report__section').all()
 
@@ -729,6 +732,8 @@ def analytics(request):
         qs = qs.filter(group__in=group_filters)
     if vehicle_filter:
         qs = qs.filter(name=vehicle_filter)
+    if shift_filter:
+        qs = qs.filter(shift=int(shift_filter))
 
     # All available groups for checkboxes
     all_groups = list(VehicleRecord.objects.values_list('group', flat=True).distinct().order_by('group'))
@@ -844,6 +849,7 @@ def analytics(request):
         'all_groups':     all_groups,
         'all_vehicles':   all_vehicles,
         'vehicle_filter': vehicle_filter,
+        'shift_filter':   shift_filter,
         'date_from':      date_from,
         'date_to':        date_to,
         'section_id':     section_id,
