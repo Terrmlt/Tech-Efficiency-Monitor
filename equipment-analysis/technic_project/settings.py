@@ -66,20 +66,16 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'technic_project.wsgi.application'
 
-_DATABASE_URL = os.environ.get('DATABASE_URL', '')
-if _DATABASE_URL:
-    import urllib.parse as _urlparse
-    _u = _urlparse.urlparse(_DATABASE_URL)
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': _u.path.lstrip('/'),
-            'USER': _u.username,
-            'PASSWORD': _u.password,
-            'HOST': _u.hostname,
-            'PORT': str(_u.port or 5432),
-        }
-    }
+import dj_database_url as _dj_db_url
+
+_pg_config = _dj_db_url.config(
+    default='',
+    conn_max_age=600,
+    conn_health_checks=True,
+)
+
+if _pg_config:
+    DATABASES = {'default': _pg_config}
 else:
     DATABASES = {
         'default': {
