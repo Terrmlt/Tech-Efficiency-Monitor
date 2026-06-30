@@ -100,6 +100,25 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_URL = '/login/'
+
+# ── Email / SMTP ───────────────────────────────────────────────────────────────
+# Configure these environment variables on the server to enable email alerts.
+# Example (Yandex):  EMAIL_HOST=smtp.yandex.ru  EMAIL_PORT=465
+#                    EMAIL_HOST_USER=you@yandex.ru  EMAIL_HOST_PASSWORD=apppassword
+#                    EMAIL_USE_SSL=True
+# Example (Gmail):   EMAIL_HOST=smtp.gmail.com  EMAIL_PORT=587
+#                    EMAIL_HOST_USER=you@gmail.com  EMAIL_HOST_PASSWORD=apppassword
+#                    EMAIL_USE_TLS=True
+# Example (cron):    0 8 * * * /path/to/venv/bin/python /path/to/manage.py send_monitoring_alert
+EMAIL_BACKEND   = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST      = os.environ.get('EMAIL_HOST', 'localhost')
+EMAIL_PORT      = int(os.environ.get('EMAIL_PORT', '25'))
+EMAIL_USE_TLS   = os.environ.get('EMAIL_USE_TLS', '').lower() in ('1', 'true', 'yes')
+EMAIL_USE_SSL   = os.environ.get('EMAIL_USE_SSL', '').lower() in ('1', 'true', 'yes')
+EMAIL_HOST_USER     = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL  = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER or 'noreply@example.com')
+MONITORING_ALERT_RECIPIENT = os.environ.get('MONITORING_ALERT_RECIPIENT', '5123@goldintercom.ru')
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
 

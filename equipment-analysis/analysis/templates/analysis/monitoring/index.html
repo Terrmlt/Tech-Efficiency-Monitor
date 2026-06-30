@@ -18,6 +18,16 @@
                 <li><a class="dropdown-item" href="{% url 'monitoring_vehicles' %}"><i class="bi bi-truck me-2"></i>Техника</a></li>
                 <li><a class="dropdown-item" href="{% url 'monitoring_breakdowns' %}"><i class="bi bi-exclamation-triangle me-2"></i>Виды поломок</a></li>
                 <li><a class="dropdown-item" href="{% url 'monitoring_failures' %}"><i class="bi bi-wrench me-2"></i>Причины неисправности</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                    <form method="post" action="{% url 'monitoring_test_email' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="dropdown-item"
+                                title="Отправить тестовое письмо на {{ alert_recipient }}">
+                            <i class="bi bi-envelope me-2"></i>Тестовое письмо ({{ alert_recipient }})
+                        </button>
+                    </form>
+                </li>
             </ul>
         </div>
         {% endif %}

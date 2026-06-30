@@ -1923,13 +1923,54 @@ def monitoring_index(request):
                 'total': total,
                 'partial': filled_today > 0,
             })
+    from django.conf import settings as _settings
     return render(request, 'analysis/monitoring/index.html', {
         'group_stats': group_stats,
         'unfilled_groups': unfilled_groups,
         'today': today,
         'no_section_warning': no_section_warning,
         'user_section': user_section,
+        'alert_recipient': _settings.MONITORING_ALERT_RECIPIENT,
     })
+
+
+@staff_required
+@require_POST
+def monitoring_send_test_email(request):
+    from django.conf import settings
+    from django.core.mail import send_mail
+    from analysis.management.commands.send_monitoring_alert import (
+        get_unfilled_vehicles, build_alert_body,
+    )
+
+    yesterday = datetime.date.today() - datetime.timedelta(days=1)
+    unfilled = get_unfilled_vehicles(yesterday)
+
+    recipient = settings.MONITORING_ALERT_RECIPIENT
+    subject = f'[ТЕСТ] Мониторинг — проверка отправки писем'
+
+    if unfilled:
+        body = '[ТЕСТ] ' + build_alert_body(yesterday, unfilled)
+    else:
+        body = (
+            '[ТЕСТ] Это тестовое письмо системы мониторинга.\n\n'
+            f'За {yesterday.strftime("%d.%m.%Y")} все данные мониторинга заполнены.\n'
+            'В боевом режиме письмо не было бы отправлено.'
+        )
+
+    try:
+        send_mail(
+            subject=subject,
+            message=body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[recipient],
+            fail_silently=False,
+        )
+        messages.success(request, f'Тестовое письмо успешно отправлено на {recipient}.')
+    except Exception as exc:
+        messages.error(request, f'Ошибка при отправке письма: {exc}')
+
+    return redirect('monitoring_index')
 
 
 @role_required(GROUP_MONITOR)

@@ -26,6 +26,7 @@ urlpatterns = [
 
     # ── Мониторинг Омникомм ──────────────────────────────────────────────────
     path('monitoring/', views.monitoring_index, name='monitoring_index'),
+    path('monitoring/test-email/', views.monitoring_send_test_email, name='monitoring_test_email'),
     path('monitoring/group/<str:group>/', views.monitoring_group, name='monitoring_group'),
     path('monitoring/group/<str:group>/save/', views.monitoring_save, name='monitoring_save'),
     path('monitoring/analytics/', views.monitoring_analytics, name='monitoring_analytics'),
