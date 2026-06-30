@@ -107,13 +107,17 @@ class Command(BaseCommand):
         subject = f'[Мониторинг] Незаполненные данные за {check_date.strftime("%d.%m.%Y")}'
         body = build_alert_body(check_date, unfilled)
 
+        from analysis.views import _get_smtp_connection
+        conn, from_email = _get_smtp_connection()
+
         try:
             send_mail(
                 subject=subject,
                 message=body,
-                from_email=settings.DEFAULT_FROM_EMAIL,
+                from_email=from_email,
                 recipient_list=[recipient],
                 fail_silently=False,
+                connection=conn,
             )
             self.stdout.write(self.style.SUCCESS(f'Письмо отправлено на {recipient}.'))
         except Exception as exc:

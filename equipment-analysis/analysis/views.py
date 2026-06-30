@@ -1876,7 +1876,7 @@ def _build_excel_workbook(report, all_records, summary):
 
 from .models import (
     BreakdownType, FailureCause, MonitoringVehicle, MonitoringRecord,
-    MONITORING_GROUPS,
+    MONITORING_GROUPS, SmtpSettings,
 )
 
 MONITORING_GROUP_LIST = [g[0] for g in MONITORING_GROUPS]
@@ -1934,6 +1934,34 @@ def monitoring_index(request):
     })
 
 
+def _get_smtp_connection():
+    """
+    Return (connection, from_email) using DB SmtpSettings if configured,
+    falling back to django.conf.settings defaults.
+    """
+    from django.core.mail import get_connection
+    from django.conf import settings as _s
+
+    try:
+        smtp = SmtpSettings.objects.get(pk=1)
+        if smtp.email_host:
+            conn = get_connection(
+                backend='django.core.mail.backends.smtp.EmailBackend',
+                host=smtp.email_host,
+                port=smtp.email_port,
+                username=smtp.email_host_user,
+                password=smtp.email_host_password,
+                use_tls=smtp.email_use_tls,
+                use_ssl=smtp.email_use_ssl,
+            )
+            from_email = smtp.default_from_email or smtp.email_host_user or _s.DEFAULT_FROM_EMAIL
+            return conn, from_email
+    except SmtpSettings.DoesNotExist:
+        pass
+
+    return None, _s.DEFAULT_FROM_EMAIL
+
+
 @staff_required
 @require_POST
 def monitoring_send_test_email(request):
@@ -1947,7 +1975,7 @@ def monitoring_send_test_email(request):
     unfilled = get_unfilled_vehicles(yesterday)
 
     recipient = settings.MONITORING_ALERT_RECIPIENT
-    subject = f'[ТЕСТ] Мониторинг — проверка отправки писем'
+    subject = '[ТЕСТ] Мониторинг — проверка отправки писем'
 
     if unfilled:
         body = '[ТЕСТ] ' + build_alert_body(yesterday, unfilled)
@@ -1958,19 +1986,62 @@ def monitoring_send_test_email(request):
             'В боевом режиме письмо не было бы отправлено.'
         )
 
+    conn, from_email = _get_smtp_connection()
+
     try:
         send_mail(
             subject=subject,
             message=body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
+            from_email=from_email,
             recipient_list=[recipient],
             fail_silently=False,
+            connection=conn,
         )
         messages.success(request, f'Тестовое письмо успешно отправлено на {recipient}.')
     except Exception as exc:
         messages.error(request, f'Ошибка при отправке письма: {exc}')
 
     return redirect('monitoring_index')
+
+
+@staff_required
+def monitoring_smtp_settings(request):
+    from django.conf import settings as _s
+
+    smtp = SmtpSettings.get_solo()
+
+    if request.method == 'POST':
+        smtp.email_host = request.POST.get('email_host', '').strip()
+        raw_port = request.POST.get('email_port', '').strip()
+        try:
+            smtp.email_port = int(raw_port) if raw_port else 25
+        except ValueError:
+            smtp.email_port = 25
+        smtp.email_use_tls = 'email_use_tls' in request.POST
+        smtp.email_use_ssl = 'email_use_ssl' in request.POST
+        smtp.email_host_user = request.POST.get('email_host_user', '').strip()
+        new_password = request.POST.get('email_host_password', '')
+        if new_password:
+            smtp.email_host_password = new_password
+        smtp.default_from_email = request.POST.get('default_from_email', '').strip()
+        smtp.save()
+        messages.success(request, 'Настройки SMTP сохранены.')
+        return redirect('monitoring_smtp_settings')
+
+    env_defaults = {
+        'host': _s.EMAIL_HOST,
+        'port': _s.EMAIL_PORT,
+        'use_tls': _s.EMAIL_USE_TLS,
+        'use_ssl': _s.EMAIL_USE_SSL,
+        'user': _s.EMAIL_HOST_USER,
+        'from_email': _s.DEFAULT_FROM_EMAIL,
+    }
+
+    return render(request, 'analysis/monitoring/smtp_settings.html', {
+        'smtp': smtp,
+        'env_defaults': env_defaults,
+        'alert_recipient': _s.MONITORING_ALERT_RECIPIENT,
+    })
 
 
 @role_required(GROUP_MONITOR)

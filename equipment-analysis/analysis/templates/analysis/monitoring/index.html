@@ -20,6 +20,11 @@
                 <li><a class="dropdown-item" href="{% url 'monitoring_failures' %}"><i class="bi bi-wrench me-2"></i>Причины неисправности</a></li>
                 <li><hr class="dropdown-divider"></li>
                 <li>
+                    <a class="dropdown-item" href="{% url 'monitoring_smtp_settings' %}">
+                        <i class="bi bi-envelope-gear me-2"></i>Настройки SMTP
+                    </a>
+                </li>
+                <li>
                     <form method="post" action="{% url 'monitoring_test_email' %}">
                         {% csrf_token %}
                         <button type="submit" class="dropdown-item"

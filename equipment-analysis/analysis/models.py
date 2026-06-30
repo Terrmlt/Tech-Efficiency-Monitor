@@ -279,6 +279,28 @@ class UserProfile(models.Model):
         return f'Профиль: {self.user.username}'
 
 
+class SmtpSettings(models.Model):
+    email_host = models.CharField(max_length=255, blank=True, verbose_name='SMTP-сервер')
+    email_port = models.PositiveIntegerField(default=25, verbose_name='Порт')
+    email_use_tls = models.BooleanField(default=False, verbose_name='Использовать TLS')
+    email_use_ssl = models.BooleanField(default=False, verbose_name='Использовать SSL')
+    email_host_user = models.CharField(max_length=255, blank=True, verbose_name='Логин')
+    email_host_password = models.CharField(max_length=255, blank=True, verbose_name='Пароль')
+    default_from_email = models.CharField(max_length=255, blank=True, verbose_name='Адрес отправителя')
+
+    class Meta:
+        verbose_name = 'Настройки SMTP'
+        verbose_name_plural = 'Настройки SMTP'
+
+    def __str__(self):
+        return f'SMTP: {self.email_host}:{self.email_port}'
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+
 class VehicleNorm(models.Model):
     report = models.ForeignKey(
         Report, on_delete=models.CASCADE,

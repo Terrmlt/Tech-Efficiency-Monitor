@@ -1,0 +1,176 @@
+{% extends 'analysis/base.html' %}
+
+{% block title %}Настройки SMTP — Мониторинг{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4">
+    <a href="{% url 'monitoring_index' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Мониторинг
+    </a>
+    <h4 class="mb-0 fw-bold"><i class="bi bi-envelope-gear me-2 text-primary"></i>Настройки SMTP</h4>
+</div>
+
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{{ msg.tags }} alert-dismissible fade show" role="alert">
+    {{ msg }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header fw-semibold py-3">
+                <i class="bi bi-server me-2 text-secondary"></i>Параметры почтового сервера
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" for="id_email_host">SMTP-сервер</label>
+                        <input type="text" class="form-control" id="id_email_host" name="email_host"
+                               value="{{ smtp.email_host }}"
+                               placeholder="Пример: smtp.yandex.ru или smtp.gmail.com">
+                        {% if not smtp.email_host %}
+                        <div class="form-text text-muted">
+                            Сейчас используется значение из переменной окружения:
+                            <code>{{ env_defaults.host }}</code>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" for="id_email_port">Порт</label>
+                        <input type="number" class="form-control" id="id_email_port" name="email_port"
+                               value="{{ smtp.email_port }}" min="1" max="65535" style="max-width:140px">
+                        <div class="form-text text-muted">Обычно: 465 (SSL), 587 (TLS), 25 (без шифрования)</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="id_email_use_tls"
+                                   name="email_use_tls" {% if smtp.email_use_tls %}checked{% endif %}>
+                            <label class="form-check-label" for="id_email_use_tls">
+                                Использовать TLS (порт 587)
+                            </label>
+                        </div>
+                        <div class="form-check mt-1">
+                            <input class="form-check-input" type="checkbox" id="id_email_use_ssl"
+                                   name="email_use_ssl" {% if smtp.email_use_ssl %}checked{% endif %}>
+                            <label class="form-check-label" for="id_email_use_ssl">
+                                Использовать SSL (порт 465)
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" for="id_email_host_user">Логин (email-адрес отправителя)</label>
+                        <input type="text" class="form-control" id="id_email_host_user" name="email_host_user"
+                               value="{{ smtp.email_host_user }}"
+                               placeholder="you@example.com" autocomplete="username">
+                        {% if not smtp.email_host_user %}
+                        <div class="form-text text-muted">
+                            Сейчас используется:
+                            <code>{{ env_defaults.user|default:"(не задан)" }}</code>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" for="id_email_host_password">Пароль приложения</label>
+                        <input type="password" class="form-control" id="id_email_host_password"
+                               name="email_host_password" autocomplete="new-password"
+                               placeholder="{% if smtp.email_host_password %}••••••••{% else %}Введите пароль{% endif %}">
+                        {% if smtp.email_host_password %}
+                        <div class="form-text text-muted">Пароль сохранён. Оставьте поле пустым, чтобы не менять его.</div>
+                        {% else %}
+                        <div class="form-text text-muted">Пароль не задан.</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold" for="id_default_from_email">Адрес в поле «От» (необязательно)</label>
+                        <input type="text" class="form-control" id="id_default_from_email" name="default_from_email"
+                               value="{{ smtp.default_from_email }}"
+                               placeholder="Мониторинг &lt;you@example.com&gt;">
+                        <div class="form-text text-muted">Если не заполнено, используется логин.</div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-floppy me-1"></i>Сохранить
+                        </button>
+                        <a href="{% url 'monitoring_index' %}" class="btn btn-outline-secondary">Отмена</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card border-info border-opacity-50">
+            <div class="card-body">
+                <h6 class="fw-bold mb-3"><i class="bi bi-info-circle text-info me-2"></i>Получатель писем</h6>
+                <p class="mb-2">Все уведомления мониторинга отправляются на:</p>
+                <p class="mb-3">
+                    <a href="mailto:{{ alert_recipient }}" class="fw-semibold fs-6">{{ alert_recipient }}</a>
+                </p>
+                <p class="text-muted small mb-0">
+                    Адрес получателя задаётся переменной окружения
+                    <code>MONITORING_ALERT_RECIPIENT</code> на сервере.
+                </p>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-body">
+                <h6 class="fw-bold mb-3"><i class="bi bi-lightbulb text-warning me-2"></i>Готовые профили</h6>
+                <div class="list-group list-group-flush">
+                    <button type="button" class="list-group-item list-group-item-action py-2 px-0 border-0"
+                            onclick="fillProfile('smtp.yandex.ru', 465, false, true)">
+                        <i class="bi bi-envelope me-2 text-muted"></i>Яндекс Почта
+                        <small class="text-muted d-block">smtp.yandex.ru:465 SSL</small>
+                    </button>
+                    <button type="button" class="list-group-item list-group-item-action py-2 px-0 border-0"
+                            onclick="fillProfile('smtp.gmail.com', 587, true, false)">
+                        <i class="bi bi-envelope me-2 text-muted"></i>Gmail
+                        <small class="text-muted d-block">smtp.gmail.com:587 TLS</small>
+                    </button>
+                    <button type="button" class="list-group-item list-group-item-action py-2 px-0 border-0"
+                            onclick="fillProfile('smtp.mail.ru', 465, false, true)">
+                        <i class="bi bi-envelope me-2 text-muted"></i>Mail.ru
+                        <small class="text-muted d-block">smtp.mail.ru:465 SSL</small>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-3 border-warning border-opacity-50">
+            <div class="card-body">
+                <h6 class="fw-bold mb-2"><i class="bi bi-shield-lock text-warning me-2"></i>Проверка подключения</h6>
+                <p class="text-muted small mb-3">
+                    После сохранения настроек нажмите кнопку «Тестовое письмо» на странице мониторинга, чтобы проверить, что письмо доходит до получателя.
+                </p>
+                <form method="post" action="{% url 'monitoring_test_email' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-warning">
+                        <i class="bi bi-send me-1"></i>Отправить тестовое письмо
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function fillProfile(host, port, useTls, useSsl) {
+    document.getElementById('id_email_host').value = host;
+    document.getElementById('id_email_port').value = port;
+    document.getElementById('id_email_use_tls').checked = useTls;
+    document.getElementById('id_email_use_ssl').checked = useSsl;
+}
+</script>
+{% endblock %}
