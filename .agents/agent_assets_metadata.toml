@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "a7vF87wg0WwUfd__ACUFh"
+uri = "file://DEPLOYMENT.md"
+type = "text"
+title = "Инструкция по развёртыванию на Linux"
