@@ -2471,12 +2471,29 @@ def monitoring_fault_drill(request):
 
 @staff_required
 def monitoring_vehicles(request):
-    vehicles = MonitoringVehicle.objects.select_related('section').order_by('group', 'order', 'name')
+    group_filter = request.GET.get('group', '')
+    section_filter = request.GET.get('section', '')
+
+    qs = MonitoringVehicle.objects.select_related('section').order_by('group', 'order', 'name')
+    total_count = qs.count()
+
+    if group_filter:
+        qs = qs.filter(group=group_filter)
+    if section_filter:
+        try:
+            qs = qs.filter(section_id=int(section_filter))
+        except ValueError:
+            pass
+
     sections = Section.objects.all()
     return render(request, 'analysis/monitoring/vehicles.html', {
-        'vehicles': vehicles,
+        'vehicles': qs,
         'sections': sections,
         'group_list': MONITORING_GROUP_LIST,
+        'total_count': total_count,
+        'shown_count': qs.count(),
+        'group_filter': group_filter,
+        'section_filter': section_filter,
     })
 
 
@@ -2517,13 +2534,20 @@ def monitoring_vehicle_create(request):
         order = int(request.POST.get('order', 0) or 0)
         is_active = request.POST.get('is_active') == '1'
         if name and group in MONITORING_GROUP_LIST:
-            MonitoringVehicle.objects.create(
-                name=name, group=group,
-                section_id=section_id, order=order, is_active=is_active,
-            )
-            messages.success(request, f'Техника «{name}» добавлена.')
-            return redirect('monitoring_vehicles')
-        messages.error(request, 'Заполните название и выберите группу.')
+            if MonitoringVehicle.objects.filter(name=name, section_id=section_id).exists():
+                messages.error(
+                    request,
+                    'Техника с таким названием и участком уже существует в справочнике.'
+                )
+            else:
+                MonitoringVehicle.objects.create(
+                    name=name, group=group,
+                    section_id=section_id, order=order, is_active=is_active,
+                )
+                messages.success(request, f'Техника «{name}» добавлена.')
+                return redirect('monitoring_vehicles')
+        else:
+            messages.error(request, 'Заполните название и выберите группу.')
     return render(request, 'analysis/monitoring/vehicle_form.html', {
         'sections': sections,
         'group_list': MONITORING_GROUP_LIST,
@@ -2536,9 +2560,23 @@ def monitoring_vehicle_edit(request, pk):
     v = get_object_or_404(MonitoringVehicle, pk=pk)
     sections = Section.objects.all()
     if request.method == 'POST':
-        v.name = request.POST.get('name', '').strip()
+        new_name = request.POST.get('name', '').strip()
+        new_section_id = request.POST.get('section') or None
+        if new_name and MonitoringVehicle.objects.filter(
+            name=new_name, section_id=new_section_id
+        ).exclude(pk=v.pk).exists():
+            messages.error(
+                request,
+                'Техника с таким названием и участком уже существует в справочнике.'
+            )
+            return render(request, 'analysis/monitoring/vehicle_form.html', {
+                'sections': sections,
+                'group_list': MONITORING_GROUP_LIST,
+                'obj': v,
+            })
+        v.name = new_name
         v.group = request.POST.get('group', v.group)
-        v.section_id = request.POST.get('section') or None
+        v.section_id = new_section_id
         v.order = int(request.POST.get('order', 0) or 0)
         v.is_active = request.POST.get('is_active') == '1'
         v.save()
