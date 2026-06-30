@@ -33,6 +33,7 @@ urlpatterns = [
 
     # Reference: vehicles
     path('monitoring/vehicles/', views.monitoring_vehicles, name='monitoring_vehicles'),
+    path('monitoring/vehicles/import/', views.monitoring_vehicle_import, name='monitoring_vehicle_import'),
     path('monitoring/vehicles/new/', views.monitoring_vehicle_create, name='monitoring_vehicle_create'),
     path('monitoring/vehicles/<int:pk>/edit/', views.monitoring_vehicle_edit, name='monitoring_vehicle_edit'),
     path('monitoring/vehicles/<int:pk>/delete/', views.monitoring_vehicle_delete, name='monitoring_vehicle_delete'),

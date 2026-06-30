@@ -2481,6 +2481,33 @@ def monitoring_vehicles(request):
 
 
 @staff_required
+@require_POST
+def monitoring_vehicle_import(request):
+    from analysis.management.commands.import_monitoring_vehicles import run_import
+    result = run_import()
+    created = result['created']
+    skipped = result['skipped']
+    unknown = result['unknown']
+    if created:
+        messages.success(
+            request,
+            f'Импорт завершён: создано {created} ед. техники, пропущено {skipped} (уже существуют).'
+        )
+    else:
+        messages.info(
+            request,
+            f'Новых записей нет — все {skipped} ед. техники уже есть в справочнике.'
+        )
+    if unknown:
+        unique_groups = sorted({g for _, g in unknown})
+        messages.warning(
+            request,
+            f'Не удалось определить группу для {len(unknown)} записей: {", ".join(unique_groups)}.'
+        )
+    return redirect('monitoring_vehicles')
+
+
+@staff_required
 def monitoring_vehicle_create(request):
     sections = Section.objects.all()
     if request.method == 'POST':
