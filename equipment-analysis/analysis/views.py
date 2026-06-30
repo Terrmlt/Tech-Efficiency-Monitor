@@ -1966,10 +1966,12 @@ def monitoring_group(request, group):
     # Allowed dates: today always + existing record dates
     allowed_dates = set(recorded_dates) | {today}
 
-    # Determine which date to show — only today or an existing record date
+    # Determine which date to show
+    # Non-staff users are always locked to today to prevent backdating
+    can_change_date = user.is_staff
     date_str = request.GET.get('date', '')
     selected_date = today
-    if date_str:
+    if can_change_date and date_str:
         try:
             candidate = datetime.date.fromisoformat(date_str)
             if candidate in allowed_dates:
@@ -2003,6 +2005,7 @@ def monitoring_group(request, group):
         'selected_date': selected_date,
         'today': today,
         'recorded_dates': recorded_dates,
+        'can_change_date': can_change_date,
         'breakdown_types': breakdown_types,
         'failure_causes': failure_causes,
         'is_excavator': is_excavator,
@@ -2024,6 +2027,11 @@ def monitoring_save(request, group):
         record_date = datetime.date.fromisoformat(date_str)
     except ValueError:
         messages.error(request, 'Неверная дата.')
+        return redirect('monitoring_group', group=group)
+
+    # Non-staff users may only save today's data
+    if not request.user.is_staff and record_date != today:
+        messages.error(request, 'Изменять данные за прошлые даты может только администратор.')
         return redirect('monitoring_group', group=group)
 
     # Only allow saving for today or dates that already have records

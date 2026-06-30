@@ -49,6 +49,7 @@
 <div class="card mb-3">
     <div class="card-body py-2 px-3 d-flex align-items-center flex-wrap gap-3">
         <label class="form-label mb-0 fw-semibold small text-nowrap">Дата заполнения:</label>
+        {% if can_change_date %}
         <select class="form-select form-select-sm" style="width:auto" onchange="goToDate(this.value)">
             <option value="{{ today|date:'Y-m-d' }}" {% if selected_date == today %}selected{% endif %}>
                 {{ today|date:'d.m.Y' }} — сегодня
@@ -68,6 +69,10 @@
         <a href="?date={{ today|date:'Y-m-d' }}" class="btn btn-sm btn-outline-primary">
             <i class="bi bi-calendar-day me-1"></i>Сегодня
         </a>
+        {% endif %}
+        {% else %}
+        <span class="fw-semibold">{{ today|date:'d.m.Y' }}</span>
+        <span class="badge bg-success"><i class="bi bi-calendar-check me-1"></i>Сегодня</span>
         {% endif %}
     </div>
 </div>
