@@ -1,9 +1,9 @@
-modules = ["nodejs-24", "python-3.11", "python3"]
+modules = ["nodejs-24", "python-3.11", "python3", "postgresql-16"]
 
 [deployment]
 router = "application"
 deploymentTarget = "autoscale"
-run = ["bash", "-c", "cd equipment-analysis && python3 manage.py migrate --run-syncdb && python3 manage.py collectstatic --noinput && gunicorn --bind=0.0.0.0:5000 --reuse-port technic_project.wsgi:application"]
+run = ["bash", "-c", "cd equipment-analysis && python3 manage.py collectstatic --noinput && gunicorn --bind=0.0.0.0:5000 --reuse-port technic_project.wsgi:application"]
 build = ["bash", "-c", "pip install -r equipment-analysis/requirements.txt"]
 
 [deployment.postBuild]
