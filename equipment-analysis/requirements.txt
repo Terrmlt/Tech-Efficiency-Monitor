@@ -3,3 +3,4 @@ openpyxl>=3.1.0
 pandas>=2.0.0
 psycopg2-binary>=2.9.0
 dj-database-url>=2.0.0
+gunicorn>=23.0
