@@ -29,7 +29,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd equipment-analysis && python3 manage.py runserver 0.0.0.0:5000"
+args = "pip install -r equipment-analysis/requirements.txt -q && cd equipment-analysis && python3 manage.py migrate --run-syncdb && python3 manage.py runserver 0.0.0.0:5000"
 waitForPort = 5000
 
 [agent]
