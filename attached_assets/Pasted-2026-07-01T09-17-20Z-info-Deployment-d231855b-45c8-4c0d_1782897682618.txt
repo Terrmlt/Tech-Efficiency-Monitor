@@ -1,0 +1,133 @@
+2026-07-01T09:17:20Z info: Deployment: d231855b-45c8-4c0d-9e5c-813a9b6e13ac
+2026-07-01T09:17:20Z info: Build: fd427cb9-677e-45c9-80d8-766bd355ce57
+2026-07-01T09:17:21Z info: Running Security Scan
+2026-07-01T09:17:37Z info: Security Scan Complete
+2026-07-01T09:17:40Z info: Preparing development database data
+2026-07-01T09:18:23Z info: Successfully copied development database data to production database
+2026-07-01T09:18:26Z info: Installing packages
+--> pnpm install
+
+Scope: all 8 workspace projects
+
+Lockfile is up to date, resolution step is skipped
+
+Progress: resolved 1, reused 0, downloaded 0, added 0
+
+Packages: +476
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+   ╭─────────────────────────────────────────╮
+   │                                         │
+   │   Update available! 10.26.1 → 11.9.0.   │
+   │   Changelog: https://pnpm.io/v/11.9.0   │
+   │    To update, run: pnpm add -g pnpm     │
+   │                                         │
+   ╰─────────────────────────────────────────╯
+
+
+Progress: resolved 476, reused 0, downloaded 18, added 2
+
+Progress: resolved 476, reused 0, downloaded 149, added 108
+
+Progress: resolved 476, reused 0, downloaded 270, added 195
+
+Progress: resolved 476, reused 0, downloaded 298, added 206
+
+Progress: resolved 476, reused 0, downloaded 343, added 225
+
+Progress: resolved 476, reused 0, downloaded 383, added 278
+
+Progress: resolved 476, reused 0, downloaded 459, added 342
+
+Progress: resolved 476, reused 0, downloaded 476, added 420
+
+Progress: resolved 476, reused 0, downloaded 476, added 476, done
+
+.../esbuild@0.27.3/node_modules/esbuild postinstall$ node install.js
+
+.../esbuild@0.27.3/node_modules/esbuild postinstall: Done
+
+
+devDependencies:
++ prettier 3.8.3
++ typescript 5.9.3
+
+
+. preinstall$ sh -c 'rm -f package-lock.json yarn.lock; case "$npm_config_user_agent" in pnpm/*) ;; *) echo "Use pnpm instead" >&2; exit 1 ;; esac'
+
+. preinstall: Done
+
+Done in 10.1s using pnpm v10.26.1
+
+--> uv lock
+
+--> uv lock
+
+Resolved 13 packages in 0.78ms
+
+Resolved 13 packages in 0.78ms
+
+--> uv sync
+
+--> uv sync
+
+Resolved 13 packages in 0.56ms
+
+Resolved 13 packages in 0.56ms
+
+Downloading pandas (10.8MiB)
+
+Downloading pandas (10.8MiB)
+
+Downloading numpy (16.1MiB)
+
+Downloading numpy (16.1MiB)
+
+Downloading django (7.9MiB)
+
+Downloading django (7.9MiB)
+
+ 
+ 
+Downloading
+Downloading
+ 
+ 
+numpy
+numpy
+ 
+ 
+Downloading
+Downloading
+ 
+ 
+pandas
+pandas
+ 
+ 
+Downloading
+Downloading
+ 
+ 
+django
+django
+Prepared 
+Prepared 
+10 packages
+10 packages
+ 
+ 
+in 1.06s
+in 1.06s
+error: Failed to install: six-1.17.0-py2.py3-none-any.whl (six==1.17.0)
+
+error: Failed to install: six-1.17.0-py2.py3-none-any.whl (six==1.17.0)
+
+  Caused by: failed to copy file from /home/runner/workspace/.cache/uv/archive-v0/TNeeUAl4jm40Wb__kgLU_/six.py to /nix/store/6334pjf6w2q623rgvwi499qaiym1p6yv-python3-3.11.14/lib/python3.11/site-packages/six.py: Permission denied (os error 13)
+
+  Caused by: failed to copy file from /home/runner/workspace/.cache/uv/archive-v0/TNeeUAl4jm40Wb__kgLU_/six.py to /nix/store/6334pjf6w2q623rgvwi499qaiym1p6yv-python3-3.11.14/lib/python3.11/site-packages/six.py: Permission denied (os error 13)
+
+exit status 2
+
+exit status 2
