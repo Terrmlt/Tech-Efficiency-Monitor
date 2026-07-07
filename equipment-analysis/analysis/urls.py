@@ -12,6 +12,7 @@ urlpatterns = [
     path('records/export/', views.export_records_excel, name='export_records_excel'),
     path('analytics/', views.analytics, name='analytics'),
     path('analytics/compare/', views.analytics_compare, name='analytics_compare'),
+    path('analytics/efficiency/', views.analytics_efficiency, name='analytics_efficiency'),
     path('records/<int:pk>/comment/', views.save_comment, name='save_comment'),
     path('sections/', views.sections, name='sections'),
     path('sections/new/', views.section_create, name='section_create'),

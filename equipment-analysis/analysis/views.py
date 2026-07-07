@@ -949,6 +949,165 @@ def analytics(request):
     return render(request, 'analysis/analytics.html', context)
 
 
+# ─── Analytics: Efficiency / Downtime ────────────────────────────────────────
+
+@role_required(GROUP_ANALYST)
+def analytics_efficiency(request):
+    """Анализ эффективности (простоев) — суммарное время свыше нормы по технике."""
+    from collections import defaultdict as _dd
+
+    date_from     = request.GET.get('date_from', '')
+    date_to       = request.GET.get('date_to', '')
+    section_id    = request.GET.get('section', '')
+    group_filters = request.GET.getlist('group')
+    vehicle_filter = request.GET.get('vehicle', '')
+    shift_filter  = request.GET.get('shift', '')
+    if shift_filter not in ('1', '2'):
+        shift_filter = ''
+
+    qs = VehicleRecord.objects.select_related('report', 'report__section').all()
+
+    if date_from:
+        try:
+            qs = qs.filter(record_date__gte=datetime.date.fromisoformat(date_from))
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            qs = qs.filter(record_date__lte=datetime.date.fromisoformat(date_to))
+        except ValueError:
+            pass
+    if section_id:
+        qs = qs.filter(report__section_id=section_id)
+    if group_filters:
+        qs = qs.filter(group__in=group_filters)
+    if vehicle_filter:
+        qs = qs.filter(name=vehicle_filter)
+    if shift_filter:
+        qs = qs.filter(shift=int(shift_filter))
+
+    rec_list = list(qs)
+
+    # Load VehicleNorm overrides for dump trucks
+    report_ids = list({r.report_id for r in rec_list})
+    vn_map = {}
+    if report_ids:
+        for vn in VehicleNorm.objects.filter(report_id__in=report_ids):
+            vn_map[(vn.report_id, vn.vehicle_name, vn.shift, vn.date)] = vn.dumptruck_norm_sec
+
+    def _get_over_sec(rec):
+        """Seconds over norm for this record (0 if within norm)."""
+        grp = rec.group
+        if grp in ('Бульдозеры', 'Погрузчики'):
+            norm = rec.report.bulldozer_norm_sec
+            if norm is not None and norm > 0:
+                return max(0.0, (rec.engine_idle_sec or 0) - norm)
+        elif grp == 'Экскаваторы':
+            norm = rec.report.excavator_norm_sec
+            if norm is not None and norm > 0 and rec.downtime_sec is not None:
+                return max(0.0, rec.downtime_sec - norm)
+        elif grp == 'Самосвалы':
+            shift_key = rec.shift if rec.shift else None
+            # Explicit precedence: exact-shift VehicleNorm → shiftless VehicleNorm → report default
+            norm = vn_map.get((rec.report_id, rec.name, shift_key, rec.date))
+            if norm is None:
+                norm = vn_map.get((rec.report_id, rec.name, None, rec.date))
+            if norm is None:
+                norm = rec.report.dumptruck_norm_sec
+            if norm is not None and norm > 0:
+                return max(0.0, (rec.engine_no_move_sec or 0) - norm)
+        return 0.0
+
+    # Only records with a known date are included in all aggregations and counts
+    dated_recs = [r for r in rec_list if r.record_date]
+
+    # Aggregate per vehicle + daily
+    vehicle_agg = _dd(lambda: {
+        'group': '', 'total_over_sec': 0.0, 'total_sec': 0.0,
+        'records': 0, 'shifts_with_over': 0,
+    })
+    daily_over = _dd(float)   # date -> total over_sec
+
+    total_over_sec_all = 0.0
+    records_with_over  = 0
+
+    for rec in dated_recs:
+        over = _get_over_sec(rec)
+        d = rec.record_date.isoformat()
+        daily_over[d] += over
+        total_over_sec_all += over
+
+        v = vehicle_agg[rec.name]
+        v['group']          = rec.group
+        v['records']       += 1
+        v['total_over_sec'] += over
+        # store actual metric seconds for context
+        if rec.group in ('Бульдозеры', 'Погрузчики'):
+            v['total_sec'] += rec.engine_idle_sec or 0
+        elif rec.group == 'Экскаваторы':
+            v['total_sec'] += rec.downtime_sec or 0
+        elif rec.group == 'Самосвалы':
+            v['total_sec'] += rec.engine_no_move_sec or 0
+        if over > 0:
+            v['shifts_with_over'] += 1
+            records_with_over += 1
+
+    # Build sorted vehicle list
+    vehicle_stats = []
+    for vname, v in vehicle_agg.items():
+        vehicle_stats.append({
+            'name':             vname,
+            'group':            v['group'],
+            'records':          v['records'],
+            'shifts_with_over': v['shifts_with_over'],
+            'total_over_sec':   v['total_over_sec'],
+            'total_over_str':   secs_to_hhmmss(v['total_over_sec']),
+            'total_over_hours': round(v['total_over_sec'] / 3600, 2),
+            'total_sec':        v['total_sec'],
+            'total_str':        secs_to_hhmmss(v['total_sec']),
+        })
+    vehicle_stats.sort(key=lambda x: x['total_over_sec'], reverse=True)
+
+    top_vehicles = [v for v in vehicle_stats if v['total_over_sec'] > 0][:5]
+
+    # Daily chart
+    all_dates = sorted(daily_over.keys())
+    daily_over_hours = [round(daily_over[d] / 3600, 2) for d in all_dates]
+
+    trend_json = json.dumps({'dates': all_dates, 'over_hours': daily_over_hours})
+
+    all_groups = list(
+        VehicleRecord.objects.values_list('group', flat=True).distinct().order_by('group')
+    )
+    vehicles_qs = VehicleRecord.objects.values('name', 'group').distinct().order_by('group', 'name')
+    if group_filters:
+        vehicles_qs = vehicles_qs.filter(group__in=group_filters)
+    all_vehicles = list(vehicles_qs)
+
+    sections = Section.objects.all()
+
+    context = {
+        'vehicle_stats':        vehicle_stats,
+        'top_vehicles':         top_vehicles,
+        'trend_json':           trend_json,
+        'has_trend':            bool(all_dates),
+        'total_over_hours':     round(total_over_sec_all / 3600, 2),
+        'total_over_str':       secs_to_hhmmss(total_over_sec_all),
+        'total_count':          len(dated_recs),
+        'records_with_over':    records_with_over,
+        'sections':             sections,
+        'all_groups':           all_groups,
+        'all_vehicles':         all_vehicles,
+        'vehicle_filter':       vehicle_filter,
+        'shift_filter':         shift_filter,
+        'date_from':            date_from,
+        'date_to':              date_to,
+        'section_id':           section_id,
+        'group_filters':        group_filters,
+    }
+    return render(request, 'analysis/analytics_efficiency.html', context)
+
+
 # ─── Analytics Compare ────────────────────────────────────────────────────────
 
 @role_required(GROUP_ANALYST)

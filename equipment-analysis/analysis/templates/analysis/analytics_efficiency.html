@@ -1,0 +1,319 @@
+{% extends 'analysis/base.html' %}
+
+{% block title %}Анализ простоев — Анализ техники{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-3">
+    <h4 class="mb-0 fw-bold"><i class="bi bi-hourglass-split me-2"></i>Анализ эффективности (простоев)</h4>
+</div>
+
+<!-- Вкладки аналитики -->
+<ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'analytics' %}?date_from={{ date_from }}&date_to={{ date_to }}&section={{ section_id }}&shift={{ shift_filter }}{% for g in group_filters %}&group={{ g }}{% endfor %}{% if vehicle_filter %}&vehicle={{ vehicle_filter }}{% endif %}">
+            <i class="bi bi-bar-chart-line me-1"></i>Общая аналитика
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{% url 'analytics_compare' %}">
+            <i class="bi bi-intersect me-1"></i>Сравнение участков
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link active" href="{% url 'analytics_efficiency' %}">
+            <i class="bi bi-hourglass-split me-1"></i>Анализ простоев
+        </a>
+    </li>
+</ul>
+
+<!-- Фильтры -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold mb-1">Дата от</label>
+                <input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold mb-1">Дата до</label>
+                <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold mb-1">Участок</label>
+                <select name="section" class="form-select form-select-sm">
+                    <option value="">Все участки</option>
+                    {% for s in sections %}
+                    <option value="{{ s.pk }}" {% if section_id == s.pk|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold mb-1">Смена</label>
+                <select name="shift" class="form-select form-select-sm">
+                    <option value="">Все смены</option>
+                    <option value="1" {% if shift_filter == '1' %}selected{% endif %}>Смена 1</option>
+                    <option value="2" {% if shift_filter == '2' %}selected{% endif %}>Смена 2</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold mb-1">Техника</label>
+                <select name="vehicle" class="form-select form-select-sm">
+                    <option value="">Вся техника</option>
+                    {% for v in all_vehicles %}
+                    <option value="{{ v.name }}" {% if vehicle_filter == v.name %}selected{% endif %}>{{ v.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2 d-flex gap-1 align-items-end">
+                <button type="submit" class="btn btn-sm btn-primary flex-grow-1">
+                    <i class="bi bi-funnel me-1"></i>Применить
+                </button>
+                <a href="{% url 'analytics_efficiency' %}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-x"></i>
+                </a>
+            </div>
+            <!-- Группы -->
+            <div class="col-12">
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <span class="small fw-semibold text-muted">Группы:</span>
+                    {% for g in all_groups %}
+                    <div class="form-check form-check-inline mb-0">
+                        <input class="form-check-input" type="checkbox" name="group" value="{{ g }}"
+                               id="g_{{ forloop.counter }}"
+                               {% if g in group_filters %}checked{% endif %}>
+                        <label class="form-check-label small" for="g_{{ forloop.counter }}">{{ g }}</label>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if not total_count %}
+<!-- Нет данных -->
+<div class="card">
+    <div class="card-body text-center py-5 text-muted">
+        <i class="bi bi-hourglass display-5 d-block mb-3"></i>
+        <p class="mb-0">Нет данных для выбранного периода.<br>Выберите период и нажмите «Применить».</p>
+    </div>
+</div>
+
+{% else %}
+
+<!-- Суммарные карточки -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card h-100">
+            <div class="card-body text-center py-3">
+                <div class="stat-value text-danger">{{ total_over_str }}</div>
+                <div class="stat-label">Суммарный простой (чч:мм:сс)</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card h-100">
+            <div class="card-body text-center py-3">
+                <div class="stat-value text-danger">{{ total_over_hours }}</div>
+                <div class="stat-label">Суммарный простой (ч)</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card h-100">
+            <div class="card-body text-center py-3">
+                <div class="stat-value">{{ records_with_over }}</div>
+                <div class="stat-label">Смен с превышением нормы</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card h-100">
+            <div class="card-body text-center py-3">
+                <div class="stat-value">{{ total_count }}</div>
+                <div class="stat-label">Всего записей</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if top_vehicles %}
+<!-- ТОП нарушителей -->
+<h5 class="fw-bold mb-3"><i class="bi bi-trophy-fill text-danger me-2"></i>Топ по простоям за период</h5>
+<div class="row g-3 mb-4">
+    {% for v in top_vehicles %}
+    <div class="col-12 col-md-6 col-xl">
+        <div class="card h-100 border-0" style="
+            background: {% if forloop.counter == 1 %}linear-gradient(135deg,#dc3545,#c01c2b){% elif forloop.counter == 2 %}linear-gradient(135deg,#fd7e14,#d9650a){% elif forloop.counter == 3 %}linear-gradient(135deg,#ffc107,#d9a000){% else %}linear-gradient(135deg,#6c757d,#495057){% endif %};
+            color: #fff; box-shadow: 0 4px 12px rgba(0,0,0,.2);">
+            <div class="card-body py-3 px-3">
+                <div class="d-flex align-items-start justify-content-between mb-2">
+                    <span class="badge bg-white {% if forloop.counter <= 3 %}text-dark{% else %}text-dark{% endif %} fs-6 fw-bold"
+                          style="opacity:.9; min-width:28px;">{{ forloop.counter }}</span>
+                    <span class="small opacity-75">
+                        {% if v.group == 'Бульдозеры' %}<i class="bi bi-truck-flatbed"></i>
+                        {% elif v.group == 'Экскаваторы' %}<i class="bi bi-tools"></i>
+                        {% elif v.group == 'Самосвалы' %}<i class="bi bi-truck"></i>
+                        {% elif v.group == 'Погрузчики' %}<i class="bi bi-box-arrow-up"></i>
+                        {% else %}<i class="bi bi-gear"></i>{% endif %}
+                        {{ v.group }}
+                    </span>
+                </div>
+                <div class="fw-bold mb-1" style="font-size:.9rem; line-height:1.2;">{{ v.name }}</div>
+                <div style="font-size:1.5rem; font-weight:700; line-height:1;">{{ v.total_over_str }}</div>
+                <div style="font-size:.75rem; opacity:.8;" class="mt-1">{{ v.total_over_hours }} ч · {{ v.shifts_with_over }} смен</div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if has_trend %}
+<!-- График по дням -->
+<div class="card mb-4">
+    <div class="card-body">
+        <h6 class="fw-bold mb-3"><i class="bi bi-graph-up me-1"></i>Динамика простоев по дням (ч)</h6>
+        <canvas id="overChart" height="80"></canvas>
+    </div>
+</div>
+{% endif %}
+
+<!-- Таблица по технике -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="d-flex align-items-center justify-content-between px-3 py-2 border-bottom">
+            <h6 class="mb-0 fw-bold"><i class="bi bi-table me-1"></i>Детализация по технике</h6>
+            <span class="small text-muted">Сортировка по убыванию простоя</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-3">№</th>
+                        <th>Техника</th>
+                        <th>Группа</th>
+                        <th>Записей</th>
+                        <th>Смен с<br>превышением</th>
+                        <th>Фактическое<br>время (чч:мм:сс)</th>
+                        <th>Простой свыше<br>нормы (чч:мм:сс)</th>
+                        <th>Простой<br>свыше нормы (ч)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for v in vehicle_stats %}
+                    <tr {% if v.total_over_sec > 0 %}class="{% if forloop.counter == 1 and v.total_over_sec > 0 %}anomaly-row{% endif %}"{% endif %}>
+                        <td class="ps-3 text-muted">{{ forloop.counter }}</td>
+                        <td class="fw-semibold">{{ v.name }}</td>
+                        <td>
+                            {% if v.group == 'Бульдозеры' %}
+                            <span class="badge bg-warning text-dark group-badge">{{ v.group }}</span>
+                            {% elif v.group == 'Экскаваторы' %}
+                            <span class="badge bg-info text-dark group-badge">{{ v.group }}</span>
+                            {% elif v.group == 'Самосвалы' %}
+                            <span class="badge bg-secondary group-badge">{{ v.group }}</span>
+                            {% elif v.group == 'Погрузчики' %}
+                            <span class="badge bg-success group-badge">{{ v.group }}</span>
+                            {% else %}
+                            <span class="badge bg-light text-dark group-badge">{{ v.group }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted">{{ v.records }}</td>
+                        <td class="text-center">
+                            {% if v.shifts_with_over > 0 %}
+                            <span class="badge bg-danger">{{ v.shifts_with_over }}</span>
+                            {% else %}
+                            <span class="text-success small"><i class="bi bi-check-circle me-1"></i>0</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted font-monospace small">{{ v.total_str }}</td>
+                        <td>
+                            {% if v.total_over_sec > 0 %}
+                            <span class="text-danger fw-semibold font-monospace">{{ v.total_over_str }}</span>
+                            {% else %}
+                            <span class="text-success small"><i class="bi bi-check-circle me-1"></i>В норме</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if v.total_over_hours > 0 %}
+                            <span class="fw-semibold text-danger">{{ v.total_over_hours }}</span>
+                            {% else %}
+                            <span class="text-muted">0</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-5">
+                            <i class="bi bi-check-circle display-6 d-block mb-2 text-success"></i>
+                            Нет данных
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if has_trend %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    var raw = {{ trend_json|safe }};
+    var ctx = document.getElementById('overChart').getContext('2d');
+
+    // Colour each bar: >0 = danger gradient, 0 = light grey
+    var barColors = raw.over_hours.map(function(v) {
+        return v > 0 ? 'rgba(220,53,69,0.75)' : 'rgba(200,200,200,0.4)';
+    });
+    var borderColors = raw.over_hours.map(function(v) {
+        return v > 0 ? '#dc3545' : '#ccc';
+    });
+
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: raw.dates,
+            datasets: [{
+                label: 'Простой свыше нормы (ч)',
+                data: raw.over_hours,
+                backgroundColor: barColors,
+                borderColor: borderColors,
+                borderWidth: 1,
+                borderRadius: 3,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(ctx) {
+                            return ' ' + ctx.parsed.y + ' ч';
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: { font: { size: 11 }, maxRotation: 45 }
+                },
+                y: {
+                    beginAtZero: true,
+                    title: { display: true, text: 'часов', font: { size: 11 } },
+                    ticks: { font: { size: 11 } }
+                }
+            }
+        }
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}
