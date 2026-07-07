@@ -10,8 +10,8 @@
         body { background-color: #f4f6f9; }
         .navbar-brand { font-weight: 700; letter-spacing: -0.5px; }
         .card { border: none; box-shadow: 0 1px 4px rgba(0,0,0,.08); border-radius: 10px; }
-        .table th { font-size: .82rem; white-space: nowrap; background: #f8f9fa; }
-        .table td { font-size: .85rem; vertical-align: middle; }
+        .table th { font-size: .78rem; white-space: nowrap; background: #f8f9fa; padding: .35rem .4rem; }
+        .table td { font-size: .80rem; vertical-align: middle; padding: .3rem .4rem; }
         .efficiency-good { color: #198754; font-weight: 600; }
         .efficiency-warn { color: #fd7e14; font-weight: 600; }
         .efficiency-bad  { color: #dc3545; font-weight: 600; }
@@ -21,14 +21,14 @@
         .daily-total-row { background-color: #e8f4fd !important; border-top: 2px solid #90caf9; border-bottom: 2px solid #90caf9; }
         .anomaly-badge { display: inline-block; background: #fff3cd; color: #856404;
                          border: 1px solid #ffc107; border-radius: 4px;
-                         padding: 2px 6px; font-size: .73rem; margin: 1px 0; }
+                         padding: 2px 5px; font-size: .70rem; margin: 1px 0; }
         .stat-value { font-size: 1.6rem; font-weight: 700; line-height: 1.1; }
         .stat-label { font-size: .8rem; color: #6c757d; margin-top: 2px; }
-        .group-badge { font-size: .78rem; padding: 3px 8px; border-radius: 20px; }
+        .group-badge { font-size: .73rem; padding: 2px 6px; border-radius: 20px; }
         footer { color: #adb5bd; font-size: .82rem; }
-        .comment-cell { min-width: 160px; }
-        .comment-input { font-size: .82rem; border: 1px solid #dee2e6; border-radius: 4px;
-                         padding: 3px 6px; width: 100%; background: #fff; }
+        .comment-cell { min-width: 130px; }
+        .comment-input { font-size: .78rem; border: 1px solid #dee2e6; border-radius: 4px;
+                         padding: 2px 5px; width: 100%; background: #fff; }
         .comment-input:focus { outline: none; border-color: #86b7fe; box-shadow: 0 0 0 2px rgba(13,110,253,.15); }
         .nav-link.active { font-weight: 600; }
     </style>
@@ -101,7 +101,7 @@
     </div>
 </nav>
 
-<div class="container pb-5">
+<div class="container-fluid px-3 px-lg-4 pb-5">
     {% if messages %}
         {% for message in messages %}
         <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
