@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Аналитика работы техники</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  :root{
+    --bg:#eef1f5;
+    --card:#ffffff;
+    --border:#e2e6ec;
+    --text:#1a2233;
+    --muted:#6b7280;
+    --blue:#2456d6;
+    --blue-dark:#173a9e;
+    --red:#d33a3a;
+    --red-bg:#fdecec;
+    --red-dark:#a52424;
+    --amber:#d99a1b;
+    --amber-bg:#fdf3dd;
+    --amber-dark:#9c6d0f;
+    --green:#1f9d55;
+    --green-bg:#e8f8ee;
+    --green-dark:#166b3a;
+    --gray-bg:#f4f5f7;
+    --radius:14px;
+    --shadow:0 1px 2px rgba(20,25,40,.04), 0 4px 14px rgba(20,25,40,.05);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:"Segoe UI",Inter,Arial,sans-serif;}
+  #app{max-width:1400px;margin:0 auto;padding:20px 24px 60px;}
+
+  /* ===== Header ===== */
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px;flex-wrap:wrap;}
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand .logo{width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,var(--blue),var(--blue-dark));display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;flex:none;}
+  .brand h1{font-size:19px;margin:0;line-height:1.2;}
+  .brand .sub{font-size:12.5px;color:var(--muted);}
+  .topbar-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .period-badge{background:#fff;border:1px solid var(--border);border-radius:10px;padding:8px 14px;font-size:13px;color:var(--text);display:flex;align-items:center;gap:8px;box-shadow:var(--shadow);}
+  .period-badge b{color:var(--blue-dark);}
+
+  button{font-family:inherit;cursor:pointer;}
+  .btn{border:1px solid var(--border);background:#fff;color:var(--text);border-radius:10px;padding:9px 16px;font-size:13.5px;font-weight:600;display:inline-flex;align-items:center;gap:7px;transition:.15s;}
+  .btn:hover{border-color:#c7ccd6;background:#fafbfc;}
+  .btn-primary{background:var(--blue);border-color:var(--blue);color:#fff;}
+  .btn-primary:hover{background:var(--blue-dark);border-color:var(--blue-dark);}
+  .btn-ghost{background:transparent;border-color:transparent;color:var(--muted);padding:6px 8px;}
+  .btn-ghost:hover{background:#eef0f4;color:var(--text);}
+  .btn-sm{padding:6px 11px;font-size:12px;}
+  input[type=file]{display:none;}
+
+  /* ===== Upload zone ===== */
+  #dropzone{background:#fff;border:2px dashed #c6ccd8;border-radius:var(--radius);padding:56px 24px;text-align:center;color:var(--muted);margin-bottom:20px;transition:.15s;}
+  #dropzone.drag{border-color:var(--blue);background:#f3f6ff;}
+  #dropzone .dz-icon{font-size:38px;margin-bottom:10px;}
+  #dropzone h3{margin:0 0 6px;color:var(--text);font-size:16px;}
+  #dropzone p{margin:0 0 16px;font-size:13px;}
+  #errBox{display:none;background:var(--red-bg);color:var(--red-dark);border:1px solid #f4c6c6;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13.5px;}
+
+  /* ===== Filters ===== */
+  .filters{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin-bottom:18px;display:flex;align-items:flex-end;gap:22px;flex-wrap:wrap;box-shadow:var(--shadow);}
+  .filter-group{display:flex;flex-direction:column;gap:7px;}
+  .filter-group label{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;max-width:520px;}
+  .chip{border:1px solid var(--border);background:#f7f8fa;border-radius:20px;padding:6px 13px;font-size:12.5px;font-weight:600;color:var(--muted);}
+  .chip.active{background:var(--blue);border-color:var(--blue);color:#fff;}
+  select,.search-input{border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;background:#fff;color:var(--text);min-width:150px;}
+  .search-input{min-width:180px;}
+  .filters .spacer{flex:1;}
+
+  /* ===== Dashboard grid ===== */
+  #dashboard{display:none;}
+  .block{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 20px 20px;position:relative;margin-bottom:18px;}
+  .block-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .block-head h2{font-size:15px;margin:0;display:flex;align-items:center;gap:8px;}
+  .block-head .desc{font-size:12px;color:var(--muted);font-weight:400;margin-top:2px;}
+  .dl-btn{width:30px;height:30px;border-radius:8px;border:1px solid var(--border);background:#fbfbfc;display:flex;align-items:center;justify-content:center;color:var(--muted);flex:none;}
+  .dl-btn:hover{background:#eef0f4;color:var(--blue-dark);}
+
+  .grid-row{display:grid;gap:18px;}
+  .grid-2{grid-template-columns:1.4fr 1fr;}
+  .grid-2b{grid-template-columns:1fr 1fr;}
+  @media(max-width:980px){.grid-2,.grid-2b{grid-template-columns:1fr;}}
+
+  /* Hero card */
+  .hero-inner{display:flex;align-items:center;}
+  .hero-inner > div:first-child{flex:1;margin-right:20px;min-width:0;}
+  .hero-num{font-size:46px;font-weight:800;color:var(--red-dark);line-height:1;}
+  .hero-label{font-size:13px;color:var(--muted);margin-top:6px;}
+  .hero-sub{font-size:13px;color:var(--muted);margin-top:14px;}
+  .reason-split{margin-top:16px;background:#f8f9fb;border:1px solid var(--border);border-radius:10px;padding:12px 14px;}
+  .reason-split-title{font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:8px;}
+  .reason-split-bar{display:flex;height:14px;border-radius:7px;overflow:hidden;background:#eef0f4;}
+  .rs-justified{background:linear-gradient(90deg,#1f9d55,#25b06a);height:100%;}
+  .rs-unjustified{background:linear-gradient(90deg,#d33a3a,#e14d4d);height:100%;}
+  .reason-split-legend{display:flex;justify-content:space-between;margin-top:9px;font-size:12px;flex-wrap:wrap;}
+  .reason-split-legend .rl-item{display:flex;align-items:center;font-weight:600;margin:3px 10px 3px 0;}
+  .reason-split-legend .rl-item span.sdot,.reason-split-legend .rl-item i{margin-right:6px;}
+  .reason-split-legend .rl-item b{font-weight:800;margin-left:4px;}
+  .reason-split-legend .just{color:var(--green-dark);}
+  .reason-split-legend .unjust{color:var(--red-dark);}
+  .group-list{margin-top:16px;}
+  .group-row{display:flex;align-items:center;font-size:13px;margin-bottom:10px;}
+  .group-row:last-child{margin-bottom:0;}
+  .dot{width:10px;height:10px;border-radius:50%;flex:none;margin-right:10px;}
+  .group-row .name{color:var(--text);font-weight:600;flex:1;margin-right:10px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .group-row .val{color:var(--text);font-weight:700;min-width:64px;text-align:right;flex:none;margin-right:10px;}
+  .group-row .pct{color:var(--muted);min-width:44px;text-align:right;flex:none;}
+  .donut-wrap{position:relative;display:flex;align-items:center;justify-content:center;flex:none;}
+  .donut-center{position:absolute;text-align:center;pointer-events:none;}
+  .donut-center .n{font-size:22px;font-weight:800;color:var(--text);}
+  .donut-center .l{font-size:11px;color:var(--muted);}
+
+  /* KPI tiles */
+  .tile-col{display:flex;flex-direction:column;}
+  .tile-col .tile{margin-bottom:16px;}
+  .tile-col .tile:last-child{margin-bottom:0;}
+  .tile{border-radius:var(--radius);padding:18px 20px;color:#fff;position:relative;box-shadow:var(--shadow);overflow:visible;}
+  .tile.red{background:linear-gradient(135deg,#e14d4d,#b52d2d);}
+  .tile.amber{background:linear-gradient(135deg,#e8ac2e,#c47f10);}
+  .tile.green{background:linear-gradient(135deg,#25b06a,#157a45);}
+  .tile-top{display:flex;justify-content:space-between;align-items:flex-start;}
+  .tile-top h3{font-size:13px;margin:0 10px 0 0;font-weight:700;opacity:.95;line-height:1.35;flex:1;}
+  .tile .big{font-size:30px;font-weight:800;margin-top:14px;}
+  .tile .sub{font-size:12px;opacity:.85;margin-top:4px;}
+  .ring{width:56px;height:56px;position:relative;flex:none;margin-right:8px;}
+  .ring-inner{position:absolute;inset:0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;}
+  .tile .dl-btn{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.25);color:#fff;flex:none;}
+  .tile .dl-btn:hover{background:rgba(255,255,255,.3);}
+
+  /* Bar charts (pure CSS, no external chart lib) */
+  .bars-wrap{display:flex;flex-direction:column;gap:12px;padding-top:4px;min-height:230px;justify-content:center;}
+  .bar-row{display:grid;grid-template-columns:220px 1fr 78px;align-items:center;gap:10px;}
+  .bar-label{font-size:12.5px;color:var(--text);font-weight:600;overflow:hidden;}
+  .bar-label .eq-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .bar-date{font-weight:600;color:var(--muted);font-size:.85em;}
+  .bar-label .bar-group-tag{font-size:10.5px;color:var(--muted);font-weight:500;}
+  .shift-breakdown{display:flex;flex-wrap:wrap;gap:6px 10px;font-size:10.5px;color:var(--muted);font-weight:600;margin-top:2px;}
+  .shift-breakdown span.sitem{display:inline-flex;align-items:center;gap:4px;}
+  .sdot{width:7px;height:7px;border-radius:2px;flex:none;}
+  .bar-track{background:#eef0f4;border-radius:6px;height:18px;overflow:hidden;}
+  .bar-fill-group{height:100%;display:flex;}
+  .bar-seg{height:100%;transition:width .3s;}
+  .bar-seg.no-reason{box-shadow: inset 0 -4px 0 0 rgba(211,58,58,.9);}
+  .reason-icon{font-size:10px;}
+  .bar-seg:first-child{border-radius:6px 0 0 6px;}
+  .bar-seg:last-child{border-radius:0 6px 6px 0;}
+  .bar-value{font-size:12.5px;font-weight:700;text-align:right;color:var(--text);}
+  .shift-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:12px;padding-top:10px;border-top:1px solid #eef0f3;}
+  .shift-legend span{display:inline-flex;align-items:center;gap:6px;font-weight:600;}
+
+  /* Enlarged variant used for the top-10 downtime-by-unit card */
+  .bars-wrap.big{gap:24px;min-height:360px;}
+  .bars-wrap.big .bar-row{grid-template-columns:300px 1fr 140px;gap:18px;}
+  .bars-wrap.big .bar-label{font-size:17px;}
+  .bars-wrap.big .eq-name{font-size:19px;font-weight:800;}
+  .bars-wrap.big .bar-group-tag{font-size:13.5px;display:block;margin-top:3px;}
+  .bars-wrap.big .shift-breakdown{font-size:13.5px;gap:8px 16px;margin-top:8px;}
+  .bars-wrap.big .bar-track{height:30px;border-radius:8px;}
+  .bars-wrap.big .bar-seg:first-child{border-radius:8px 0 0 8px;}
+  .bars-wrap.big .bar-seg:last-child{border-radius:0 8px 8px 0;}
+  .bars-wrap.big .bar-value{font-size:21px;font-weight:800;}
+  .bars-wrap.big .sdot{width:9px;height:9px;}
+
+  .vbars-wrap{display:flex;align-items:flex-end;justify-content:center;gap:38px;height:270px;padding:14px 14px 0;flex-wrap:wrap;}
+  .vbar-col{display:flex;flex-direction:column;align-items:center;gap:9px;height:100%;justify-content:flex-end;width:88px;}
+  .vbar-value{font-size:13.5px;font-weight:800;color:var(--text);text-align:center;line-height:1.25;}
+  .vbar-value .vbar-pct{display:block;font-size:11.5px;font-weight:600;color:var(--muted);}
+  .vbar-track{width:56px;flex:1;display:flex;align-items:flex-end;background:#f4f5f7;border-radius:8px 8px 4px 4px;overflow:hidden;}
+  .vbar-fill{width:100%;border-radius:8px 8px 0 0;min-height:3px;transition:height .3s;}
+  .vbar-label{font-size:12.5px;color:var(--text);font-weight:700;text-align:center;}
+  .chart-box{min-height:250px;display:flex;align-items:center;justify-content:center;}
+
+  /* Tables */
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{text-align:left;color:var(--muted);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.03em;padding:8px 10px;border-bottom:2px solid var(--border);cursor:pointer;white-space:nowrap;}
+  th:hover{color:var(--text);}
+  th.sorted::after{content:' \25BE';}
+  td{padding:9px 10px;border-bottom:1px solid #eef0f3;white-space:nowrap;}
+  tr:hover td{background:#f8f9fb;}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:20px;font-weight:700;font-size:12px;white-space:nowrap;}
+  .pill-pct{font-weight:600;opacity:.75;font-size:11px;}
+  .pill.green{background:var(--green-bg);color:var(--green-dark);}
+  .pill.amber{background:var(--amber-bg);color:var(--amber-dark);}
+  .pill.red{background:var(--red-bg);color:var(--red-dark);}
+  .pill.gray{background:#eef0f3;color:var(--muted);}
+  .muted-cell{color:var(--muted);}
+  .downtime-cell{font-weight:700;}
+  .downtime-cell.has{color:var(--red-dark);}
+  .row-nonworking{background:var(--red-bg);}
+  .empty-note{color:var(--muted);font-size:13px;padding:14px 4px;}
+  .table-scroll{overflow-x:auto;}
+  .group-tag{font-size:11px;background:#eef1f6;color:var(--muted);padding:2px 8px;border-radius:6px;font-weight:700;}
+
+  /* Secondary muted block */
+  .secondary{background:var(--gray-bg);border:1px dashed #d6dae2;}
+  .sec-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;}
+  .sec-stat{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;}
+  .sec-stat .l{font-size:11.5px;color:var(--muted);margin-bottom:4px;}
+  .sec-stat .v{font-size:19px;font-weight:700;color:#3a4152;}
+
+  .legend-row{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--muted);}
+  .legend-row span{display:inline-flex;align-items:center;gap:6px;}
+  .legend-row i{width:10px;height:10px;border-radius:3px;display:inline-block;}
+
+  footer{text-align:center;color:var(--muted);font-size:12px;margin-top:30px;}
+  .print-only{display:none;}
+
+  /* ============================= PRINT / PDF ============================= */
+  @media print{
+    @page{ size:A4; margin:14mm 12mm; }
+    html, body{ background:#fff !important; }
+    #app{ max-width:none; padding:0; margin:0; }
+    .no-print{ display:none !important; }
+    .print-only{ display:block !important; margin-bottom:18px; }
+    .print-title{ font-size:20px; font-weight:800; color:#111; }
+    .print-meta{ font-size:11.5px; color:#555; margin-top:4px; }
+
+    * { box-shadow:none !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; color-adjust:exact; }
+
+    .block{ border:1px solid #ddd; box-shadow:none; break-inside:avoid; page-break-inside:avoid; margin-bottom:14px; }
+    .grid-row.grid-2{ display:block; }
+    .grid-row.grid-2 > *{ margin-bottom:14px; }
+    .tile-col .tile{ break-inside:avoid; page-break-inside:avoid; }
+    .dl-btn{ display:none !important; }
+    .table-scroll{ overflow:visible !important; }
+    table{ font-size:10.5px; }
+    th, td{ padding:5px 6px; }
+    .bars-wrap.big .eq-name{ font-size:14px; }
+    .bars-wrap.big .bar-value{ font-size:15px; }
+    .bars-wrap.big .bar-track{ height:18px; }
+    .bars-wrap.big{ gap:14px; }
+    .shift-breakdown{ font-size:10px; }
+    footer{ display:none; }
+    a[href]:after{ content:""; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo">⛭</div>
+      <div>
+        <h1>Аналитика работы техники</h1>
+        <div class="sub" id="periodSub">Загрузите отчёт, чтобы построить дашборд</div>
+      </div>
+    </div>
+    <div class="topbar-actions no-print" id="topActions" style="display:none;">
+      <div class="period-badge">📅 <b id="periodBadge">—</b></div>
+      <button class="btn" id="reuploadBtn">⤴ Загрузить другой файл</button>
+      <button class="btn" id="printBtn">🖨 Печать / PDF (A4)</button>
+      <button class="btn btn-primary" id="exportAllBtn">⭳ Скачать весь дашборд PNG</button>
+    </div>
+  </div>
+
+  <div id="errBox"></div>
+
+  <div id="dropzone" class="no-print">
+    <div class="dz-icon">📊</div>
+    <h3>Загрузите Excel-отчёт по технике</h3>
+    <p>Файл со сменами, эффективностью, выходом техники и простоями (.xlsx)</p>
+    <button class="btn btn-primary" id="chooseFileBtn">Выбрать файл</button>
+    <input type="file" id="fileInput" accept=".xlsx,.xls">
+  </div>
+
+  <div class="filters no-print" id="filtersBar" style="display:none;">
+    <div class="filter-group">
+      <label>Группы техники</label>
+      <div class="chips" id="groupChips"></div>
+    </div>
+    <div class="filter-group">
+      <label>Участок</label>
+      <select id="siteSelect"><option value="all">Все участки</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Поиск техники</label>
+      <input class="search-input" id="searchInput" placeholder="Например: CAT, Volvo…">
+    </div>
+    <div class="spacer"></div>
+    <button class="btn btn-sm" id="resetFiltersBtn">Сбросить фильтры</button>
+  </div>
+
+  <div id="printHeader" class="print-only">
+    <div class="print-title">Аналитика работы техники</div>
+    <div class="print-meta">Период: <b id="printPeriod">—</b> &nbsp;·&nbsp; Единиц техники: <b id="printEquip">—</b> &nbsp;·&nbsp; Сформировано: <b id="printGenerated">—</b></div>
+  </div>
+
+  <div id="dashboard">
+
+    <!-- Hero + KPI tiles -->
+    <div class="grid-row grid-2">
+      <div class="block" id="blk-hero">
+        <div class="block-head">
+          <div>
+            <h2>Общий простой техники сверх нормы</h2>
+            <div class="desc">Суммарное время простоя, доля с уважительной причиной и распределение по группам техники</div>
+          </div>
+          <button class="dl-btn" data-target="blk-hero" title="Скачать PNG">⭳</button>
+        </div>
+        <div class="hero-inner">
+          <div>
+            <div class="hero-num" id="heroDowntime">0ч 00м</div>
+            <div class="hero-label">суммарный простой сверх нормы за период</div>
+            <div class="hero-sub" id="heroUnitsAffected">Простаивает 0 из 0 единиц техники</div>
+            <div class="reason-split">
+              <div class="reason-split-title">Простой сверх нормы: уважительный vs без причины</div>
+              <div class="reason-split-bar" id="reasonSplitBar"></div>
+              <div class="reason-split-legend">
+                <span class="rl-item just">✅ Уважительная причина: <b id="rsJustVal">0ч 00м</b></span>
+                <span class="rl-item unjust">❗ Без причины: <b id="rsUnjustVal">0ч 00м</b></span>
+              </div>
+            </div>
+            <div class="group-list" id="groupList"></div>
+          </div>
+          <div class="donut-wrap">
+            <div id="groupDonut"></div>
+            <div class="donut-center">
+              <div class="n" id="donutCenterN">0</div>
+              <div class="l">ед. техники</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tile-col">
+        <div class="tile red" id="blk-tile-idle">
+          <div class="tile-top">
+            <h3>Простой техники<br>(эффективность &gt; 100%)</h3>
+            <button class="dl-btn" data-target="blk-tile-idle" title="Скачать PNG">⭳</button>
+          </div>
+          <div class="big" id="tileIdleCount">0</div>
+          <div class="sub" id="tileIdleSub">единиц техники простаивает сверх нормы</div>
+        </div>
+        <div class="tile amber" id="blk-tile-low">
+          <div class="tile-top">
+            <h3>Низкий выход техники<br>(&lt; 80%)</h3>
+            <button class="dl-btn" data-target="blk-tile-low" title="Скачать PNG">⭳</button>
+          </div>
+          <div class="big" id="tileLowCount">0</div>
+          <div class="sub" id="tileLowSub">требует внимания, но не критично</div>
+        </div>
+        <div class="tile green" id="blk-tile-good">
+          <div class="tile-top">
+            <h3>Техника работает штатно<br>(выход ≥ 80%)</h3>
+            <button class="dl-btn" data-target="blk-tile-good" title="Скачать PNG">⭳</button>
+          </div>
+          <div class="big" id="tileGoodCount">0</div>
+          <div class="sub" id="tileGoodSub">полностью выполняет норму выхода</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="block" id="blk-chart-unit">
+      <div class="block-head">
+        <div>
+          <h2>Простои по технике (топ-10)</h2>
+          <div class="desc">Время простоя сверх нормы по единицам техники, с разбивкой по сменам</div>
+        </div>
+        <button class="dl-btn" data-target="blk-chart-unit" title="Скачать PNG">⭳</button>
+      </div>
+      <div class="chart-box"><div class="bars-wrap big" id="chartByUnit"></div></div>
+      <div class="shift-legend" id="chartByUnitLegend"></div>
+    </div>
+
+    <div class="block" id="blk-chart-group">
+      <div class="block-head">
+        <div>
+          <h2>Простои по группам техники</h2>
+          <div class="desc">Распределение времени простоя сверх нормы между группами техники</div>
+        </div>
+        <button class="dl-btn" data-target="blk-chart-group" title="Скачать PNG">⭳</button>
+      </div>
+      <div class="chart-box"><div class="vbars-wrap" id="chartByGroup"></div></div>
+      <div class="group-list" id="chartByGroupList"></div>
+    </div>
+
+    <!-- Downtime reasons -->
+    <div class="block" id="blk-reasons">
+      <div class="block-head">
+        <div>
+          <h2>Простои сверх нормы — причины</h2>
+          <div class="desc">Каждая смена с простоем: уважительная причина (есть комментарий) или без объяснения — требует внимания руководства</div>
+        </div>
+        <button class="dl-btn" data-target="blk-reasons" title="Скачать PNG">⭳</button>
+      </div>
+      <div class="table-scroll">
+        <table id="tblReasons">
+          <thead><tr><th>Дата</th><th>Смена</th><th>Группа</th><th>Техника</th><th>Простой</th><th>Статус</th><th>Причина / комментарий</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="empty-note" id="reasonsEmpty" style="display:none;">Простоев сверх нормы не зафиксировано 👍</div>
+    </div>
+
+    <!-- Non-working equipment -->
+    <div class="block" id="blk-nonworking">
+      <div class="block-head">
+        <div>
+          <h2>⚠ Неработающая техника (простой всей смены)</h2>
+          <div class="desc">Смены с нулевым временем работы — техника не выходила в работу</div>
+        </div>
+        <button class="dl-btn" data-target="blk-nonworking" title="Скачать PNG">⭳</button>
+      </div>
+      <div class="table-scroll">
+        <table id="tblNonWorking">
+          <thead><tr><th>Дата</th><th>Смена</th><th>Группа</th><th>Техника</th><th>Участок</th><th>Статус</th><th>Причина</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="empty-note" id="nonWorkingEmpty" style="display:none;">Нет смен с полным простоем — вся техника выходила в работу 👍</div>
+    </div>
+
+    <!-- Detail table -->
+    <div class="block" id="blk-detail">
+      <div class="block-head">
+        <div>
+          <h2>Детализация по технике</h2>
+          <div class="desc">Итоги за период по каждой единице техники. Клик по заголовку — сортировка</div>
+        </div>
+        <button class="dl-btn" data-target="blk-detail" title="Скачать PNG">⭳</button>
+      </div>
+      <div class="table-scroll">
+        <table id="tblDetail">
+          <thead><tr>
+            <th data-key="date">Дата</th>
+            <th data-key="group">Группа</th>
+            <th data-key="equip">Техника</th>
+            <th data-key="site">Участок</th>
+            <th data-key="workMin">Время работы</th>
+            <th data-key="output">Выход, %</th>
+            <th data-key="eff">Эффективность, %</th>
+            <th data-key="downtimeMin">Простой сверх нормы</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="legend-row">
+        <span><i style="background:#1f9d55"></i>✅ Выход ≥ 80% — техника работает в норме</span>
+        <span><i style="background:#d99a1b"></i>⚠ Выход &lt; 80% — требует внимания</span>
+        <span><i style="background:#d33a3a"></i>⛔ Эффективность &gt; 100% — простой сверх нормы</span>
+      </div>
+    </div>
+
+    <!-- Secondary muted info -->
+    <div class="block secondary" id="blk-secondary">
+      <div class="block-head">
+        <div>
+          <h2 style="color:var(--muted)">Пробег и заправки (справочно)</h2>
+          <div class="desc">Второстепенные показатели — без цветовой индикации</div>
+        </div>
+        <button class="dl-btn" data-target="blk-secondary" title="Скачать PNG">⭳</button>
+      </div>
+      <div class="sec-grid" id="secGrid"></div>
+    </div>
+
+  </div>
+
+  <footer>Дашборд формируется автоматически из загруженного Excel-файла. Все расчёты выполняются локально в браузере.</footer>
+</div>
+
+<script>
+/* ============================= STATE ============================= */
+const state = {
+  units: [], shifts: [], groups: [], sites: [],
+  filters: { groups: new Set(), site: 'all', search: '' },
+  sortKey: 'downtimeMin', sortDir: 'desc',
+  fileLabel: 'dashboard'
+};
+/* no external chart library — all visuals are pure SVG/CSS, built below */
+
+/* ============================= HELPERS ============================= */
+function norm(s){ return (s==null?'':s.toString()).replace(/\n/g,' ').replace(/\s+/g,' ').trim().toLowerCase(); }
+function timeToMin(v){
+  if (v===null||v===undefined||v==='') return 0;
+  const s = v.toString().trim();
+  const m = s.match(/^(\d+):(\d{2}):(\d{2})$/);
+  if (!m) return 0;
+  return (+m[1])*60 + (+m[2]) + (+m[3])/60;
+}
+function minToHHMM(mins){
+  const total = Math.round(mins);
+  const sign = total<0?'-':'';
+  const abs = Math.abs(total);
+  const h = Math.floor(abs/60), m = abs%60;
+  return `${sign}${h}ч ${String(m).padStart(2,'0')}м`;
+}
+function fmtPct(v){ return (v===null||v===undefined||v==='')? '—' : (Math.round(v*10)/10)+'%'; }
+function fmtNum(v,d=1){ return (v===null||v===undefined||v==='')? '—' : Number(v).toFixed(d); }
+function esc(s){ return (s==null?'':s.toString()).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function hasReason(comment){ return comment!=null && comment.toString().trim()!==''; }
+function reasonBadge(comment){
+  return hasReason(comment)
+    ? `<span class="pill green">✅ Уважительная</span>`
+    : `<span class="pill red">❗ Без причины</span>`;
+}
+function parseRuDate(s){
+  if (!s) return null;
+  const m = s.toString().trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (!m) return null;
+  return +m[3]*10000 + (+m[2])*100 + (+m[1]); // yyyymmdd as sortable number
+}
+function reasonText(comment){
+  return hasReason(comment) ? esc(comment) : '<span class="muted-cell">причина не указана</span>';
+}
+function truncateText(s, n){
+  s = (s||'').toString();
+  return s.length>n ? s.slice(0,n-1)+'…' : s;
+}
+
+const PALETTE = ['#2456d6','#d33a3a','#d99a1b','#1f9d55','#7c3aed','#0891b2','#be185d','#65a30d','#ea580c','#475569'];
+function colorForGroup(name){
+  if (!state.groups.includes(name)) return '#94a3b8';
+  const i = state.groups.indexOf(name);
+  return PALETTE[i % PALETTE.length];
+}
+const SHIFT_PALETTE = ['#2456d6','#d99a1b','#7c3aed','#0891b2','#be185d','#65a30d','#d33a3a'];
+function colorForShift(label, allShiftLabels){
+  const i = allShiftLabels.indexOf(label);
+  return SHIFT_PALETTE[(i<0?0:i) % SHIFT_PALETTE.length];
+}
+
+/* Pure-SVG donut/ring chart — no external chart library, renders reliably in PNG export.
+   segments: [{pct, color}] where pct sums to <=100. baseColor is the track/remainder color.
+   Uses <path> arcs computed via plain trigonometry — deliberately avoids CSS transforms
+   and stroke-dasharray/rotate tricks, which html2canvas renders unreliably (clipped/shifted). */
+function polarPoint(cx, cy, r, angleDeg){
+  const rad = (angleDeg - 90) * Math.PI / 180;
+  return { x: cx + r*Math.cos(rad), y: cy + r*Math.sin(rad) };
+}
+function buildDonutSVG(segments, size, strokeWidth, baseColor){
+  const r = 15.9155, cx = 21, cy = 21;
+  let cumDeg = 0;
+  const total = segments.reduce((a,s)=>a+Math.max(0,s.pct),0);
+  const arcs = [];
+  segments.forEach(seg=>{
+    const pct = Math.max(0, seg.pct);
+    if (pct <= 0.05) return;
+    const startDeg = cumDeg;
+    let endDeg = cumDeg + pct*3.6;
+    cumDeg = endDeg;
+    if (total >= 99.95 && segments.indexOf(seg)===segments.length-1) endDeg = 359.99; // avoid degenerate full-circle arc
+    const p1 = polarPoint(cx, cy, r, startDeg);
+    const p2 = polarPoint(cx, cy, r, endDeg);
+    const largeArc = (endDeg - startDeg) > 180 ? 1 : 0;
+    arcs.push(`<path d="M ${p1.x.toFixed(3)} ${p1.y.toFixed(3)} A ${r} ${r} 0 ${largeArc} 1 ${p2.x.toFixed(3)} ${p2.y.toFixed(3)}" fill="none" stroke="${seg.color}" stroke-width="${strokeWidth}" stroke-linecap="butt"></path>`);
+  });
+  return `<svg viewBox="0 0 42 42" width="${size}" height="${size}">
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${baseColor}" stroke-width="${strokeWidth}"></circle>
+    ${arcs.join('')}
+  </svg>`;
+}
+
+/* ============================= PARSING ============================= */
+function buildIndex(header){
+  const idx = {};
+  header.forEach((h,i)=>{
+    const n = norm(h);
+    if (n==='дата') idx.date=i;
+    else if (n==='смена') idx.shift=i;
+    else if (n==='участок') idx.site=i;
+    else if (n==='отчёт'||n==='отчет') idx.report=i;
+    else if (n==='техника') idx.equip=i;
+    else if (n==='группа') idx.group=i;
+    else if (n.includes('время')&&n.includes('работ')) idx.worktime=i;
+    else if (n.includes('факт')&&n.includes('расход')) idx.fuelFact=i;
+    else if (n.includes('норма')) idx.fuelNorm=i;
+    else if (n.includes('расход')&&n.includes('норме')) idx.fuelRatio=i;
+    else if (n.includes('выход')&&n.includes('техник')) idx.output=i;
+    else if (n.includes('эффективность')) idx.eff=i;
+    else if (n.includes('простой')) idx.downtime=i;
+    else if (n.includes('пробег')) idx.mileage=i;
+    else if (n.includes('заправка')) idx.refuel=i;
+    else if (n.includes('коммент')) idx.comment=i;
+  });
+  return idx;
+}
+
+function extractRecords(rows){
+  const header = rows[0];
+  const idx = buildIndex(header);
+  const required = ['date','shift','equip','group','worktime','output','eff','downtime'];
+  const missing = required.filter(k=> idx[k]===undefined);
+  if (missing.length) throw new Error('Не удалось найти столбцы: ' + missing.join(', '));
+
+  const dataRows = rows.slice(1).filter(r => r[idx.equip]!=null && r[idx.equip]!=='');
+  // Group by (equipment + date) — a report can span many days and the same
+  // machine appears once per day, each day with its own "Итого" summary row.
+  const byEquipDate = {};
+  const order = [];
+  dataRows.forEach(r=>{
+    const key = r[idx.equip] + '\u0001' + r[idx.date];
+    if (!byEquipDate[key]){ byEquipDate[key] = []; order.push(key); }
+    byEquipDate[key].push(r);
+  });
+
+  const units = [], shifts = [];
+  order.forEach(key=>{
+    const recs = byEquipDate[key];
+    const equip = recs[0][idx.equip];
+    const shiftRecs = recs.filter(r=> norm(r[idx.shift])!=='итого');
+    let totalRec = recs.find(r=> norm(r[idx.shift])==='итого');
+
+    shiftRecs.forEach(r=>{
+      const workMin = timeToMin(r[idx.worktime]);
+      shifts.push({
+        date: r[idx.date], equip, group: r[idx.group], site: r[idx.site],
+        shift: r[idx.shift], workMin,
+        output: r[idx.output], eff: r[idx.eff],
+        downtimeMin: timeToMin(r[idx.downtime]),
+        comment: r[idx.comment]
+      });
+    });
+
+    if (!totalRec){
+      const workMin = shiftRecs.reduce((a,r)=>a+timeToMin(r[idx.worktime]),0);
+      const outs = shiftRecs.map(r=>r[idx.output]).filter(v=>v!=null);
+      const effs = shiftRecs.map(r=>r[idx.eff]).filter(v=>v!=null);
+      totalRec = {
+        [idx.date]: shiftRecs[0]?.[idx.date], [idx.group]: shiftRecs[0]?.[idx.group],
+        [idx.site]: shiftRecs[0]?.[idx.site],
+        [idx.output]: outs.length? outs.reduce((a,b)=>a+b,0)/outs.length : null,
+        [idx.eff]: effs.length? effs.reduce((a,b)=>a+b,0)/effs.length : null,
+        [idx.mileage]: shiftRecs.reduce((a,r)=>a+(+r[idx.mileage]||0),0),
+        [idx.refuel]: shiftRecs.reduce((a,r)=>a+(+r[idx.refuel]||0),0),
+      };
+      totalRec.__workMin = workMin;
+    }
+
+    const shiftDowntimeSum = shiftRecs.reduce((a,r)=>a+timeToMin(r[idx.downtime]),0);
+    const workMinSum = totalRec.__workMin!==undefined ? totalRec.__workMin : timeToMin(totalRec[idx.worktime]);
+
+    units.push({
+      equip, group: totalRec[idx.group], site: totalRec[idx.site], date: totalRec[idx.date],
+      workMin: workMinSum,
+      output: totalRec[idx.output], eff: totalRec[idx.eff],
+      downtimeMin: shiftDowntimeSum,
+      mileage: idx.mileage!==undefined ? (+totalRec[idx.mileage]||0) : 0,
+      refuel: idx.refuel!==undefined ? (+totalRec[idx.refuel]||0) : 0,
+      shiftsCount: shiftRecs.length
+    });
+  });
+
+  return { units, shifts, idx };
+}
+
+/* ============================= LOAD FILE ============================= */
+function handleFile(file){
+  if (typeof XLSX === 'undefined'){
+    showError('Не удалось загрузить библиотеку чтения Excel (сеть/CDN недоступны). Обновите страницу и попробуйте снова.');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    try{
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:true});
+      const { units, shifts } = extractRecords(rows);
+      if (!units.length) throw new Error('В файле не найдено ни одной записи по технике.');
+      state.units = units; state.shifts = shifts;
+      state.groups = [...new Set(units.map(u=>u.group).filter(Boolean))];
+      state.sites = [...new Set(units.map(u=>u.site).filter(Boolean))];
+      state.filters.groups = new Set();
+      state.filters.site = 'all';
+      state.filters.search = '';
+      state.fileLabel = file.name.replace(/\.[^.]+$/,'') || 'dashboard';
+      initUI();
+      renderAll();
+      document.getElementById('errBox').style.display='none';
+      document.getElementById('dropzone').style.display='none';
+      document.getElementById('filtersBar').style.display='flex';
+      document.getElementById('dashboard').style.display='block';
+      document.getElementById('topActions').style.display='flex';
+    }catch(err){
+      showError('Ошибка обработки файла: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+function showError(msg){
+  const box = document.getElementById('errBox');
+  box.textContent = msg; box.style.display='block';
+}
+
+/* ============================= FILTERS UI ============================= */
+function initUI(){
+  const chipsWrap = document.getElementById('groupChips');
+  chipsWrap.innerHTML='';
+  state.groups.forEach(g=>{
+    const chip = document.createElement('button');
+    chip.className='chip'; chip.textContent=g; chip.type='button';
+    chip.onclick=()=>{
+      if (state.filters.groups.has(g)) state.filters.groups.delete(g);
+      else state.filters.groups.add(g);
+      chip.classList.toggle('active');
+      renderAll();
+    };
+    chipsWrap.appendChild(chip);
+  });
+
+  const siteSel = document.getElementById('siteSelect');
+  siteSel.innerHTML = '<option value="all">Все участки</option>' +
+    state.sites.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
+  siteSel.onchange = ()=>{ state.filters.site = siteSel.value; renderAll(); };
+
+  document.getElementById('searchInput').oninput = (e)=>{
+    state.filters.search = e.target.value.trim().toLowerCase(); renderAll();
+  };
+  document.getElementById('resetFiltersBtn').onclick = ()=>{
+    state.filters.groups = new Set(); state.filters.site='all'; state.filters.search='';
+    document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+    siteSel.value='all'; document.getElementById('searchInput').value='';
+    renderAll();
+  };
+}
+
+function applyFilters(){
+  const f = state.filters;
+  const filt = (arr)=> arr.filter(r=>
+    (f.groups.size===0 || f.groups.has(r.group)) &&
+    (f.site==='all' || r.site===f.site) &&
+    (f.search==='' || (r.equip||'').toLowerCase().includes(f.search))
+  );
+  return { units: filt(state.units), shifts: filt(state.shifts) };
+}
+
+/* ============================= RENDER ============================= */
+function renderAll(){
+  const { units, shifts } = applyFilters();
+  renderPeriod();
+  renderHero(units, shifts);
+  renderTiles(units);
+  renderChartByUnit(units, shifts);
+  renderChartByGroup(units);
+  renderReasonsTable(shifts);
+  renderNonWorking(shifts);
+  renderDetailTable(units);
+  renderSecondary(units);
+}
+
+function renderPeriod(){
+  const dates = [...new Set(state.units.map(u=>u.date).filter(Boolean))]
+    .sort((a,b)=> parseRuDate(a) - parseRuDate(b));
+  let text = '—';
+  if (dates.length===1) text = dates[0];
+  else if (dates.length>1) text = dates[0] + ' – ' + dates[dates.length-1];
+  document.getElementById('periodBadge').textContent = text;
+  const equipCount = new Set(state.units.map(u=>u.equip)).size;
+  document.getElementById('periodSub').textContent = `Единиц техники: ${equipCount} · Групп: ${state.groups.length} · Дней в отчёте: ${dates.length}`;
+
+  document.getElementById('printPeriod').textContent = text;
+  document.getElementById('printEquip').textContent = equipCount;
+  document.getElementById('printGenerated').textContent = new Date().toLocaleDateString('ru-RU', {day:'2-digit',month:'2-digit',year:'numeric'});
+}
+
+function renderHero(units, shifts){
+  const totalDowntime = units.reduce((a,u)=>a+u.downtimeMin,0);
+  const equipCount = new Set(units.map(u=>u.equip)).size;
+  const affectedEquipCount = new Set(units.filter(u=>u.downtimeMin>0).map(u=>u.equip)).size;
+  document.getElementById('heroDowntime').textContent = minToHHMM(totalDowntime);
+  document.getElementById('heroUnitsAffected').textContent = `Простаивает ${affectedEquipCount} из ${equipCount} единиц техники`;
+  document.getElementById('donutCenterN').textContent = equipCount;
+
+  const downtimeShifts = shifts.filter(s=>s.downtimeMin>0);
+  const justified = downtimeShifts.filter(s=>hasReason(s.comment));
+  const unjustified = downtimeShifts.filter(s=>!hasReason(s.comment));
+  const justMin = justified.reduce((a,s)=>a+s.downtimeMin,0);
+  const unjustMin = unjustified.reduce((a,s)=>a+s.downtimeMin,0);
+  const rsTotal = justMin + unjustMin;
+  const justPct = rsTotal>0 ? Math.round(justMin/rsTotal*100) : 0;
+  const unjustPct = 100 - justPct;
+  document.getElementById('reasonSplitBar').innerHTML = rsTotal>0
+    ? `<div class="rs-justified" style="width:${justPct}%"></div><div class="rs-unjustified" style="width:${unjustPct}%"></div>`
+    : `<div style="width:100%;background:#eef0f4"></div>`;
+  document.getElementById('rsJustVal').textContent = `${minToHHMM(justMin)} (${justified.length} см.) · ${justPct}%`;
+  document.getElementById('rsUnjustVal').textContent = `${minToHHMM(unjustMin)} (${unjustified.length} см.) · ${unjustPct}%`;
+
+  const byGroup = {};
+  units.forEach(u=>{
+    byGroup[u.group] = byGroup[u.group] || {equipSet:new Set(), downtime:0};
+    byGroup[u.group].equipSet.add(u.equip);
+    byGroup[u.group].downtime += u.downtimeMin;
+  });
+  const groupNames = Object.keys(byGroup).sort((a,b)=> byGroup[b].downtime - byGroup[a].downtime);
+  const listWrap = document.getElementById('groupList');
+  listWrap.innerHTML = groupNames.map(g=>{
+    const d = byGroup[g];
+    const pct = totalDowntime>0 ? Math.round(d.downtime/totalDowntime*100) : 0;
+    return `<div class="group-row">
+      <span class="dot" style="background:${colorForGroup(g)}"></span>
+      <span class="name">${esc(g)} <span class="muted-cell">(${d.equipSet.size})</span></span>
+      <span class="val">${minToHHMM(d.downtime)}</span>
+      <span class="pct">${pct}%</span>
+    </div>`;
+  }).join('') || '<div class="empty-note">Нет данных</div>';
+
+  const donutWrap = document.getElementById('groupDonut');
+  if (totalDowntime > 0 && groupNames.length){
+    const segments = groupNames.map(g=>({ pct: byGroup[g].downtime/totalDowntime*100, color: colorForGroup(g) }));
+    donutWrap.innerHTML = buildDonutSVG(segments, 230, 6, '#eef0f4');
+  } else {
+    donutWrap.innerHTML = buildDonutSVG([], 230, 6, '#eef0f4');
+  }
+}
+
+function renderTiles(units){
+  const idle = units.filter(u=> u.eff!=null && u.eff>100);
+  const low = units.filter(u=> u.output!=null && u.output<80);
+  const good = units.filter(u=> u.output!=null && u.output>=80);
+  const total = units.length || 1;
+
+  document.getElementById('tileIdleCount').textContent = idle.length;
+  document.getElementById('tileIdleSub').textContent = idle.length
+    ? `худший случай: ${idle.slice().sort((a,b)=>b.eff-a.eff)[0].equip} (${idle.slice().sort((a,b)=>b.eff-a.eff)[0].date}) — ${fmtPct(idle.slice().sort((a,b)=>b.eff-a.eff)[0].eff)}`
+    : 'случаев простоя сверх нормы за период';
+
+  document.getElementById('tileLowCount').textContent = low.length;
+  document.getElementById('tileLowSub').textContent = `случаев за период (машино-смен по итогам дня)`;
+  document.getElementById('tileGoodCount').textContent = good.length;
+  document.getElementById('tileGoodSub').textContent = `случаев полностью выполняют норму выхода`;
+
+  setRing('blk-tile-idle', idle.length/total*100);
+  setRing('blk-tile-low', low.length/total*100);
+  setRing('blk-tile-good', good.length/total*100);
+}
+function setRing(blockId, pct){
+  const block = document.getElementById(blockId);
+  let ring = block.querySelector('.ring');
+  if (!ring){
+    ring = document.createElement('div'); ring.className='ring';
+    block.querySelector('.tile-top').insertBefore(ring, block.querySelector('.dl-btn'));
+  }
+  const p = Math.max(0, Math.min(100, Math.round(pct)));
+  ring.innerHTML = buildDonutSVG([{pct:p, color:'#ffffff'}], 56, 7, 'rgba(255,255,255,.28)') +
+    `<div class="ring-inner">${p}%</div>`;
+}
+
+function renderChartByUnit(units, shifts){
+  // Aggregate by equipment across the whole period — one bar per machine,
+  // with every shift (across all dates) listed underneath it.
+  const byEquip = {};
+  units.forEach(u=>{
+    if (!byEquip[u.equip]) byEquip[u.equip] = { equip:u.equip, group:u.group, downtimeMin:0 };
+    byEquip[u.equip].downtimeMin += u.downtimeMin;
+  });
+  const sorted = Object.values(byEquip).filter(e=>e.downtimeMin>0).sort((a,b)=>b.downtimeMin-a.downtimeMin).slice(0,10);
+  const wrap = document.getElementById('chartByUnit');
+  const legendWrap = document.getElementById('chartByUnitLegend');
+  if (!sorted.length){
+    wrap.innerHTML = '<div class="empty-note" style="text-align:center;">Простоев сверх нормы не зафиксировано 👍</div>';
+    legendWrap.innerHTML = '';
+    return;
+  }
+  const allShiftLabels = [...new Set(shifts.filter(s=>s.downtimeMin>0).map(s=>s.shift))].sort();
+  const max = sorted[0].downtimeMin;
+
+  wrap.innerHTML = sorted.map(e=>{
+    const equipShifts = shifts.filter(s=>s.equip===e.equip && s.downtimeMin>0)
+      .sort((a,b)=> (parseRuDate(a.date)-parseRuDate(b.date)) || (a.shift||'').localeCompare(b.shift||''));
+    const barWidthPct = Math.max(6, Math.round(e.downtimeMin/max*100));
+    const segments = equipShifts.map(s=>{
+      const noReason = !hasReason(s.comment);
+      const title = `${s.date} · ${s.shift}: ${minToHHMM(s.downtimeMin)} — ${hasReason(s.comment)? s.comment : 'причина не указана'}`;
+      return `<div class="bar-seg${noReason?' no-reason':''}" style="flex:${s.downtimeMin} 0 auto;background:${colorForShift(s.shift, allShiftLabels)}" title="${esc(title)}"></div>`;
+    }).join('');
+    const breakdown = equipShifts.map(s=>{
+      const reasonPart = hasReason(s.comment)
+        ? `<span class="reason-icon">✅</span> ${esc(truncateText(s.comment,20))}`
+        : `<span class="reason-icon">❗</span> без причины`;
+      return `<span class="sitem"><span class="sdot" style="background:${colorForShift(s.shift, allShiftLabels)}"></span>${esc(s.date)} ${esc(s.shift)}: ${minToHHMM(s.downtimeMin)} — ${reasonPart}</span>`;
+    }).join('');
+    return `<div class="bar-row">
+      <div class="bar-label">
+        <div class="eq-name">${esc(e.equip)}</div>
+        <div class="bar-group-tag">${esc(e.group)} · ${equipShifts.length} см. с простоем</div>
+        <div class="shift-breakdown">${breakdown}</div>
+      </div>
+      <div class="bar-track"><div class="bar-fill-group" style="width:${barWidthPct}%">${segments}</div></div>
+      <div class="bar-value">${minToHHMM(e.downtimeMin)}</div>
+    </div>`;
+  }).join('');
+
+  legendWrap.innerHTML = allShiftLabels.map(l=>
+    `<span><span class="sdot" style="background:${colorForShift(l, allShiftLabels)}"></span>${esc(l)}</span>`
+  ).join('') + `<span>❗ красная полоса снизу сегмента = причина простоя не указана</span>`;
+}
+
+function renderChartByGroup(units){
+  const byGroup = {};
+  units.forEach(u=>{
+    byGroup[u.group] = (byGroup[u.group]||0) + u.downtimeMin;
+  });
+  const total = Object.values(byGroup).reduce((a,b)=>a+b,0);
+  const groupNames = Object.keys(byGroup).sort((a,b)=>byGroup[b]-byGroup[a]);
+  const wrap = document.getElementById('chartByGroup');
+  const listWrap = document.getElementById('chartByGroupList');
+  if (!groupNames.length || total===0){
+    wrap.innerHTML = '<div class="empty-note" style="text-align:center;">Простоев сверх нормы не зафиксировано 👍</div>';
+    listWrap.innerHTML = '';
+    return;
+  }
+  const max = byGroup[groupNames[0]];
+
+  wrap.innerHTML = groupNames.map(g=>{
+    const v = byGroup[g];
+    const pct = v>0 ? Math.max(3, Math.round(v/max*100)) : 0;
+    const share = total>0 ? Math.round(v/total*100) : 0;
+    return `<div class="vbar-col">
+      <div class="vbar-value">${minToHHMM(v)}<span class="vbar-pct">${share}%</span></div>
+      <div class="vbar-track"><div class="vbar-fill" style="height:${pct}%;background:${colorForGroup(g)}"></div></div>
+      <div class="vbar-label">${esc(g)}</div>
+    </div>`;
+  }).join('');
+
+  listWrap.innerHTML = groupNames.map(g=>{
+    const v = byGroup[g];
+    const share = total>0 ? Math.round(v/total*100) : 0;
+    return `<div class="group-row">
+      <span class="dot" style="background:${colorForGroup(g)}"></span>
+      <span class="name">${esc(g)}</span>
+      <span class="val">${minToHHMM(v)}</span>
+      <span class="pct">${share}%</span>
+    </div>`;
+  }).join('');
+}
+
+function renderReasonsTable(shifts){
+  const rows = shifts.filter(s=>s.downtimeMin>0).sort((a,b)=>b.downtimeMin-a.downtimeMin);
+  const tbody = document.querySelector('#tblReasons tbody');
+  tbody.innerHTML = rows.map(s=>`
+    <tr class="${hasReason(s.comment)?'':'row-nonworking'}">
+      <td>${esc(s.date)}</td>
+      <td>${esc(s.shift)}</td>
+      <td><span class="group-tag">${esc(s.group)}</span></td>
+      <td><b>${esc(s.equip)}</b></td>
+      <td class="downtime-cell has">${minToHHMM(s.downtimeMin)}</td>
+      <td>${reasonBadge(s.comment)}</td>
+      <td>${reasonText(s.comment)}</td>
+    </tr>`).join('');
+  document.getElementById('reasonsEmpty').style.display = rows.length? 'none':'block';
+  document.getElementById('tblReasons').style.display = rows.length? 'table':'none';
+}
+
+function renderNonWorking(shifts){
+  const rows = shifts.filter(s=>s.workMin===0);
+  const tbody = document.querySelector('#tblNonWorking tbody');
+  tbody.innerHTML = rows.map(s=>`
+    <tr class="row-nonworking">
+      <td>${esc(s.date)}</td>
+      <td>${esc(s.shift)}</td>
+      <td><span class="group-tag">${esc(s.group)}</span></td>
+      <td>${esc(s.equip)}</td>
+      <td>${esc(s.site)}</td>
+      <td>${reasonBadge(s.comment)}</td>
+      <td>${reasonText(s.comment)}</td>
+    </tr>`).join('');
+  document.getElementById('nonWorkingEmpty').style.display = rows.length? 'none':'block';
+  document.getElementById('tblNonWorking').style.display = rows.length? 'table':'none';
+}
+
+function outputPill(v){
+  if (v==null) return '<span class="pill gray">— нет данных</span>';
+  if (v>=80) return `<span class="pill green">✅ Работает <span class="pill-pct">${fmtPct(v)}</span></span>`;
+  return `<span class="pill amber">⚠ Внимание <span class="pill-pct">${fmtPct(v)}</span></span>`;
+}
+function effPill(v){
+  if (v==null) return '<span class="pill gray">— нет данных</span>';
+  if (v>100) return `<span class="pill red">⛔ Простой <span class="pill-pct">${fmtPct(v)}</span></span>`;
+  return `<span class="pill green">✅ Норма <span class="pill-pct">${fmtPct(v)}</span></span>`;
+}
+
+function renderDetailTable(units){
+  const dir = state.sortDir==='asc'?1:-1;
+  const key = state.sortKey;
+  const sorted = units.slice().sort((a,b)=>{
+    if (key==='date') return (parseRuDate(a.date) - parseRuDate(b.date)) * dir;
+    let va=a[key], vb=b[key];
+    if (typeof va==='string') return va.localeCompare(vb)*dir;
+    return ((va??-Infinity)-(vb??-Infinity))*dir;
+  });
+  const tbody = document.querySelector('#tblDetail tbody');
+  tbody.innerHTML = sorted.map(u=>`
+    <tr>
+      <td class="muted-cell">${esc(u.date)}</td>
+      <td><span class="group-tag">${esc(u.group)}</span></td>
+      <td><b>${esc(u.equip)}</b></td>
+      <td class="muted-cell">${esc(u.site)}</td>
+      <td>${minToHHMM(u.workMin)}</td>
+      <td>${outputPill(u.output)}</td>
+      <td>${effPill(u.eff)}</td>
+      <td class="downtime-cell ${u.downtimeMin>0?'has':''}">${u.downtimeMin>0? minToHHMM(u.downtimeMin) : '—'}</td>
+    </tr>`).join('') || '<tr><td colspan="8" class="empty-note">Нет данных по заданным фильтрам</td></tr>';
+
+  document.querySelectorAll('#tblDetail th[data-key]').forEach(th=>{
+    th.classList.toggle('sorted', th.dataset.key===state.sortKey);
+  });
+}
+document.addEventListener('click', (e)=>{
+  const th = e.target.closest('#tblDetail th[data-key]');
+  if (!th) return;
+  const k = th.dataset.key;
+  if (state.sortKey===k) state.sortDir = state.sortDir==='asc'?'desc':'asc';
+  else { state.sortKey=k; state.sortDir='desc'; }
+  renderDetailTable(applyFilters().units);
+});
+
+function renderSecondary(units){
+  const mileage = units.reduce((a,u)=>a+(u.mileage||0),0);
+  const refuel = units.reduce((a,u)=>a+(u.refuel||0),0);
+  const wrap = document.getElementById('secGrid');
+  wrap.innerHTML = `
+    <div class="sec-stat"><div class="l">Суммарный пробег</div><div class="v">${fmtNum(mileage,1)} км</div></div>
+    <div class="sec-stat"><div class="l">Суммарная заправка</div><div class="v">${fmtNum(refuel,1)} л</div></div>
+    <div class="sec-stat"><div class="l">Единиц техники</div><div class="v">${units.length}</div></div>
+    <div class="sec-stat"><div class="l">Средний пробег на ед.</div><div class="v">${fmtNum(units.length? mileage/units.length:0,1)} км</div></div>
+  `;
+}
+
+/* ============================= EXPORT PNG ============================= */
+function exportElement(el, filename){
+  if (typeof html2canvas === 'undefined'){
+    alert('Библиотека экспорта PNG не загрузилась (сеть/CDN недоступны). Обновите страницу и попробуйте снова.');
+    return;
+  }
+  html2canvas(el, { scale:2, backgroundColor:'#ffffff', useCORS:true }).then(canvas=>{
+    const link = document.createElement('a');
+    link.download = filename;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  });
+}
+document.addEventListener('click', (e)=>{
+  const btn = e.target.closest('.dl-btn[data-target]');
+  if (!btn) return;
+  const el = document.getElementById(btn.dataset.target);
+  exportElement(el, `${state.fileLabel}_${btn.dataset.target}.png`);
+});
+document.getElementById('exportAllBtn').addEventListener('click', ()=>{
+  exportElement(document.getElementById('dashboard'), `${state.fileLabel}_dashboard.png`);
+});
+
+/* ============================= UPLOAD WIRING ============================= */
+const dz = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+document.getElementById('chooseFileBtn').addEventListener('click', ()=>fileInput.click());
+document.getElementById('reuploadBtn').addEventListener('click', ()=>fileInput.click());
+document.getElementById('printBtn').addEventListener('click', ()=>window.print());
+fileInput.addEventListener('change', (e)=>{ if (e.target.files[0]) handleFile(e.target.files[0]); });
+['dragenter','dragover'].forEach(ev=> dz.addEventListener(ev, (e)=>{ e.preventDefault(); dz.classList.add('drag'); }));
+['dragleave','drop'].forEach(ev=> dz.addEventListener(ev, (e)=>{ e.preventDefault(); dz.classList.remove('drag'); }));
+dz.addEventListener('drop', (e)=>{ const f=e.dataTransfer.files[0]; if (f) handleFile(f); });
+</script>
+</body>
+</html>

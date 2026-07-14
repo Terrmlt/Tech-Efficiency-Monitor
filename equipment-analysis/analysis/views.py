@@ -14,7 +14,10 @@ from django.db.models import Q, Avg, Count, Sum
 
 from .forms import ReportUploadForm, SectionForm, UserCreateForm, UserEditForm
 from .models import Report, VehicleRecord, Section, VehicleNorm, secs_to_hhmmss, UserProfile
-from .utils import parse_excel_file, detect_anomalies, calculate_metrics, build_summary
+from .utils import (
+    parse_excel_file, detect_anomalies, calculate_metrics, build_summary,
+    color_for_group, build_donut_svg, secs_to_hm,
+)
 
 
 # ─── Role helpers & decorators ────────────────────────────────────────────────
@@ -1039,39 +1042,92 @@ def analytics_efficiency(request):
                 return max(0.0, (rec.engine_no_move_sec or 0) - norm)
         return 0.0
 
+    def _shift_label(rec):
+        return {1: 'Смена 1', 2: 'Смена 2'}.get(rec.shift, '—')
+
     # Only records with a known date are included in all aggregations and counts
     dated_recs = [r for r in rec_list if r.record_date]
 
-    # Aggregate per vehicle + daily
+    # Aggregate per vehicle
     vehicle_agg = _dd(lambda: {
         'group': '', 'total_over_sec': 0.0, 'total_sec': 0.0,
-        'records': 0, 'shifts_with_over': 0,
+        'records': 0, 'shifts_with_over': 0, 'shifts': [],
     })
-    daily_over = _dd(float)   # date -> total over_sec
+    daily_over = _dd(float)     # date -> total over_sec
+    group_over = _dd(float)     # group -> total over_sec
+    group_units = _dd(set)      # group -> {vehicle names}
 
     total_over_sec_all = 0.0
     records_with_over  = 0
 
+    idle_count = 0    # type_efficiency > 100%
+    low_count  = 0    # equipment_output < 80%
+    good_count = 0    # equipment_output >= 80%
+
+    reasons_rows = []       # shift-level rows with over_sec > 0, for the "причины" table
+    non_working_rows = []   # shift-level rows with zero engine time
+    total_mileage = 0.0
+    total_refueling = 0.0
+
     for rec in dated_recs:
         over = _get_over_sec(rec)
         d = rec.record_date.isoformat()
+        d_display = rec.record_date.strftime('%d.%m.%Y')
         daily_over[d] += over
         total_over_sec_all += over
+        group_over[rec.group] += over
+        group_units[rec.group].add(rec.name)
 
         v = vehicle_agg[rec.name]
         v['group']          = rec.group
         v['records']       += 1
         v['total_over_sec'] += over
-        # store actual metric seconds for context
         if rec.group in ('Бульдозеры', 'Погрузчики'):
             v['total_sec'] += rec.engine_idle_sec or 0
         elif rec.group == 'Экскаваторы':
             v['total_sec'] += rec.downtime_sec or 0
         elif rec.group == 'Самосвалы':
             v['total_sec'] += rec.engine_no_move_sec or 0
+
+        has_reason = bool(rec.comment and rec.comment.strip())
+
         if over > 0:
             v['shifts_with_over'] += 1
+            v['shifts'].append({
+                'date': d_display, 'sort_date': d,
+                'shift': _shift_label(rec), 'over_sec': over,
+                'over_str': secs_to_hm(over), 'has_reason': has_reason,
+                'comment': rec.comment,
+            })
             records_with_over += 1
+            reasons_rows.append({
+                'date': d_display, 'sort_date': d, 'shift': _shift_label(rec),
+                'group': rec.group, 'name': rec.name,
+                'over_sec': over, 'over_str': secs_to_hm(over),
+                'has_reason': has_reason, 'comment': rec.comment,
+            })
+
+        if (rec.engine_time_sec or 0) == 0:
+            non_working_rows.append({
+                'date': d_display, 'sort_date': d, 'shift': _shift_label(rec),
+                'group': rec.group, 'name': rec.name,
+                'section': rec.report.section.name if rec.report.section_id else '—',
+                'has_reason': has_reason, 'comment': rec.comment,
+            })
+
+        if rec.type_efficiency is not None and rec.type_efficiency * 100 > 100:
+            idle_count += 1
+        if rec.equipment_output is not None:
+            if rec.equipment_output * 100 < 80:
+                low_count += 1
+            else:
+                good_count += 1
+
+        total_mileage += rec.mileage or 0
+        total_refueling += rec.refueling or 0
+
+    reasons_rows.sort(key=lambda r: r['over_sec'], reverse=True)
+    non_working_rows.sort(key=lambda r: r['sort_date'])
 
     # Build sorted vehicle list
     vehicle_stats = []
@@ -1083,13 +1139,66 @@ def analytics_efficiency(request):
             'shifts_with_over': v['shifts_with_over'],
             'total_over_sec':   v['total_over_sec'],
             'total_over_str':   secs_to_hhmmss(v['total_over_sec']),
+            'total_over_hm':    secs_to_hm(v['total_over_sec']),
             'total_over_hours': round(v['total_over_sec'] / 3600, 2),
             'total_sec':        v['total_sec'],
             'total_str':        secs_to_hhmmss(v['total_sec']),
+            'shifts':           sorted(v['shifts'], key=lambda s: s['sort_date']),
         })
     vehicle_stats.sort(key=lambda x: x['total_over_sec'], reverse=True)
 
     top_vehicles = [v for v in vehicle_stats if v['total_over_sec'] > 0][:5]
+
+    # ── "Простои по технике" bar chart — top-10 vehicles by over-norm time ──────
+    chart_units = [v for v in vehicle_stats if v['total_over_sec'] > 0][:10]
+    max_unit_over = chart_units[0]['total_over_sec'] if chart_units else 0
+    for v in chart_units:
+        v['bar_pct'] = max(6, round(v['total_over_sec'] / max_unit_over * 100)) if max_unit_over else 0
+        just_sec = sum(s['over_sec'] for s in v['shifts'] if s['has_reason'])
+        unjust_sec = v['total_over_sec'] - just_sec
+        v['just_pct'] = round(just_sec / v['total_over_sec'] * 100) if v['total_over_sec'] else 0
+        v['unjust_pct'] = 100 - v['just_pct'] if v['total_over_sec'] else 0
+
+    # ── "Простои по группам" chart ───────────────────────────────────────────────
+    group_names_sorted = sorted(group_over.keys(), key=lambda g: group_over[g], reverse=True)
+    max_group_over = group_over[group_names_sorted[0]] if group_names_sorted else 0
+    group_chart = []
+    for g in group_names_sorted:
+        v = group_over[g]
+        group_chart.append({
+            'name': g,
+            'over_sec': v,
+            'over_hm': secs_to_hm(v),
+            'color': color_for_group(g, group_names_sorted),
+            'units': len(group_units[g]),
+            'bar_pct': max(3, round(v / max_group_over * 100)) if max_group_over and v > 0 else 0,
+            'share_pct': round(v / total_over_sec_all * 100) if total_over_sec_all else 0,
+        })
+
+    # ── Hero donut (share of over-norm time per group) ──────────────────────────
+    group_donut_svg = build_donut_svg(
+        [(g['share_pct'], g['color']) for g in group_chart], size=200, stroke_width=6,
+    )
+
+    # ── KPI tiles + rings ─────────────────────────────────────────────────────────
+    considered = len(dated_recs) or 1
+    idle_pct = round(idle_count / considered * 100)
+    low_pct  = round(low_count / considered * 100)
+    good_pct = round(good_count / considered * 100)
+    ring_idle_svg = build_donut_svg([(idle_pct, '#ffffff')], size=56, stroke_width=7, base_color='rgba(255,255,255,.28)')
+    ring_low_svg  = build_donut_svg([(low_pct, '#ffffff')],  size=56, stroke_width=7, base_color='rgba(255,255,255,.28)')
+    ring_good_svg = build_donut_svg([(good_pct, '#ffffff')], size=56, stroke_width=7, base_color='rgba(255,255,255,.28)')
+
+    equip_count = len({r.name for r in dated_recs})
+    affected_equip_count = len({v['name'] for v in vehicle_stats if v['total_over_sec'] > 0})
+
+    justified_rows = [r for r in reasons_rows if r['has_reason']]
+    unjustified_rows = [r for r in reasons_rows if not r['has_reason']]
+    just_sec_total = sum(r['over_sec'] for r in justified_rows)
+    unjust_sec_total = sum(r['over_sec'] for r in unjustified_rows)
+    rs_total = just_sec_total + unjust_sec_total
+    just_pct_total = round(just_sec_total / rs_total * 100) if rs_total else 0
+    unjust_pct_total = 100 - just_pct_total if rs_total else 0
 
     # Daily chart
     all_dates = sorted(daily_over.keys())
@@ -1106,6 +1215,38 @@ def analytics_efficiency(request):
     all_vehicles = list(vehicles_qs)
 
     sections = Section.objects.all()
+    selected_section_name = None
+    if section_id:
+        try:
+            selected_section_name = Section.objects.get(pk=section_id).name
+        except (Section.DoesNotExist, ValueError):
+            pass
+
+    # Detail table — one row per shift record, for the sortable table + PDF export
+    detail_rows = []
+    for rec in dated_recs:
+        detail_rows.append({
+            'date': rec.record_date.strftime('%d.%m.%Y'),
+            'sort_date': rec.record_date.isoformat(),
+            'shift': _shift_label(rec),
+            'group': rec.group,
+            'name': rec.name,
+            'section': rec.report.section.name if rec.report.section_id else '—',
+            'work_str': secs_to_hm(rec.engine_time_sec or 0),
+            'work_sec': rec.engine_time_sec or 0,
+            'output': round(rec.equipment_output * 100, 1) if rec.equipment_output is not None else None,
+            'eff': round(rec.type_efficiency * 100, 1) if rec.type_efficiency is not None else None,
+            'over_sec': _get_over_sec(rec),
+        })
+    detail_rows.sort(key=lambda r: r['over_sec'], reverse=True)
+    for r in detail_rows:
+        r['over_str'] = secs_to_hm(r['over_sec']) if r['over_sec'] > 0 else None
+
+    period_label = '—'
+    if all_dates:
+        d0 = datetime.date.fromisoformat(all_dates[0]).strftime('%d.%m.%Y')
+        d1 = datetime.date.fromisoformat(all_dates[-1]).strftime('%d.%m.%Y')
+        period_label = d0 if d0 == d1 else f'{d0} – {d1}'
 
     context = {
         'vehicle_stats':        vehicle_stats,
@@ -1114,6 +1255,7 @@ def analytics_efficiency(request):
         'has_trend':            bool(all_dates),
         'total_over_hours':     round(total_over_sec_all / 3600, 2),
         'total_over_str':       secs_to_hhmmss(total_over_sec_all),
+        'total_over_hm':        secs_to_hm(total_over_sec_all),
         'total_count':          len(dated_recs),
         'records_with_over':    records_with_over,
         'sections':             sections,
@@ -1124,7 +1266,35 @@ def analytics_efficiency(request):
         'date_from':            date_from,
         'date_to':              date_to,
         'section_id':           section_id,
+        'selected_section_name': selected_section_name,
         'group_filters':        group_filters,
+        'period_label':         period_label,
+
+        # dashboard blocks
+        'equip_count':          equip_count,
+        'affected_equip_count': affected_equip_count,
+        'group_chart':          group_chart,
+        'group_donut_svg':      group_donut_svg,
+        'just_sec_total':       just_sec_total,
+        'unjust_sec_total':     unjust_sec_total,
+        'just_hm':              secs_to_hm(just_sec_total),
+        'unjust_hm':            secs_to_hm(unjust_sec_total),
+        'just_pct_total':       just_pct_total,
+        'unjust_pct_total':     unjust_pct_total,
+        'just_count':           len(justified_rows),
+        'unjust_count':         len(unjustified_rows),
+
+        'idle_count': idle_count, 'idle_pct': idle_pct, 'ring_idle_svg': ring_idle_svg,
+        'low_count': low_count, 'low_pct': low_pct, 'ring_low_svg': ring_low_svg,
+        'good_count': good_count, 'good_pct': good_pct, 'ring_good_svg': ring_good_svg,
+
+        'chart_units':          chart_units,
+        'reasons_rows':         reasons_rows,
+        'non_working_rows':     non_working_rows,
+        'detail_rows':          detail_rows,
+        'total_mileage':        round(total_mileage, 1),
+        'total_refueling':      round(total_refueling, 1),
+        'avg_mileage':          round(total_mileage / equip_count, 1) if equip_count else 0,
     }
     return render(request, 'analysis/analytics_efficiency.html', context)
 

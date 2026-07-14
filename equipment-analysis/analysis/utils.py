@@ -1,6 +1,76 @@
 import datetime
+import math
 import openpyxl
 from .models import secs_to_hhmmss
+
+
+# ─── Dashboard colour palette ──────────────────────────────────────────────────
+GROUP_COLORS = {
+    'Бульдозеры': '#2456d6',
+    'Экскаваторы': '#d33a3a',
+    'Самосвалы': '#d99a1b',
+    'Погрузчики': '#1f9d55',
+}
+FALLBACK_PALETTE = ['#7c3aed', '#0891b2', '#be185d', '#65a30d', '#ea580c', '#475569']
+
+
+def color_for_group(name, known_groups=None):
+    """Stable colour per equipment group — fixed for the 4 known groups,
+    cycling through a fallback palette (by position in known_groups) for
+    anything else, e.g. mis-tagged sections like 'ОП Немир'."""
+    if name in GROUP_COLORS:
+        return GROUP_COLORS[name]
+    if known_groups:
+        others = [g for g in known_groups if g not in GROUP_COLORS]
+        if name in others:
+            return FALLBACK_PALETTE[others.index(name) % len(FALLBACK_PALETTE)]
+    return '#94a3b8'
+
+
+def secs_to_hm(seconds):
+    """Format seconds as 'Xч ММм' (used on the downtime dashboard)."""
+    total_min = round((seconds or 0) / 60)
+    sign = '-' if total_min < 0 else ''
+    total_min = abs(total_min)
+    h, m = divmod(total_min, 60)
+    return f'{sign}{h}ч {m:02d}м'
+
+
+def _polar_point(cx, cy, r, angle_deg):
+    rad = math.radians(angle_deg - 90)
+    return cx + r * math.cos(rad), cy + r * math.sin(rad)
+
+
+def build_donut_svg(segments, size=230, stroke_width=6, base_color='#eef0f4'):
+    """Pure-SVG donut/ring chart, server-rendered so it survives html2canvas
+    PNG export and print-to-PDF without relying on canvas/JS chart libs.
+    `segments` is a list of (pct, color) tuples where pct is 0-100."""
+    r, cx, cy = 15.9155, 21, 21
+    total = sum(max(0, pct) for pct, _ in segments)
+    cum_deg = 0.0
+    arcs = []
+    n = len(segments)
+    for i, (pct, color) in enumerate(segments):
+        pct = max(0, pct)
+        if pct <= 0.05:
+            continue
+        start_deg = cum_deg
+        end_deg = cum_deg + pct * 3.6
+        cum_deg = end_deg
+        if total >= 99.95 and i == n - 1:
+            end_deg = 359.99
+        x1, y1 = _polar_point(cx, cy, r, start_deg)
+        x2, y2 = _polar_point(cx, cy, r, end_deg)
+        large_arc = 1 if (end_deg - start_deg) > 180 else 0
+        arcs.append(
+            f'<path d="M {x1:.3f} {y1:.3f} A {r} {r} 0 {large_arc} 1 {x2:.3f} {y2:.3f}" '
+            f'fill="none" stroke="{color}" stroke-width="{stroke_width}" stroke-linecap="butt"></path>'
+        )
+    return (
+        f'<svg viewBox="0 0 42 42" width="{size}" height="{size}">'
+        f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{base_color}" stroke-width="{stroke_width}"></circle>'
+        + ''.join(arcs) + '</svg>'
+    )
 
 
 # ─── Primitive parsers ────────────────────────────────────────────────────────

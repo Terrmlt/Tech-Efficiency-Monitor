@@ -1,14 +1,16 @@
 {% extends 'analysis/base.html' %}
 
-{% block title %}Анализ простоев — Анализ техники{% endblock %}
+{% block title %}Простои — Анализ техники{% endblock %}
 
 {% block content %}
+<div class="eff-dash">
+
 <div class="d-flex align-items-center mb-3">
     <h4 class="mb-0 fw-bold"><i class="bi bi-hourglass-split me-2"></i>Анализ эффективности (простоев)</h4>
 </div>
 
 <!-- Вкладки аналитики -->
-<ul class="nav nav-tabs mb-4">
+<ul class="nav nav-tabs mb-4 no-print">
     <li class="nav-item">
         <a class="nav-link" href="{% url 'analytics' %}?date_from={{ date_from }}&date_to={{ date_to }}&section={{ section_id }}&shift={{ shift_filter }}{% for g in group_filters %}&group={{ g }}{% endfor %}{% if vehicle_filter %}&vehicle={{ vehicle_filter }}{% endif %}">
             <i class="bi bi-bar-chart-line me-1"></i>Общая аналитика
@@ -27,7 +29,7 @@
 </ul>
 
 <!-- Фильтры -->
-<div class="card mb-4">
+<div class="card mb-4 no-print">
     <div class="card-body">
         <form method="get" class="row g-2 align-items-end">
             <div class="col-md-2">
@@ -101,219 +103,558 @@
 
 {% else %}
 
-<!-- Суммарные карточки -->
-<div class="row g-3 mb-4">
-    <div class="col-6 col-md-3">
-        <div class="card h-100">
-            <div class="card-body text-center py-3">
-                <div class="stat-value text-danger">{{ total_over_str }}</div>
-                <div class="stat-label">Суммарный простой (чч:мм:сс)</div>
+<!-- Панель экспорта -->
+<div class="export-bar no-print">
+    <div class="period-badge">
+        <i class="bi bi-calendar3 me-1"></i>Период: <b>{{ period_label }}</b>
+        &nbsp;·&nbsp; Участок: <b>{{ selected_section_name|default:"все" }}</b>
+    </div>
+    <div class="d-flex gap-2 ms-auto">
+        <button class="btn btn-sm btn-outline-secondary" id="printBtn"><i class="bi bi-printer me-1"></i>Печать / PDF (A4)</button>
+        <button class="btn btn-sm btn-primary" id="exportAllBtn"><i class="bi bi-download me-1"></i>Скачать весь дашборд PNG</button>
+    </div>
+</div>
+
+<div id="printHeader" class="print-only">
+    <div class="print-title">Анализ эффективности (простоев)</div>
+    <div class="print-meta">Период: <b>{{ period_label }}</b> · Участок: <b>{{ selected_section_name|default:"все" }}</b> · Единиц техники: <b>{{ equip_count }}</b></div>
+</div>
+
+<div id="dashboard-root">
+
+<!-- Hero + KPI tiles -->
+<div class="grid-row grid-2">
+    <div class="block" id="blk-hero">
+        <div class="block-head">
+            <div>
+                <h2>Общий простой техники сверх нормы</h2>
+                <div class="desc">Суммарное время простоя, доля с уважительной причиной и распределение по группам техники</div>
+            </div>
+            <button class="dl-btn no-print" data-target="blk-hero" title="Скачать PNG"><i class="bi bi-download"></i></button>
+        </div>
+        <div class="hero-inner">
+            <div class="hero-main">
+                <div class="hero-num">{{ total_over_hm }}</div>
+                <div class="hero-label">суммарный простой сверх нормы за период</div>
+                <div class="hero-sub">Простаивает {{ affected_equip_count }} из {{ equip_count }} единиц техники</div>
+                <div class="reason-split">
+                    <div class="reason-split-title">Простой сверх нормы: уважительный vs без причины</div>
+                    <div class="reason-split-bar">
+                        {% if just_pct_total or unjust_pct_total %}
+                        <div class="rs-justified" style="width:{{ just_pct_total }}%"></div>
+                        <div class="rs-unjustified" style="width:{{ unjust_pct_total }}%"></div>
+                        {% else %}
+                        <div style="width:100%;background:#eef0f4"></div>
+                        {% endif %}
+                    </div>
+                    <div class="reason-split-legend">
+                        <span class="rl-item just">✅ Уважительная причина: <b>{{ just_hm }} ({{ just_count }} см.) · {{ just_pct_total }}%</b></span>
+                        <span class="rl-item unjust">❗ Без причины: <b>{{ unjust_hm }} ({{ unjust_count }} см.) · {{ unjust_pct_total }}%</b></span>
+                    </div>
+                </div>
+                <div class="group-list">
+                    {% for g in group_chart %}
+                    <div class="group-row">
+                        <span class="dot" style="background:{{ g.color }}"></span>
+                        <span class="name">{{ g.name }} <span class="muted-cell">({{ g.units }})</span></span>
+                        <span class="val">{{ g.over_hm }}</span>
+                        <span class="pct">{{ g.share_pct }}%</span>
+                    </div>
+                    {% empty %}
+                    <div class="empty-note">Нет данных</div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="donut-wrap">
+                {{ group_donut_svg|safe }}
+                <div class="donut-center">
+                    <div class="n">{{ equip_count }}</div>
+                    <div class="l">ед. техники</div>
+                </div>
             </div>
         </div>
     </div>
-    <div class="col-6 col-md-3">
-        <div class="card h-100">
-            <div class="card-body text-center py-3">
-                <div class="stat-value text-danger">{{ total_over_hours }}</div>
-                <div class="stat-label">Суммарный простой (ч)</div>
+
+    <div class="tile-col">
+        <div class="tile red" id="blk-tile-idle">
+            <div class="tile-top">
+                <h3>Простой техники<br>(эффективность &gt; 100%)</h3>
+                <div class="ring">{{ ring_idle_svg|safe }}<div class="ring-inner">{{ idle_pct }}%</div></div>
+                <button class="dl-btn no-print" data-target="blk-tile-idle" title="Скачать PNG"><i class="bi bi-download"></i></button>
             </div>
+            <div class="big">{{ idle_count }}</div>
+            <div class="sub">случаев простоя сверх нормы за период</div>
         </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="card h-100">
-            <div class="card-body text-center py-3">
-                <div class="stat-value">{{ records_with_over }}</div>
-                <div class="stat-label">Смен с превышением нормы</div>
+        <div class="tile amber" id="blk-tile-low">
+            <div class="tile-top">
+                <h3>Низкий выход техники<br>(&lt; 80%)</h3>
+                <div class="ring">{{ ring_low_svg|safe }}<div class="ring-inner">{{ low_pct }}%</div></div>
+                <button class="dl-btn no-print" data-target="blk-tile-low" title="Скачать PNG"><i class="bi bi-download"></i></button>
             </div>
+            <div class="big">{{ low_count }}</div>
+            <div class="sub">требует внимания, но не критично</div>
         </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="card h-100">
-            <div class="card-body text-center py-3">
-                <div class="stat-value">{{ total_count }}</div>
-                <div class="stat-label">Всего записей</div>
+        <div class="tile green" id="blk-tile-good">
+            <div class="tile-top">
+                <h3>Техника работает штатно<br>(выход ≥ 80%)</h3>
+                <div class="ring">{{ ring_good_svg|safe }}<div class="ring-inner">{{ good_pct }}%</div></div>
+                <button class="dl-btn no-print" data-target="blk-tile-good" title="Скачать PNG"><i class="bi bi-download"></i></button>
             </div>
+            <div class="big">{{ good_count }}</div>
+            <div class="sub">полностью выполняют норму выхода</div>
         </div>
     </div>
 </div>
 
-{% if top_vehicles %}
-<!-- ТОП нарушителей -->
-<h5 class="fw-bold mb-3"><i class="bi bi-trophy-fill text-danger me-2"></i>Топ по простоям за период</h5>
-<div class="row g-3 mb-4">
-    {% for v in top_vehicles %}
-    <div class="col-12 col-md-6 col-xl">
-        <div class="card h-100 border-0" style="
-            background: {% if forloop.counter == 1 %}linear-gradient(135deg,#dc3545,#c01c2b){% elif forloop.counter == 2 %}linear-gradient(135deg,#fd7e14,#d9650a){% elif forloop.counter == 3 %}linear-gradient(135deg,#ffc107,#d9a000){% else %}linear-gradient(135deg,#6c757d,#495057){% endif %};
-            color: #fff; box-shadow: 0 4px 12px rgba(0,0,0,.2);">
-            <div class="card-body py-3 px-3">
-                <div class="d-flex align-items-start justify-content-between mb-2">
-                    <span class="badge bg-white {% if forloop.counter <= 3 %}text-dark{% else %}text-dark{% endif %} fs-6 fw-bold"
-                          style="opacity:.9; min-width:28px;">{{ forloop.counter }}</span>
-                    <span class="small opacity-75">
-                        {% if v.group == 'Бульдозеры' %}<i class="bi bi-truck-flatbed"></i>
-                        {% elif v.group == 'Экскаваторы' %}<i class="bi bi-tools"></i>
-                        {% elif v.group == 'Самосвалы' %}<i class="bi bi-truck"></i>
-                        {% elif v.group == 'Погрузчики' %}<i class="bi bi-box-arrow-up"></i>
-                        {% else %}<i class="bi bi-gear"></i>{% endif %}
-                        {{ v.group }}
-                    </span>
-                </div>
-                <div class="fw-bold mb-1" style="font-size:.9rem; line-height:1.2;">{{ v.name }}</div>
-                <div style="font-size:1.5rem; font-weight:700; line-height:1;">{{ v.total_over_str }}</div>
-                <div style="font-size:.75rem; opacity:.8;" class="mt-1">{{ v.total_over_hours }} ч · {{ v.shifts_with_over }} смен</div>
-            </div>
+<!-- Charts -->
+<div class="block" id="blk-chart-unit">
+    <div class="block-head">
+        <div>
+            <h2>Простои по технике (топ-10)</h2>
+            <div class="desc">Время простоя сверх нормы по единицам техники: зелёным — с уважительной причиной, красным — без причины</div>
         </div>
+        <button class="dl-btn no-print" data-target="blk-chart-unit" title="Скачать PNG"><i class="bi bi-download"></i></button>
     </div>
-    {% endfor %}
+    <div class="bars-wrap big">
+        {% for u in chart_units %}
+        <div class="bar-row">
+            <div class="bar-label">
+                <div class="eq-name">{{ u.name }}</div>
+                <div class="bar-group-tag">{{ u.group }} · {{ u.shifts_with_over }} см. с простоем</div>
+                <div class="shift-breakdown">
+                    {% for s in u.shifts %}
+                    <span class="sitem">
+                        <span class="sdot" style="background:{% if s.has_reason %}#1f9d55{% else %}#d33a3a{% endif %}"></span>
+                        {{ s.date }} {{ s.shift }}: {{ s.over_str }} —
+                        {% if s.has_reason %}✅ {{ s.comment|truncatechars:24 }}{% else %}❗ без причины{% endif %}
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="bar-track">
+                <div class="bar-fill-group" style="width:{{ u.bar_pct }}%">
+                    {% if u.just_pct > 0 %}<div class="bar-seg" style="flex:{{ u.just_pct }} 0 auto;background:#1f9d55"></div>{% endif %}
+                    {% if u.unjust_pct > 0 %}<div class="bar-seg" style="flex:{{ u.unjust_pct }} 0 auto;background:#d33a3a"></div>{% endif %}
+                </div>
+            </div>
+            <div class="bar-value">{{ u.total_over_hm }}</div>
+        </div>
+        {% empty %}
+        <div class="empty-note" style="text-align:center;">Простоев сверх нормы не зафиксировано 👍</div>
+        {% endfor %}
+    </div>
+    {% if chart_units %}
+    <div class="shift-legend">
+        <span><span class="sdot" style="background:#1f9d55"></span>Уважительная причина</span>
+        <span><span class="sdot" style="background:#d33a3a"></span>Без причины</span>
+    </div>
+    {% endif %}
 </div>
-{% endif %}
+
+<div class="block" id="blk-chart-group">
+    <div class="block-head">
+        <div>
+            <h2>Простои по группам техники</h2>
+            <div class="desc">Распределение времени простоя сверх нормы между группами техники</div>
+        </div>
+        <button class="dl-btn no-print" data-target="blk-chart-group" title="Скачать PNG"><i class="bi bi-download"></i></button>
+    </div>
+    <div class="vbars-wrap">
+        {% for g in group_chart %}
+        <div class="vbar-col">
+            <div class="vbar-value">{{ g.over_hm }}<span class="vbar-pct">{{ g.share_pct }}%</span></div>
+            <div class="vbar-track"><div class="vbar-fill" style="height:{{ g.bar_pct }}%;background:{{ g.color }}"></div></div>
+            <div class="vbar-label">{{ g.name }}</div>
+        </div>
+        {% empty %}
+        <div class="empty-note" style="text-align:center;">Простоев сверх нормы не зафиксировано 👍</div>
+        {% endfor %}
+    </div>
+    <div class="group-list">
+        {% for g in group_chart %}
+        <div class="group-row">
+            <span class="dot" style="background:{{ g.color }}"></span>
+            <span class="name">{{ g.name }}</span>
+            <span class="val">{{ g.over_hm }}</span>
+            <span class="pct">{{ g.share_pct }}%</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
 
 {% if has_trend %}
-<!-- График по дням -->
-<div class="card mb-4">
-    <div class="card-body">
-        <h6 class="fw-bold mb-3"><i class="bi bi-graph-up me-1"></i>Динамика простоев по дням (ч)</h6>
-        <canvas id="overChart" height="80"></canvas>
+<div class="block no-print" id="blk-trend">
+    <div class="block-head">
+        <div>
+            <h2>Динамика простоев по дням</h2>
+            <div class="desc">Суммарный простой сверх нормы (ч) по датам за выбранный период</div>
+        </div>
     </div>
+    <canvas id="overChart" height="80"></canvas>
 </div>
 {% endif %}
 
-<!-- Таблица по технике -->
-<div class="card">
-    <div class="card-body p-0">
-        <div class="d-flex align-items-center justify-content-between px-3 py-2 border-bottom">
-            <h6 class="mb-0 fw-bold"><i class="bi bi-table me-1"></i>Детализация по технике</h6>
-            <span class="small text-muted">Сортировка по убыванию простоя</span>
+<!-- Downtime reasons -->
+<div class="block" id="blk-reasons">
+    <div class="block-head">
+        <div>
+            <h2>Простои сверх нормы — причины</h2>
+            <div class="desc">Каждая смена с простоем: уважительная причина (есть комментарий) или без объяснения — требует внимания руководства</div>
         </div>
-        <div class="table-responsive">
-            <table class="table table-hover mb-0">
-                <thead>
-                    <tr>
-                        <th class="ps-3">№</th>
-                        <th>Техника</th>
-                        <th>Группа</th>
-                        <th>Записей</th>
-                        <th>Смен с<br>превышением</th>
-                        <th>Фактическое<br>время (чч:мм:сс)</th>
-                        <th>Простой свыше<br>нормы (чч:мм:сс)</th>
-                        <th>Простой<br>свыше нормы (ч)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for v in vehicle_stats %}
-                    <tr {% if v.total_over_sec > 0 %}class="{% if forloop.counter == 1 and v.total_over_sec > 0 %}anomaly-row{% endif %}"{% endif %}>
-                        <td class="ps-3 text-muted">{{ forloop.counter }}</td>
-                        <td class="fw-semibold">{{ v.name }}</td>
-                        <td>
-                            {% if v.group == 'Бульдозеры' %}
-                            <span class="badge bg-warning text-dark group-badge">{{ v.group }}</span>
-                            {% elif v.group == 'Экскаваторы' %}
-                            <span class="badge bg-info text-dark group-badge">{{ v.group }}</span>
-                            {% elif v.group == 'Самосвалы' %}
-                            <span class="badge bg-secondary group-badge">{{ v.group }}</span>
-                            {% elif v.group == 'Погрузчики' %}
-                            <span class="badge bg-success group-badge">{{ v.group }}</span>
-                            {% else %}
-                            <span class="badge bg-light text-dark group-badge">{{ v.group }}</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-muted">{{ v.records }}</td>
-                        <td class="text-center">
-                            {% if v.shifts_with_over > 0 %}
-                            <span class="badge bg-danger">{{ v.shifts_with_over }}</span>
-                            {% else %}
-                            <span class="text-success small"><i class="bi bi-check-circle me-1"></i>0</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-muted font-monospace small">{{ v.total_str }}</td>
-                        <td>
-                            {% if v.total_over_sec > 0 %}
-                            <span class="text-danger fw-semibold font-monospace">{{ v.total_over_str }}</span>
-                            {% else %}
-                            <span class="text-success small"><i class="bi bi-check-circle me-1"></i>В норме</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if v.total_over_hours > 0 %}
-                            <span class="fw-semibold text-danger">{{ v.total_over_hours }}</span>
-                            {% else %}
-                            <span class="text-muted">0</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="8" class="text-center text-muted py-5">
-                            <i class="bi bi-check-circle display-6 d-block mb-2 text-success"></i>
-                            Нет данных
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <button class="dl-btn no-print" data-target="blk-reasons" title="Скачать PNG"><i class="bi bi-download"></i></button>
+    </div>
+    <div class="table-scroll">
+        <table>
+            <thead><tr><th>Дата</th><th>Смена</th><th>Группа</th><th>Техника</th><th>Простой</th><th>Статус</th><th>Причина / комментарий</th></tr></thead>
+            <tbody>
+                {% for r in reasons_rows %}
+                <tr class="{% if not r.has_reason %}row-nonworking{% endif %}">
+                    <td>{{ r.date }}</td>
+                    <td>{{ r.shift }}</td>
+                    <td><span class="group-tag">{{ r.group }}</span></td>
+                    <td><b>{{ r.name }}</b></td>
+                    <td class="downtime-cell has">{{ r.over_str }}</td>
+                    <td>{% if r.has_reason %}<span class="pill green">✅ Уважительная</span>{% else %}<span class="pill red">❗ Без причины</span>{% endif %}</td>
+                    <td>{% if r.has_reason %}{{ r.comment }}{% else %}<span class="muted-cell">причина не указана</span>{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if not reasons_rows %}<div class="empty-note">Простоев сверх нормы не зафиксировано 👍</div>{% endif %}
+</div>
+
+<!-- Non-working equipment -->
+<div class="block" id="blk-nonworking">
+    <div class="block-head">
+        <div>
+            <h2>⚠ Неработающая техника (простой всей смены)</h2>
+            <div class="desc">Смены с нулевым временем работы двигателя — техника не выходила в работу</div>
         </div>
+        <button class="dl-btn no-print" data-target="blk-nonworking" title="Скачать PNG"><i class="bi bi-download"></i></button>
+    </div>
+    <div class="table-scroll">
+        <table>
+            <thead><tr><th>Дата</th><th>Смена</th><th>Группа</th><th>Техника</th><th>Участок</th><th>Статус</th><th>Причина</th></tr></thead>
+            <tbody>
+                {% for r in non_working_rows %}
+                <tr class="row-nonworking">
+                    <td>{{ r.date }}</td>
+                    <td>{{ r.shift }}</td>
+                    <td><span class="group-tag">{{ r.group }}</span></td>
+                    <td>{{ r.name }}</td>
+                    <td>{{ r.section }}</td>
+                    <td>{% if r.has_reason %}<span class="pill green">✅ Уважительная</span>{% else %}<span class="pill red">❗ Без причины</span>{% endif %}</td>
+                    <td>{% if r.has_reason %}{{ r.comment }}{% else %}<span class="muted-cell">причина не указана</span>{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if not non_working_rows %}<div class="empty-note">Нет смен с полным простоем — вся техника выходила в работу 👍</div>{% endif %}
+</div>
+
+<!-- Detail table -->
+<div class="block" id="blk-detail">
+    <div class="block-head">
+        <div>
+            <h2>Детализация по технике</h2>
+            <div class="desc">Каждая смена за период. Клик по заголовку столбца — сортировка</div>
+        </div>
+        <button class="dl-btn no-print" data-target="blk-detail" title="Скачать PNG"><i class="bi bi-download"></i></button>
+    </div>
+    <div class="table-scroll">
+        <table id="tblDetail">
+            <thead><tr>
+                <th data-key="date" data-type="text">Дата</th>
+                <th data-key="group" data-type="text">Группа</th>
+                <th data-key="name" data-type="text">Техника</th>
+                <th data-key="section" data-type="text">Участок</th>
+                <th data-key="work_sec" data-type="num">Время работы</th>
+                <th data-key="output" data-type="num">Выход, %</th>
+                <th data-key="eff" data-type="num">Эффективность, %</th>
+                <th data-key="over_sec" data-type="num" class="sorted">Простой сверх нормы</th>
+            </tr></thead>
+            <tbody>
+                {% for r in detail_rows %}
+                <tr>
+                    <td class="muted-cell" data-v="{{ r.sort_date }}">{{ r.date }}</td>
+                    <td data-v="{{ r.group }}"><span class="group-tag">{{ r.group }}</span></td>
+                    <td data-v="{{ r.name }}"><b>{{ r.name }}</b></td>
+                    <td class="muted-cell" data-v="{{ r.section }}">{{ r.section }}</td>
+                    <td data-v="{{ r.work_sec }}">{{ r.work_str }}</td>
+                    <td data-v="{{ r.output|default_if_none:-1 }}">
+                        {% if r.output == None %}<span class="pill gray">— нет данных</span>
+                        {% elif r.output >= 80 %}<span class="pill green">✅ Работает <span class="pill-pct">{{ r.output }}%</span></span>
+                        {% else %}<span class="pill amber">⚠ Внимание <span class="pill-pct">{{ r.output }}%</span></span>{% endif %}
+                    </td>
+                    <td data-v="{{ r.eff|default_if_none:-1 }}">
+                        {% if r.eff == None %}<span class="pill gray">— нет данных</span>
+                        {% elif r.eff > 100 %}<span class="pill red">⛔ Простой <span class="pill-pct">{{ r.eff }}%</span></span>
+                        {% else %}<span class="pill green">✅ Норма <span class="pill-pct">{{ r.eff }}%</span></span>{% endif %}
+                    </td>
+                    <td class="downtime-cell {% if r.over_sec > 0 %}has{% endif %}" data-v="{{ r.over_sec }}">{% if r.over_str %}{{ r.over_str }}{% else %}—{% endif %}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="8" class="empty-note">Нет данных по заданным фильтрам</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="legend-row">
+        <span><i style="background:#1f9d55"></i>✅ Выход ≥ 80% — техника работает в норме</span>
+        <span><i style="background:#d99a1b"></i>⚠ Выход &lt; 80% — требует внимания</span>
+        <span><i style="background:#d33a3a"></i>⛔ Эффективность &gt; 100% — простой сверх нормы</span>
     </div>
 </div>
 
+<!-- Secondary muted info -->
+<div class="block secondary" id="blk-secondary">
+    <div class="block-head">
+        <div>
+            <h2 style="color:var(--eff-muted)">Пробег и заправки (справочно)</h2>
+            <div class="desc">Второстепенные показатели — без цветовой индикации</div>
+        </div>
+        <button class="dl-btn no-print" data-target="blk-secondary" title="Скачать PNG"><i class="bi bi-download"></i></button>
+    </div>
+    <div class="sec-grid">
+        <div class="sec-stat"><div class="l">Суммарный пробег</div><div class="v">{{ total_mileage }} км</div></div>
+        <div class="sec-stat"><div class="l">Суммарная заправка</div><div class="v">{{ total_refueling }} л</div></div>
+        <div class="sec-stat"><div class="l">Единиц техники</div><div class="v">{{ equip_count }}</div></div>
+        <div class="sec-stat"><div class="l">Средний пробег на ед.</div><div class="v">{{ avg_mileage }} км</div></div>
+    </div>
+</div>
+
+</div>
 {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  .eff-dash{
+    --eff-border:#e2e6ec; --eff-muted:#6b7280; --eff-text:#1a2233;
+    --eff-red:#d33a3a; --eff-red-bg:#fdecec; --eff-red-dark:#a52424;
+    --eff-amber:#d99a1b; --eff-amber-bg:#fdf3dd; --eff-amber-dark:#9c6d0f;
+    --eff-green:#1f9d55; --eff-green-bg:#e8f8ee; --eff-green-dark:#166b3a;
+    --eff-radius:14px; --eff-shadow:0 1px 2px rgba(20,25,40,.04), 0 4px 14px rgba(20,25,40,.05);
+  }
+  .eff-dash .export-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;}
+  .eff-dash .period-badge{background:#fff;border:1px solid var(--eff-border);border-radius:10px;padding:8px 14px;font-size:13px;box-shadow:var(--eff-shadow);}
+  .eff-dash .period-badge b{color:#173a9e;}
+
+  .eff-dash .block{background:#fff;border:1px solid var(--eff-border);border-radius:var(--eff-radius);box-shadow:var(--eff-shadow);padding:18px 20px 20px;position:relative;margin-bottom:18px;}
+  .eff-dash .block-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px;}
+  .eff-dash .block-head h2{font-size:15px;margin:0;color:var(--eff-text);}
+  .eff-dash .block-head .desc{font-size:12px;color:var(--eff-muted);font-weight:400;margin-top:2px;}
+  .eff-dash .dl-btn{width:30px;height:30px;border-radius:8px;border:1px solid var(--eff-border);background:#fbfbfc;display:flex;align-items:center;justify-content:center;color:var(--eff-muted);flex:none;}
+  .eff-dash .dl-btn:hover{background:#eef0f4;color:#173a9e;}
+
+  .eff-dash .grid-row{display:grid;gap:18px;}
+  .eff-dash .grid-2{grid-template-columns:1.4fr 1fr;}
+  @media(max-width:980px){.eff-dash .grid-2{grid-template-columns:1fr;}}
+
+  .eff-dash .hero-inner{display:flex;align-items:center;}
+  .eff-dash .hero-main{flex:1;margin-right:20px;min-width:0;}
+  .eff-dash .hero-num{font-size:42px;font-weight:800;color:var(--eff-red-dark);line-height:1;}
+  .eff-dash .hero-label{font-size:13px;color:var(--eff-muted);margin-top:6px;}
+  .eff-dash .hero-sub{font-size:13px;color:var(--eff-muted);margin-top:14px;}
+  .eff-dash .reason-split{margin-top:16px;background:#f8f9fb;border:1px solid var(--eff-border);border-radius:10px;padding:12px 14px;}
+  .eff-dash .reason-split-title{font-size:11.5px;font-weight:700;color:var(--eff-muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:8px;}
+  .eff-dash .reason-split-bar{display:flex;height:14px;border-radius:7px;overflow:hidden;background:#eef0f4;}
+  .eff-dash .rs-justified{background:linear-gradient(90deg,#1f9d55,#25b06a);height:100%;}
+  .eff-dash .rs-unjustified{background:linear-gradient(90deg,#d33a3a,#e14d4d);height:100%;}
+  .eff-dash .reason-split-legend{display:flex;justify-content:space-between;margin-top:9px;font-size:12px;flex-wrap:wrap;gap:4px 10px;}
+  .eff-dash .reason-split-legend .rl-item{font-weight:600;}
+  .eff-dash .reason-split-legend .just{color:var(--eff-green-dark);}
+  .eff-dash .reason-split-legend .unjust{color:var(--eff-red-dark);}
+  .eff-dash .group-list{margin-top:16px;}
+  .eff-dash .group-row{display:flex;align-items:center;font-size:13px;margin-bottom:10px;}
+  .eff-dash .group-row:last-child{margin-bottom:0;}
+  .eff-dash .dot{width:10px;height:10px;border-radius:50%;flex:none;margin-right:10px;}
+  .eff-dash .group-row .name{color:var(--eff-text);font-weight:600;flex:1;margin-right:10px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .eff-dash .group-row .val{color:var(--eff-text);font-weight:700;min-width:80px;text-align:right;flex:none;margin-right:10px;}
+  .eff-dash .group-row .pct{color:var(--eff-muted);min-width:40px;text-align:right;flex:none;}
+  .eff-dash .donut-wrap{position:relative;display:flex;align-items:center;justify-content:center;flex:none;}
+  .eff-dash .donut-center{position:absolute;text-align:center;pointer-events:none;}
+  .eff-dash .donut-center .n{font-size:22px;font-weight:800;color:var(--eff-text);}
+  .eff-dash .donut-center .l{font-size:11px;color:var(--eff-muted);}
+
+  .eff-dash .tile-col{display:flex;flex-direction:column;}
+  .eff-dash .tile-col .tile{margin-bottom:16px;}
+  .eff-dash .tile-col .tile:last-child{margin-bottom:0;}
+  .eff-dash .tile{border-radius:var(--eff-radius);padding:18px 20px;color:#fff;position:relative;box-shadow:var(--eff-shadow);}
+  .eff-dash .tile.red{background:linear-gradient(135deg,#e14d4d,#b52d2d);}
+  .eff-dash .tile.amber{background:linear-gradient(135deg,#e8ac2e,#c47f10);}
+  .eff-dash .tile.green{background:linear-gradient(135deg,#25b06a,#157a45);}
+  .eff-dash .tile-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+  .eff-dash .tile-top h3{font-size:13px;margin:0;font-weight:700;opacity:.95;line-height:1.35;flex:1;}
+  .eff-dash .tile .big{font-size:30px;font-weight:800;margin-top:14px;}
+  .eff-dash .tile .sub{font-size:12px;opacity:.85;margin-top:4px;}
+  .eff-dash .ring{width:56px;height:56px;position:relative;flex:none;}
+  .eff-dash .ring-inner{position:absolute;inset:0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;}
+  .eff-dash .tile .dl-btn{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.25);color:#fff;flex:none;}
+  .eff-dash .tile .dl-btn:hover{background:rgba(255,255,255,.3);}
+
+  .eff-dash .bars-wrap.big{display:flex;flex-direction:column;gap:22px;padding-top:4px;min-height:120px;}
+  .eff-dash .bars-wrap.big .bar-row{display:grid;grid-template-columns:260px 1fr 110px;align-items:center;gap:16px;}
+  @media(max-width:900px){.eff-dash .bars-wrap.big .bar-row{grid-template-columns:1fr;}}
+  .eff-dash .bar-label .eq-name{font-size:15px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .eff-dash .bar-label .bar-group-tag{font-size:11.5px;color:var(--eff-muted);font-weight:500;margin-top:1px;}
+  .eff-dash .shift-breakdown{display:flex;flex-wrap:wrap;gap:5px 12px;font-size:11px;color:var(--eff-muted);font-weight:600;margin-top:5px;}
+  .eff-dash .shift-breakdown span.sitem{display:inline-flex;align-items:center;gap:4px;}
+  .eff-dash .sdot{width:8px;height:8px;border-radius:2px;flex:none;}
+  .eff-dash .bar-track{background:#eef0f4;border-radius:8px;height:22px;overflow:hidden;}
+  .eff-dash .bar-fill-group{height:100%;display:flex;}
+  .eff-dash .bar-seg{height:100%;}
+  .eff-dash .bar-value{font-size:16px;font-weight:800;text-align:right;color:var(--eff-text);}
+  .eff-dash .shift-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--eff-muted);margin-top:12px;padding-top:10px;border-top:1px solid #eef0f3;}
+  .eff-dash .shift-legend span{display:inline-flex;align-items:center;gap:6px;font-weight:600;}
+
+  .eff-dash .vbars-wrap{display:flex;align-items:flex-end;justify-content:center;gap:38px;height:250px;padding:14px 14px 0;flex-wrap:wrap;}
+  .eff-dash .vbar-col{display:flex;flex-direction:column;align-items:center;gap:9px;height:100%;justify-content:flex-end;width:100px;}
+  .eff-dash .vbar-value{font-size:12.5px;font-weight:800;color:var(--eff-text);text-align:center;line-height:1.25;}
+  .eff-dash .vbar-value .vbar-pct{display:block;font-size:11px;font-weight:600;color:var(--eff-muted);}
+  .eff-dash .vbar-track{width:56px;flex:1;display:flex;align-items:flex-end;background:#f4f5f7;border-radius:8px 8px 4px 4px;overflow:hidden;}
+  .eff-dash .vbar-fill{width:100%;border-radius:8px 8px 0 0;min-height:3px;}
+  .eff-dash .vbar-label{font-size:12px;color:var(--eff-text);font-weight:700;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100px;}
+
+  .eff-dash table{width:100%;border-collapse:collapse;font-size:13px;}
+  .eff-dash th{text-align:left;color:var(--eff-muted);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.03em;padding:8px 10px;border-bottom:2px solid var(--eff-border);cursor:pointer;white-space:nowrap;}
+  .eff-dash th:hover{color:var(--eff-text);}
+  .eff-dash th.sorted::after{content:' \25BE';}
+  .eff-dash td{padding:9px 10px;border-bottom:1px solid #eef0f3;white-space:nowrap;}
+  .eff-dash tr:hover td{background:#f8f9fb;}
+  .eff-dash .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:20px;font-weight:700;font-size:12px;white-space:nowrap;}
+  .eff-dash .pill-pct{font-weight:600;opacity:.75;font-size:11px;}
+  .eff-dash .pill.green{background:var(--eff-green-bg);color:var(--eff-green-dark);}
+  .eff-dash .pill.amber{background:var(--eff-amber-bg);color:var(--eff-amber-dark);}
+  .eff-dash .pill.red{background:var(--eff-red-bg);color:var(--eff-red-dark);}
+  .eff-dash .pill.gray{background:#eef0f3;color:var(--eff-muted);}
+  .eff-dash .muted-cell{color:var(--eff-muted);}
+  .eff-dash .downtime-cell{font-weight:700;}
+  .eff-dash .downtime-cell.has{color:var(--eff-red-dark);}
+  .eff-dash .row-nonworking{background:var(--eff-red-bg);}
+  .eff-dash .empty-note{color:var(--eff-muted);font-size:13px;padding:14px 4px;}
+  .eff-dash .table-scroll{overflow-x:auto;}
+  .eff-dash .group-tag{font-size:11px;background:#eef1f6;color:var(--eff-muted);padding:2px 8px;border-radius:6px;font-weight:700;}
+
+  .eff-dash .secondary{background:#f4f5f7;border:1px dashed #d6dae2;}
+  .eff-dash .sec-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;}
+  .eff-dash .sec-stat{background:#fff;border:1px solid var(--eff-border);border-radius:10px;padding:12px 14px;}
+  .eff-dash .sec-stat .l{font-size:11.5px;color:var(--eff-muted);margin-bottom:4px;}
+  .eff-dash .sec-stat .v{font-size:19px;font-weight:700;color:#3a4152;}
+
+  .eff-dash .legend-row{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--eff-muted);}
+  .eff-dash .legend-row span{display:inline-flex;align-items:center;gap:6px;}
+  .eff-dash .legend-row i{width:10px;height:10px;border-radius:3px;display:inline-block;}
+  .eff-dash .print-only{display:none;}
+
+  @media print{
+    @page{ size:A4; margin:12mm 10mm; }
+    body{ background:#fff !important; }
+    nav, footer, .no-print{ display:none !important; }
+    .eff-dash .print-only{ display:block !important; margin-bottom:16px; }
+    .eff-dash .print-title{ font-size:19px; font-weight:800; color:#111; }
+    .eff-dash .print-meta{ font-size:11px; color:#555; margin-top:4px; }
+    * { box-shadow:none !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .eff-dash .block{ border:1px solid #ddd; box-shadow:none; break-inside:avoid; page-break-inside:avoid; margin-bottom:12px; }
+    .eff-dash .grid-row.grid-2{ display:block; }
+    .eff-dash .grid-row.grid-2 > *{ margin-bottom:12px; }
+    .eff-dash .tile-col .tile{ break-inside:avoid; page-break-inside:avoid; }
+    .eff-dash table{ font-size:10.5px; }
+    .eff-dash th, .eff-dash td{ padding:5px 6px; }
+  }
+</style>
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 {% if has_trend %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 (function() {
     var raw = {{ trend_json|safe }};
     var ctx = document.getElementById('overChart').getContext('2d');
-
-    // Colour each bar: >0 = danger gradient, 0 = light grey
-    var barColors = raw.over_hours.map(function(v) {
-        return v > 0 ? 'rgba(220,53,69,0.75)' : 'rgba(200,200,200,0.4)';
-    });
-    var borderColors = raw.over_hours.map(function(v) {
-        return v > 0 ? '#dc3545' : '#ccc';
-    });
-
+    var barColors = raw.over_hours.map(function(v) { return v > 0 ? 'rgba(220,53,69,0.75)' : 'rgba(200,200,200,0.4)'; });
+    var borderColors = raw.over_hours.map(function(v) { return v > 0 ? '#dc3545' : '#ccc'; });
     new Chart(ctx, {
         type: 'bar',
-        data: {
-            labels: raw.dates,
-            datasets: [{
-                label: 'Простой свыше нормы (ч)',
-                data: raw.over_hours,
-                backgroundColor: barColors,
-                borderColor: borderColors,
-                borderWidth: 1,
-                borderRadius: 3,
-            }]
-        },
+        data: { labels: raw.dates, datasets: [{ label: 'Простой свыше нормы (ч)', data: raw.over_hours, backgroundColor: barColors, borderColor: borderColors, borderWidth: 1, borderRadius: 3 }] },
         options: {
             responsive: true,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    callbacks: {
-                        label: function(ctx) {
-                            return ' ' + ctx.parsed.y + ' ч';
-                        }
-                    }
-                }
-            },
+            plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(ctx) { return ' ' + ctx.parsed.y + ' ч'; } } } },
             scales: {
-                x: {
-                    grid: { display: false },
-                    ticks: { font: { size: 11 }, maxRotation: 45 }
-                },
-                y: {
-                    beginAtZero: true,
-                    title: { display: true, text: 'часов', font: { size: 11 } },
-                    ticks: { font: { size: 11 } }
-                }
+                x: { grid: { display: false }, ticks: { font: { size: 11 }, maxRotation: 45 } },
+                y: { beginAtZero: true, title: { display: true, text: 'часов', font: { size: 11 } }, ticks: { font: { size: 11 } } }
             }
         }
     });
 })();
 </script>
 {% endif %}
+<script>
+(function(){
+    function esc(s){ return (s==null?'':s.toString()); }
+
+    // ── Export to PNG ────────────────────────────────────────────────────────
+    function exportElement(el, filename){
+        if (typeof html2canvas === 'undefined'){
+            alert('Не удалось загрузить библиотеку экспорта PNG. Проверьте подключение к интернету.');
+            return;
+        }
+        html2canvas(el, { scale:2, backgroundColor:'#ffffff', useCORS:true }).then(function(canvas){
+            var link = document.createElement('a');
+            link.download = filename;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        });
+    }
+    document.addEventListener('click', function(e){
+        var btn = e.target.closest('.dl-btn[data-target]');
+        if (!btn) return;
+        var el = document.getElementById(btn.dataset.target);
+        exportElement(el, 'prostoi_' + btn.dataset.target + '.png');
+    });
+    var exportAllBtn = document.getElementById('exportAllBtn');
+    if (exportAllBtn){
+        exportAllBtn.addEventListener('click', function(){
+            exportElement(document.getElementById('dashboard-root'), 'prostoi_dashboard.png');
+        });
+    }
+    var printBtn = document.getElementById('printBtn');
+    if (printBtn){
+        printBtn.addEventListener('click', function(){ window.print(); });
+    }
+
+    // ── Sortable detail table (client-side, no reload) ──────────────────────
+    var table = document.getElementById('tblDetail');
+    if (table){
+        var sortKey = 'over_sec', sortDir = 'desc';
+        var tbody = table.querySelector('tbody');
+        function sortRows(){
+            var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr')).filter(function(r){ return r.cells.length > 1; });
+            var th = table.querySelector('th[data-key="' + sortKey + '"]');
+            var type = th ? th.dataset.type : 'text';
+            var colIndex = Array.prototype.indexOf.call(table.querySelectorAll('th'), th);
+            rows.sort(function(a, b){
+                var va = a.cells[colIndex].dataset.v, vb = b.cells[colIndex].dataset.v;
+                if (type === 'num'){ va = parseFloat(va); vb = parseFloat(vb); }
+                var cmp = va < vb ? -1 : (va > vb ? 1 : 0);
+                return sortDir === 'asc' ? cmp : -cmp;
+            });
+            rows.forEach(function(r){ tbody.appendChild(r); });
+            table.querySelectorAll('th[data-key]').forEach(function(h){ h.classList.toggle('sorted', h.dataset.key === sortKey); });
+        }
+        table.querySelectorAll('th[data-key]').forEach(function(th){
+            th.addEventListener('click', function(){
+                var k = th.dataset.key;
+                if (sortKey === k) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+                else { sortKey = k; sortDir = 'desc'; }
+                sortRows();
+            });
+        });
+    }
+})();
+</script>
 {% endblock %}
