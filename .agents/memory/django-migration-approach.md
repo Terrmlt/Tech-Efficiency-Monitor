@@ -19,3 +19,5 @@ When `python manage.py migrate` (or `makemigrations`) hangs indefinitely, apply 
 4. Restart the workflow — Django will see the migration as already applied and start cleanly
 
 **Note:** `configureWorkflow` in `code_execution` also fails (CANCEL error) in this environment, so `.replit` workflow commands cannot be changed programmatically — they must be edited by the user if a permanent `migrate` step is needed in the startup command.
+
+**Update (equipment-analysis project):** in that project the hang was actually caused by running `manage.py migrate` concurrently with a live `runserver` process (both racing on the DB), not by SQLite itself — the project actually uses Postgres via `DATABASE_URL`/`dj-database-url`, falling back to SQLite only if unset. Fix was simply: kill any running server/migrate process first, then run `migrate --run-syncdb` standalone. No manual DDL/sqlite3 script was needed once the conflicting process was gone. Try this simpler fix first before resorting to the manual DDL script.

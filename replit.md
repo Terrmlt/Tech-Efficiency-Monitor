@@ -4,14 +4,16 @@ Django-приложение для загрузки и анализа Excel-от
 
 ## Run & Operate
 
-- `cd equipment-analysis && python3 manage.py runserver 0.0.0.0:8000` — запуск Django-сервера
+- Запускается через workflow "Start application": `pip install -r equipment-analysis/requirements.txt -q && cd equipment-analysis && python3 manage.py migrate --run-syncdb && python3 manage.py runserver 0.0.0.0:5000`
+- Приложение слушает порт 5000 (требование Replit preview)
 - `cd equipment-analysis && python3 manage.py migrate` — применить миграции БД
 - `cd equipment-analysis && python3 manage.py makemigrations analysis` — создать миграции после изменений моделей
+- В базе уже загружены исходные данные из `dump.json` (пользователи, отчёты, записи по ТС) через `loaddata`
 
 ## Stack
 
 - Python 3.11 + Django 5.x
-- SQLite (база данных)
+- PostgreSQL (база данных Replit, подключение через `DATABASE_URL` и `dj-database-url`; падает обратно на SQLite `db.sqlite3`, если `DATABASE_URL` не задан)
 - openpyxl (чтение Excel)
 - Bootstrap 5 (UI)
 
@@ -22,7 +24,7 @@ Django-приложение для загрузки и анализа Excel-от
 - `equipment-analysis/analysis/utils.py` — парсинг Excel, обнаружение аномалий, расчёт метрик
 - `equipment-analysis/analysis/models.py` — модели Report и VehicleRecord
 - `equipment-analysis/analysis/templates/analysis/` — HTML-шаблоны
-- `equipment-analysis/db.sqlite3` — база данных
+- `equipment-analysis/dump.json` — дамп исходных данных проекта (загружен в БД)
 
 ## Architecture decisions
 
