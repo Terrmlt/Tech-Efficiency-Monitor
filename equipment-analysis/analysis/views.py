@@ -85,7 +85,28 @@ def index(request):
         if is_analyst(user):
             return redirect('analytics')
     reports = Report.objects.select_related('section').all()
-    return render(request, 'analysis/index.html', {'reports': reports})
+
+    section_id = request.GET.get('section', '').strip()
+    if section_id == 'none':
+        reports = reports.filter(section__isnull=True)
+    elif section_id:
+        reports = reports.filter(section_id=section_id)
+
+    sort = request.GET.get('sort', '')
+    if sort == 'section':
+        reports = reports.order_by('section__name', '-uploaded_at')
+    # default ordering ('-uploaded_at') already applied by Report.Meta.ordering
+
+    all_sections = Section.objects.all()
+    has_unassigned = Report.objects.filter(section__isnull=True).exists()
+
+    return render(request, 'analysis/index.html', {
+        'reports': reports,
+        'sections': all_sections,
+        'has_unassigned': has_unassigned,
+        'selected_section': section_id,
+        'selected_sort': sort,
+    })
 
 
 # ─── Upload ───────────────────────────────────────────────────────────────────

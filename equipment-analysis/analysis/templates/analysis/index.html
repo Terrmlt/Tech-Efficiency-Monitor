@@ -10,13 +10,47 @@
     </a>
 </div>
 
+<form method="get" class="card mb-4">
+    <div class="card-body d-flex flex-wrap align-items-end gap-3">
+        <div>
+            <label class="form-label small fw-semibold mb-1">Участок</label>
+            <select name="section" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="" {% if not selected_section %}selected{% endif %}>Все участки</option>
+                {% for s in sections %}
+                <option value="{{ s.id }}" {% if selected_section == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+                {% endfor %}
+                {% if has_unassigned %}
+                <option value="none" {% if selected_section == 'none' %}selected{% endif %}>Без участка</option>
+                {% endif %}
+            </select>
+        </div>
+        <div>
+            <label class="form-label small fw-semibold mb-1">Сортировка</label>
+            <select name="sort" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="" {% if not selected_sort %}selected{% endif %}>По дате загрузки</option>
+                <option value="section" {% if selected_sort == 'section' %}selected{% endif %}>По участку</option>
+            </select>
+        </div>
+        {% if selected_section or selected_sort %}
+        <a href="{% url 'index' %}" class="btn btn-sm btn-outline-secondary">Сбросить</a>
+        {% endif %}
+    </div>
+</form>
+
 {% if reports %}
 <div class="row g-3">
     {% for report in reports %}
     <div class="col-12 col-md-6 col-xl-4">
         <div class="card h-100">
             <div class="card-body">
-                <h6 class="fw-bold mb-1">{{ report.name }}</h6>
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                    <h6 class="fw-bold mb-1">{{ report.name }}</h6>
+                    {% if report.section %}
+                    <span class="badge bg-primary-subtle text-primary-emphasis border">{{ report.section.name }}</span>
+                    {% else %}
+                    <span class="badge bg-light text-muted border">Без участка</span>
+                    {% endif %}
+                </div>
                 {% if report.period %}
                 <p class="text-muted small mb-2"><i class="bi bi-calendar3 me-1"></i>{{ report.period }} {{ report.year }}</p>
                 {% endif %}
