@@ -1,3 +1,4 @@
+import os
 import re
 import datetime
 from django import forms
@@ -49,13 +50,13 @@ class ReportUploadForm(forms.ModelForm):
         widget=forms.TextInput(attrs=TIME_INPUT_ATTRS),
     )
     bulldozer_norm = forms.CharField(
-        initial='02:00:00',
+        initial='03:00:00',
         label='Норма холостого хода — Бульдозеры/Погрузчики',
         help_text='Допустимое время работы двигателя на холостом ходу',
         widget=forms.TextInput(attrs=TIME_INPUT_ATTRS),
     )
     excavator_norm = forms.CharField(
-        initial='02:00:00',
+        initial='03:40:00',
         label='Норма простоя стрелы — Экскаваторы',
         help_text='Допустимое время простоя стрелы (колонка «Время простоя»)',
         widget=forms.TextInput(attrs=TIME_INPUT_ATTRS),
@@ -66,7 +67,7 @@ class ReportUploadForm(forms.ModelForm):
         widgets = {
             'name': forms.TextInput(attrs={
                 'class': 'form-control',
-                'placeholder': 'Например: Отчёт 15.06.2026 Смена 1',
+                'placeholder': 'По умолчанию — название загруженного файла',
             }),
             'file': forms.FileInput(attrs={
                 'class': 'form-control',
@@ -77,6 +78,10 @@ class ReportUploadForm(forms.ModelForm):
             'name': 'Название отчёта',
             'file': 'Файл Excel (.xlsx)',
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['name'].required = False
 
     def clean_daily_norm(self):
         return parse_hhmmss(self.cleaned_data['daily_norm'])
@@ -101,6 +106,8 @@ class ReportUploadForm(forms.ModelForm):
         report.bulldozer_norm_sec = self.cleaned_data['bulldozer_norm']
         report.excavator_norm_sec = self.cleaned_data['excavator_norm']
         report.section = self.cleaned_data.get('section')
+        if not report.name and report.file:
+            report.name = os.path.splitext(os.path.basename(report.file.name))[0]
         if commit:
             report.save()
         return report

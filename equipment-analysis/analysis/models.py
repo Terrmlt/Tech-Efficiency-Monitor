@@ -44,8 +44,8 @@ class Report(models.Model):
     shift = models.SmallIntegerField(default=1, choices=SHIFT_CHOICES, verbose_name='Смена')
 
     daily_norm_sec = models.IntegerField(default=36000, verbose_name='Норма работы в смену (сек)')
-    bulldozer_norm_sec = models.IntegerField(default=7200, verbose_name='Норма холостого хода бульдозеров/погрузчиков (сек)')
-    excavator_norm_sec = models.IntegerField(default=7200, verbose_name='Норма времени простоя стрелы экскаваторов (сек)')
+    bulldozer_norm_sec = models.IntegerField(default=10800, verbose_name='Норма холостого хода бульдозеров/погрузчиков (сек)')
+    excavator_norm_sec = models.IntegerField(default=13200, verbose_name='Норма времени простоя стрелы экскаваторов (сек)')
     dumptruck_norm_sec = models.IntegerField(default=10800, verbose_name='Норма времени без движения самосвалов (сек)')
 
     class Meta:
