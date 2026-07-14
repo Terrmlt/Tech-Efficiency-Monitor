@@ -25,6 +25,16 @@ if _replit_domain:
         f'https://*.{_replit_domain}',
     ]
 
+# Replit's preview shows the app inside an iframe on a different top-level
+# domain, so browsers treat our session/CSRF cookies as third-party cookies.
+# Without SameSite=None (and Secure, required alongside None), browsers
+# block those cookies inside the iframe, which breaks login with a
+# "CSRF token from POST incorrect" 403 error.
+SESSION_COOKIE_SAMESITE = 'None'
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SAMESITE = 'None'
+CSRF_COOKIE_SECURE = True
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
