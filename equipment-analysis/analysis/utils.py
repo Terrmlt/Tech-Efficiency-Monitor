@@ -375,7 +375,10 @@ def parse_excel_file(file_path):
         raw_name  = get(cols['name'])
         raw_group = get(cols['group'])
         name  = str(raw_name).strip()  if raw_name  else ''
-        group = str(raw_group).strip() if raw_group else ''
+        # Excel exports are inconsistent about casing ('самосвалы' vs 'Самосвалы'),
+        # which broke type_efficiency matching downstream — normalize to the
+        # capitalized form used everywhere else in the app.
+        group = str(raw_group).strip().capitalize() if raw_group else ''
 
         # Skip rows that look like headers or totals (no meaningful name)
         if not name or name.lower() in ('транспортное средство', 'итого', 'всего', ''):
