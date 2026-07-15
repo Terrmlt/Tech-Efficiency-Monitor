@@ -5,7 +5,7 @@
 {% block content %}
 <div class="eff-dash">
 
-<div class="d-flex align-items-center mb-3">
+<div class="d-flex align-items-center mb-3 no-print">
     <h4 class="mb-0 fw-bold"><i class="bi bi-hourglass-split me-2"></i>Анализ эффективности (простоев)</h4>
 </div>
 
@@ -570,20 +570,43 @@
   @media print{
     /* Wide tables/columns — always print landscape so nothing is squeezed (2.11) */
     @page{ size:A4 landscape; margin:8mm; }
-    body{ background:#fff !important; }
+    html, body{ background:#fff !important; height:auto !important; }
     nav, footer, .no-print{ display:none !important; }
-    .eff-dash .print-only{ display:block !important; margin-bottom:10px; }
-    .eff-dash .print-title{ font-size:16px; font-weight:800; color:#111; }
-    .eff-dash .print-meta{ font-size:10px; color:#555; margin-top:3px; }
+    .eff-dash{ padding:0 !important; margin:0 !important; }
+    .eff-dash .print-only{ display:block !important; margin-bottom:6px; }
+    .eff-dash .print-title{ font-size:14px; font-weight:800; color:#111; }
+    .eff-dash .print-meta{ font-size:9px; color:#555; margin-top:2px; }
     * { box-shadow:none !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-    .eff-dash .block{ border:1px solid #ddd; box-shadow:none; margin-bottom:8px; padding:10px 12px 12px; }
-    /* Only the small, self-contained blocks are forced to stay on one page —
+    .eff-dash .block{ border:1px solid #ddd; box-shadow:none; margin-bottom:6px; padding:8px 10px 10px; }
+    .eff-dash .block-head{ margin-bottom:6px; }
+    .eff-dash .block-head h2{ font-size:12.5px; }
+    .eff-dash .block-head .desc{ font-size:9px; }
+
+    /* Only small, self-contained pieces are kept intact across a page break —
        tables are allowed to flow across pages with repeating headers below */
-    .eff-dash .tile-grid{ page-break-inside:avoid; break-inside:avoid; }
     .eff-dash .tile{ break-inside:avoid; page-break-inside:avoid; }
-    /* 2.1: the group summary is the most important block for management —
-       keep it intact and force everything after it onto later pages */
-    #blk-summary{ break-inside:avoid; page-break-inside:avoid; page-break-after:always; }
+
+    /* 2.1: the group summary is the most important block for management — shrink
+       it so it reliably fits a single landscape page, then force a hard break
+       after it so nothing else shares that page. */
+    #blk-summary{ break-inside:avoid; page-break-inside:avoid; page-break-after:always; break-after:page; }
+    #blk-summary .summary-inner{ gap:14px; }
+    #blk-summary .vbars-wrap{ height:90px !important; gap:10px !important; padding:0 !important; }
+    #blk-summary .vbar-col{ width:56px !important; gap:5px !important; }
+    #blk-summary .vbar-track{ width:34px !important; }
+    #blk-summary .vbar-value{ font-size:9.5px !important; }
+    #blk-summary .vbar-value .vbar-pct{ font-size:8.5px !important; }
+    #blk-summary .vbar-label{ font-size:9px !important; max-width:56px !important; }
+    #blk-summary .summary-side{ width:190px !important; gap:6px !important; }
+    #blk-summary .donut-wrap svg{ width:90px !important; height:90px !important; }
+    #blk-summary .donut-center .n{ font-size:12px !important; }
+    #blk-summary .donut-center .l{ font-size:8px !important; }
+    #blk-summary .group-list{ margin-top:0 !important; }
+    #blk-summary .group-row{ font-size:9.5px !important; margin-bottom:4px !important; }
+    #blk-summary .reason-split{ margin-top:8px !important; padding:6px 8px !important; }
+    #blk-summary .reason-split-title{ font-size:9px !important; margin-bottom:5px !important; }
+    #blk-summary .reason-split-bar{ height:9px !important; }
+    #blk-summary .reason-split-legend{ font-size:9.5px !important; margin-top:5px !important; }
 
     .eff-dash table{ font-size:9.5px; width:100%; table-layout:auto; }
     .eff-dash th, .eff-dash td{ padding:4px 5px; white-space:normal; }
