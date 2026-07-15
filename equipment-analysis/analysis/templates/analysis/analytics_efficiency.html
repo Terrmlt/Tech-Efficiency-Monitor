@@ -122,87 +122,103 @@
 
 <div id="dashboard-root">
 
-<!-- Hero + KPI tiles -->
-<div class="grid-row grid-2">
-    <div class="block" id="blk-hero">
-        <div class="block-head">
-            <div>
-                <h2>Общий простой техники сверх нормы</h2>
-                <div class="desc">Суммарное время простоя, доля с уважительной причиной и распределение по группам техники</div>
-            </div>
-            <button class="dl-btn no-print" data-target="blk-hero" title="Скачать PNG"><i class="bi bi-download"></i></button>
+<!-- Сводка для руководства — самый важный блок, должен помещаться на 1 лист при печати -->
+<div class="block" id="blk-summary">
+    <div class="block-head">
+        <div>
+            <h2>Простои по группам техники — сводка</h2>
+            <div class="desc">Суммарное время простоя сверх нормы по группам техники за период</div>
         </div>
-        <div class="hero-inner">
-            <div class="hero-main">
-                <div class="hero-num">{{ total_over_hm }}</div>
-                <div class="hero-label">суммарный простой сверх нормы за период</div>
-                <div class="hero-sub">Простаивает {{ affected_equip_count }} из {{ equip_count }} единиц техники</div>
-                <div class="reason-split">
-                    <div class="reason-split-title">Простой сверх нормы: уважительный vs без причины</div>
-                    <div class="reason-split-bar">
-                        {% if just_pct_total or unjust_pct_total %}
-                        <div class="rs-justified" style="width:{{ just_pct_total }}%"></div>
-                        <div class="rs-unjustified" style="width:{{ unjust_pct_total }}%"></div>
-                        {% else %}
-                        <div style="width:100%;background:#eef0f4"></div>
-                        {% endif %}
-                    </div>
-                    <div class="reason-split-legend">
-                        <span class="rl-item just">✅ Уважительная причина: <b>{{ just_hm }} ({{ just_count }} см.) · {{ just_pct_total }}%</b></span>
-                        <span class="rl-item unjust">❗ Без причины: <b>{{ unjust_hm }} ({{ unjust_count }} см.) · {{ unjust_pct_total }}%</b></span>
-                    </div>
-                </div>
-                <div class="group-list">
-                    {% for g in group_chart %}
-                    <div class="group-row">
-                        <span class="dot" style="background:{{ g.color }}"></span>
-                        <span class="name">{{ g.name }} <span class="muted-cell">({{ g.units }})</span></span>
-                        <span class="val">{{ g.over_hm }}</span>
-                        <span class="pct">{{ g.share_pct }}%</span>
-                    </div>
-                    {% empty %}
-                    <div class="empty-note">Нет данных</div>
-                    {% endfor %}
-                </div>
+        <button class="dl-btn no-print" data-target="blk-summary" title="Скачать PNG"><i class="bi bi-download"></i></button>
+    </div>
+    <div class="summary-inner">
+        <div class="vbars-wrap">
+            {% for g in group_chart %}
+            <div class="vbar-col">
+                <div class="vbar-value">{{ g.over_hm }}<span class="vbar-pct">{{ g.share_pct }}%</span></div>
+                <div class="vbar-track"><div class="vbar-fill" style="height:{{ g.bar_pct }}%;background:{{ g.color }}"></div></div>
+                <div class="vbar-label">{{ g.name }}</div>
             </div>
+            {% empty %}
+            <div class="empty-note" style="text-align:center;">Простоев сверх нормы не зафиксировано 👍</div>
+            {% endfor %}
+        </div>
+        <div class="summary-side">
             <div class="donut-wrap">
                 {{ group_donut_svg|safe }}
                 <div class="donut-center">
-                    <div class="n">{{ equip_count }}</div>
-                    <div class="l">ед. техники</div>
+                    <div class="n">{{ affected_equip_count }}/{{ equip_count }}</div>
+                    <div class="l">ед. простаивает</div>
                 </div>
+            </div>
+            <div class="group-list">
+                {% for g in group_chart %}
+                <div class="group-row">
+                    <span class="dot" style="background:{{ g.color }}"></span>
+                    <span class="name">{{ g.name }} <span class="muted-cell">({{ g.units }})</span></span>
+                    <span class="val">{{ g.over_hm }}</span>
+                    <span class="pct">{{ g.share_pct }}%</span>
+                </div>
+                {% empty %}
+                <div class="empty-note">Нет данных</div>
+                {% endfor %}
             </div>
         </div>
     </div>
+    <div class="reason-split">
+        <div class="reason-split-title">Простой сверх нормы: с причиной vs без причины</div>
+        <div class="reason-split-bar">
+            {% if just_pct_total or unjust_pct_total %}
+            <div class="rs-justified" style="width:{{ just_pct_total }}%"></div>
+            <div class="rs-unjustified" style="width:{{ unjust_pct_total }}%"></div>
+            {% else %}
+            <div style="width:100%;background:#eef0f4"></div>
+            {% endif %}
+        </div>
+        <div class="reason-split-legend">
+            <span class="rl-item just">✅ С причиной: <b>{{ just_hm }} ({{ just_count }} см.) · {{ just_pct_total }}%</b></span>
+            <span class="rl-item unjust">❗ Без причины: <b>{{ unjust_hm }} ({{ unjust_count }} см.) · {{ unjust_pct_total }}%</b></span>
+        </div>
+    </div>
+</div>
 
-    <div class="tile-col">
-        <div class="tile red" id="blk-tile-idle">
-            <div class="tile-top">
-                <h3>Простой техники<br>(эффективность &gt; 100%)</h3>
-                <div class="ring">{{ ring_idle_svg|safe }}<div class="ring-inner">{{ idle_pct }}%</div></div>
-                <button class="dl-btn no-print" data-target="blk-tile-idle" title="Скачать PNG"><i class="bi bi-download"></i></button>
-            </div>
-            <div class="big">{{ idle_count }}</div>
-            <div class="sub">случаев простоя сверх нормы за период</div>
+<!-- KPI-карточки (компактно) -->
+<div class="tile-grid">
+    <div class="tile red compact tile-full" id="blk-tile-idle">
+        <div class="tile-top">
+            <h3>Простой техники <span class="tile-h-note">(&gt; 30 мин сверх нормы)</span></h3>
+            <div class="ring sm">{{ ring_idle_svg|safe }}<div class="ring-inner">{{ idle_pct }}%</div></div>
         </div>
-        <div class="tile amber" id="blk-tile-low">
-            <div class="tile-top">
-                <h3>Низкий выход техники<br>(&lt; 80%)</h3>
-                <div class="ring">{{ ring_low_svg|safe }}<div class="ring-inner">{{ low_pct }}%</div></div>
-                <button class="dl-btn no-print" data-target="blk-tile-low" title="Скачать PNG"><i class="bi bi-download"></i></button>
-            </div>
-            <div class="big">{{ low_count }}</div>
-            <div class="sub">требует внимания, но не критично</div>
+        <div class="big">{{ idle_count }}</div>
+        <div class="sub">случаев простоя сверх нормы за период</div>
+    </div>
+    <div class="tile amber compact" id="blk-tile-low-s1">
+        <div class="tile-top">
+            <h3>Низкий выход техники<br>(&lt; 80%) · Смена 1</h3>
+            <div class="ring sm">{{ ring_low_s1_svg|safe }}<div class="ring-inner">{{ low_s1_pct }}%</div></div>
         </div>
-        <div class="tile green" id="blk-tile-good">
-            <div class="tile-top">
-                <h3>Техника работает штатно<br>(выход ≥ 80%)</h3>
-                <div class="ring">{{ ring_good_svg|safe }}<div class="ring-inner">{{ good_pct }}%</div></div>
-                <button class="dl-btn no-print" data-target="blk-tile-good" title="Скачать PNG"><i class="bi bi-download"></i></button>
-            </div>
-            <div class="big">{{ good_count }}</div>
-            <div class="sub">полностью выполняют норму выхода</div>
+        <div class="big">{{ low_s1 }}</div>
+    </div>
+    <div class="tile amber compact" id="blk-tile-low-s2">
+        <div class="tile-top">
+            <h3>Низкий выход техники<br>(&lt; 80%) · Смена 2</h3>
+            <div class="ring sm">{{ ring_low_s2_svg|safe }}<div class="ring-inner">{{ low_s2_pct }}%</div></div>
         </div>
+        <div class="big">{{ low_s2 }}</div>
+    </div>
+    <div class="tile green compact" id="blk-tile-good-s1">
+        <div class="tile-top">
+            <h3>Техника работает в рамках<br>нормы выхода · Смена 1</h3>
+            <div class="ring sm">{{ ring_good_s1_svg|safe }}<div class="ring-inner">{{ good_s1_pct }}%</div></div>
+        </div>
+        <div class="big">{{ good_s1 }}</div>
+    </div>
+    <div class="tile green compact" id="blk-tile-good-s2">
+        <div class="tile-top">
+            <h3>Техника работает в рамках<br>нормы выхода · Смена 2</h3>
+            <div class="ring sm">{{ ring_good_s2_svg|safe }}<div class="ring-inner">{{ good_s2_pct }}%</div></div>
+        </div>
+        <div class="big">{{ good_s2 }}</div>
     </div>
 </div>
 
@@ -215,18 +231,17 @@
         </div>
         <button class="dl-btn no-print" data-target="blk-chart-unit" title="Скачать PNG"><i class="bi bi-download"></i></button>
     </div>
-    <div class="bars-wrap big">
+    <div class="bars-wrap compact">
         {% for u in chart_units %}
         <div class="bar-row">
             <div class="bar-label">
-                <div class="eq-name">{{ u.name }}</div>
-                <div class="bar-group-tag">{{ u.group }} · {{ u.shifts_with_over }} см. с простоем</div>
+                <div class="eq-name">{{ u.name }} <span class="bar-group-tag">{{ u.group }} · {{ u.shifts_with_over }} см.</span></div>
                 <div class="shift-breakdown">
                     {% for s in u.shifts %}
                     <span class="sitem">
                         <span class="sdot" style="background:{% if s.has_reason %}#1f9d55{% else %}#d33a3a{% endif %}"></span>
                         {{ s.date }} {{ s.shift }}: {{ s.over_str }} —
-                        {% if s.has_reason %}✅ {{ s.comment|truncatechars:24 }}{% else %}❗ без причины{% endif %}
+                        {% if s.has_reason %}✅ {{ s.comment|truncatechars:20 }}{% else %}❗ без причины{% endif %}
                     </span>
                     {% endfor %}
                 </div>
@@ -245,41 +260,10 @@
     </div>
     {% if chart_units %}
     <div class="shift-legend">
-        <span><span class="sdot" style="background:#1f9d55"></span>Уважительная причина</span>
+        <span><span class="sdot" style="background:#1f9d55"></span>С причиной</span>
         <span><span class="sdot" style="background:#d33a3a"></span>Без причины</span>
     </div>
     {% endif %}
-</div>
-
-<div class="block" id="blk-chart-group">
-    <div class="block-head">
-        <div>
-            <h2>Простои по группам техники</h2>
-            <div class="desc">Распределение времени простоя сверх нормы между группами техники</div>
-        </div>
-        <button class="dl-btn no-print" data-target="blk-chart-group" title="Скачать PNG"><i class="bi bi-download"></i></button>
-    </div>
-    <div class="vbars-wrap">
-        {% for g in group_chart %}
-        <div class="vbar-col">
-            <div class="vbar-value">{{ g.over_hm }}<span class="vbar-pct">{{ g.share_pct }}%</span></div>
-            <div class="vbar-track"><div class="vbar-fill" style="height:{{ g.bar_pct }}%;background:{{ g.color }}"></div></div>
-            <div class="vbar-label">{{ g.name }}</div>
-        </div>
-        {% empty %}
-        <div class="empty-note" style="text-align:center;">Простоев сверх нормы не зафиксировано 👍</div>
-        {% endfor %}
-    </div>
-    <div class="group-list">
-        {% for g in group_chart %}
-        <div class="group-row">
-            <span class="dot" style="background:{{ g.color }}"></span>
-            <span class="name">{{ g.name }}</span>
-            <span class="val">{{ g.over_hm }}</span>
-            <span class="pct">{{ g.share_pct }}%</span>
-        </div>
-        {% endfor %}
-    </div>
 </div>
 
 {% if has_trend %}
@@ -294,37 +278,43 @@
 </div>
 {% endif %}
 
-<!-- Downtime reasons -->
+<!-- Downtime reasons — split by shift -->
 <div class="block" id="blk-reasons">
     <div class="block-head">
         <div>
             <h2>Простои сверх нормы — причины</h2>
-            <div class="desc">Каждая смена с простоем: уважительная причина (есть комментарий) или без объяснения — требует внимания руководства</div>
+            <div class="desc">Каждая смена с простоем свыше 30 мин: норма, факт, разница (простой сверх нормы) и причина</div>
         </div>
         <button class="dl-btn no-print" data-target="blk-reasons" title="Скачать PNG"><i class="bi bi-download"></i></button>
     </div>
-    <div class="table-scroll">
-        <table>
-            <thead><tr><th>Дата</th><th>Смена</th><th>Группа</th><th>Техника</th><th>Простой</th><th>Статус</th><th>Причина / комментарий</th></tr></thead>
-            <tbody>
-                {% for r in reasons_rows %}
-                <tr class="{% if not r.has_reason %}row-nonworking{% endif %}">
-                    <td>{{ r.date }}</td>
-                    <td>{{ r.shift }}</td>
-                    <td><span class="group-tag">{{ r.group }}</span></td>
-                    <td><b>{{ r.name }}</b></td>
-                    <td class="downtime-cell has">{{ r.over_str }}</td>
-                    <td>{% if r.has_reason %}<span class="pill green">✅ Уважительная</span>{% else %}<span class="pill red">❗ Без причины</span>{% endif %}</td>
-                    <td>{% if r.has_reason %}{{ r.comment }}{% else %}<span class="muted-cell">причина не указана</span>{% endif %}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    {% for sec in reasons_sections %}
+    <div class="shift-section">
+        <div class="shift-section-title">{{ sec.title }}</div>
+        <div class="table-scroll">
+            <table>
+                <thead><tr><th>Дата</th><th>Группа</th><th>Техника</th><th>Норма</th><th>Факт</th><th>Простой сверх нормы</th><th>Статус</th><th>Причина / комментарий</th></tr></thead>
+                <tbody>
+                    {% for r in sec.rows %}
+                    <tr class="{% if not r.has_reason %}row-nonworking{% endif %}">
+                        <td>{{ r.date }}</td>
+                        <td><span class="group-tag">{{ r.group }}</span></td>
+                        <td><b>{{ r.name }}</b></td>
+                        <td class="muted-cell">{{ r.norm_str }}</td>
+                        <td class="muted-cell">{{ r.actual_str }}</td>
+                        <td class="downtime-cell has">{{ r.over_str }}</td>
+                        <td>{% if r.has_reason %}<span class="pill green">✅ С причиной</span>{% else %}<span class="pill red">❗ Без причины</span>{% endif %}</td>
+                        <td>{% if r.has_reason %}{{ r.comment }}{% else %}<span class="muted-cell">причина не указана</span>{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
+    {% endfor %}
     {% if not reasons_rows %}<div class="empty-note">Простоев сверх нормы не зафиксировано 👍</div>{% endif %}
 </div>
 
-<!-- Non-working equipment -->
+<!-- Non-working equipment — split by shift -->
 <div class="block" id="blk-nonworking">
     <div class="block-head">
         <div>
@@ -333,24 +323,28 @@
         </div>
         <button class="dl-btn no-print" data-target="blk-nonworking" title="Скачать PNG"><i class="bi bi-download"></i></button>
     </div>
-    <div class="table-scroll">
-        <table>
-            <thead><tr><th>Дата</th><th>Смена</th><th>Группа</th><th>Техника</th><th>Участок</th><th>Статус</th><th>Причина</th></tr></thead>
-            <tbody>
-                {% for r in non_working_rows %}
-                <tr class="row-nonworking">
-                    <td>{{ r.date }}</td>
-                    <td>{{ r.shift }}</td>
-                    <td><span class="group-tag">{{ r.group }}</span></td>
-                    <td>{{ r.name }}</td>
-                    <td>{{ r.section }}</td>
-                    <td>{% if r.has_reason %}<span class="pill green">✅ Уважительная</span>{% else %}<span class="pill red">❗ Без причины</span>{% endif %}</td>
-                    <td>{% if r.has_reason %}{{ r.comment }}{% else %}<span class="muted-cell">причина не указана</span>{% endif %}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    {% for sec in non_working_sections %}
+    <div class="shift-section">
+        <div class="shift-section-title">{{ sec.title }}</div>
+        <div class="table-scroll">
+            <table>
+                <thead><tr><th>Дата</th><th>Группа</th><th>Техника</th><th>Участок</th><th>Статус</th><th>Причина</th></tr></thead>
+                <tbody>
+                    {% for r in sec.rows %}
+                    <tr class="row-nonworking">
+                        <td>{{ r.date }}</td>
+                        <td><span class="group-tag">{{ r.group }}</span></td>
+                        <td>{{ r.name }}</td>
+                        <td>{{ r.section }}</td>
+                        <td>{% if r.has_reason %}<span class="pill green">✅ С причиной</span>{% else %}<span class="pill red">❗ Без причины</span>{% endif %}</td>
+                        <td>{% if r.has_reason %}{{ r.comment }}{% else %}<span class="muted-cell">причина не указана</span>{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
+    {% endfor %}
     {% if not non_working_rows %}<div class="empty-note">Нет смен с полным простоем — вся техника выходила в работу 👍</div>{% endif %}
 </div>
 
@@ -408,20 +402,32 @@
     </div>
 </div>
 
-<!-- Secondary muted info -->
+<!-- Secondary muted info — mileage/refueling per equipment group -->
 <div class="block secondary" id="blk-secondary">
     <div class="block-head">
         <div>
-            <h2 style="color:var(--eff-muted)">Пробег и заправки (справочно)</h2>
+            <h2 style="color:var(--eff-muted)">Пробег и заправки по группам техники (справочно)</h2>
             <div class="desc">Второстепенные показатели — без цветовой индикации</div>
         </div>
         <button class="dl-btn no-print" data-target="blk-secondary" title="Скачать PNG"><i class="bi bi-download"></i></button>
     </div>
-    <div class="sec-grid">
-        <div class="sec-stat"><div class="l">Суммарный пробег</div><div class="v">{{ total_mileage }} км</div></div>
-        <div class="sec-stat"><div class="l">Суммарная заправка</div><div class="v">{{ total_refueling }} л</div></div>
-        <div class="sec-stat"><div class="l">Единиц техники</div><div class="v">{{ equip_count }}</div></div>
-        <div class="sec-stat"><div class="l">Средний пробег на ед.</div><div class="v">{{ avg_mileage }} км</div></div>
+    <div class="table-scroll">
+        <table>
+            <thead><tr><th>Группа</th><th>Единиц техники</th><th>Суммарный пробег</th><th>Ср. пробег на ед.</th><th>Суммарная заправка</th></tr></thead>
+            <tbody>
+                {% for g in group_secondary %}
+                <tr>
+                    <td><span class="group-tag">{{ g.name }}</span></td>
+                    <td>{{ g.units }}</td>
+                    <td>{{ g.mileage }} км</td>
+                    <td class="muted-cell">{{ g.avg_mileage }} км</td>
+                    <td>{{ g.refueling }} л</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="empty-note">Нет данных</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 </div>
 
@@ -454,11 +460,11 @@
   .eff-dash .grid-2{grid-template-columns:1.4fr 1fr;}
   @media(max-width:980px){.eff-dash .grid-2{grid-template-columns:1fr;}}
 
-  .eff-dash .hero-inner{display:flex;align-items:center;}
-  .eff-dash .hero-main{flex:1;margin-right:20px;min-width:0;}
-  .eff-dash .hero-num{font-size:42px;font-weight:800;color:var(--eff-red-dark);line-height:1;}
-  .eff-dash .hero-label{font-size:13px;color:var(--eff-muted);margin-top:6px;}
-  .eff-dash .hero-sub{font-size:13px;color:var(--eff-muted);margin-top:14px;}
+  /* Top summary block (2.1) — most important, must fit on one printed page */
+  .eff-dash .summary-inner{display:flex;gap:24px;align-items:flex-start;}
+  .eff-dash .summary-side{flex:none;width:300px;display:flex;flex-direction:column;align-items:center;gap:10px;}
+  @media(max-width:900px){.eff-dash .summary-inner{flex-direction:column;} .eff-dash .summary-side{width:100%;}}
+
   .eff-dash .reason-split{margin-top:16px;background:#f8f9fb;border:1px solid var(--eff-border);border-radius:10px;padding:12px 14px;}
   .eff-dash .reason-split-title{font-size:11.5px;font-weight:700;color:var(--eff-muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:8px;}
   .eff-dash .reason-split-bar{display:flex;height:14px;border-radius:7px;overflow:hidden;background:#eef0f4;}
@@ -480,36 +486,47 @@
   .eff-dash .donut-center .n{font-size:22px;font-weight:800;color:var(--eff-text);}
   .eff-dash .donut-center .l{font-size:11px;color:var(--eff-muted);}
 
-  .eff-dash .tile-col{display:flex;flex-direction:column;}
-  .eff-dash .tile-col .tile{margin-bottom:16px;}
-  .eff-dash .tile-col .tile:last-child{margin-bottom:0;}
-  .eff-dash .tile{border-radius:var(--eff-radius);padding:18px 20px;color:#fff;position:relative;box-shadow:var(--eff-shadow);}
+  /* Compact KPI tile grid (2.4, 2.5) */
+  .eff-dash .tile-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px;}
+  .eff-dash .tile-grid .tile-full{grid-column:1 / -1;}
+  @media(max-width:700px){.eff-dash .tile-grid{grid-template-columns:1fr;}}
+  .eff-dash .tile{border-radius:10px;padding:18px 20px;color:#fff;position:relative;box-shadow:var(--eff-shadow);}
+  .eff-dash .tile.compact{padding:10px 14px;}
   .eff-dash .tile.red{background:linear-gradient(135deg,#e14d4d,#b52d2d);}
   .eff-dash .tile.amber{background:linear-gradient(135deg,#e8ac2e,#c47f10);}
   .eff-dash .tile.green{background:linear-gradient(135deg,#25b06a,#157a45);}
-  .eff-dash .tile-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
-  .eff-dash .tile-top h3{font-size:13px;margin:0;font-weight:700;opacity:.95;line-height:1.35;flex:1;}
-  .eff-dash .tile .big{font-size:30px;font-weight:800;margin-top:14px;}
-  .eff-dash .tile .sub{font-size:12px;opacity:.85;margin-top:4px;}
+  .eff-dash .tile-top{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .eff-dash .tile-top h3{font-size:11.5px;margin:0;font-weight:700;opacity:.95;line-height:1.25;flex:1;}
+  .eff-dash .tile-h-note{font-weight:500;opacity:.85;}
+  .eff-dash .tile .big{font-size:22px;font-weight:800;margin-top:4px;}
+  .eff-dash .tile .sub{font-size:11px;opacity:.85;margin-top:2px;}
   .eff-dash .ring{width:56px;height:56px;position:relative;flex:none;}
+  .eff-dash .ring.sm{width:44px;height:44px;}
   .eff-dash .ring-inner{position:absolute;inset:0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;}
+  .eff-dash .ring.sm .ring-inner{font-size:10px;}
   .eff-dash .tile .dl-btn{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.25);color:#fff;flex:none;}
   .eff-dash .tile .dl-btn:hover{background:rgba(255,255,255,.3);}
 
-  .eff-dash .bars-wrap.big{display:flex;flex-direction:column;gap:22px;padding-top:4px;min-height:120px;}
-  .eff-dash .bars-wrap.big .bar-row{display:grid;grid-template-columns:260px 1fr 110px;align-items:center;gap:16px;}
-  @media(max-width:900px){.eff-dash .bars-wrap.big .bar-row{grid-template-columns:1fr;}}
-  .eff-dash .bar-label .eq-name{font-size:15px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .eff-dash .bar-label .bar-group-tag{font-size:11.5px;color:var(--eff-muted);font-weight:500;margin-top:1px;}
-  .eff-dash .shift-breakdown{display:flex;flex-wrap:wrap;gap:5px 12px;font-size:11px;color:var(--eff-muted);font-weight:600;margin-top:5px;}
+  /* Compact top-10 bars (2.7) */
+  .eff-dash .bars-wrap.compact{display:flex;flex-direction:column;gap:10px;padding-top:2px;}
+  .eff-dash .bars-wrap.compact .bar-row{display:grid;grid-template-columns:220px 1fr 90px;align-items:center;gap:12px;}
+  @media(max-width:900px){.eff-dash .bars-wrap.compact .bar-row{grid-template-columns:1fr;}}
+  .eff-dash .bar-label .eq-name{font-size:13px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .eff-dash .bar-label .bar-group-tag{font-size:10.5px;color:var(--eff-muted);font-weight:500;}
+  .eff-dash .shift-breakdown{display:flex;flex-wrap:wrap;gap:3px 10px;font-size:10px;color:var(--eff-muted);font-weight:600;margin-top:2px;}
   .eff-dash .shift-breakdown span.sitem{display:inline-flex;align-items:center;gap:4px;}
   .eff-dash .sdot{width:8px;height:8px;border-radius:2px;flex:none;}
-  .eff-dash .bar-track{background:#eef0f4;border-radius:8px;height:22px;overflow:hidden;}
+  .eff-dash .bar-track{background:#eef0f4;border-radius:6px;height:16px;overflow:hidden;}
   .eff-dash .bar-fill-group{height:100%;display:flex;}
   .eff-dash .bar-seg{height:100%;}
-  .eff-dash .bar-value{font-size:16px;font-weight:800;text-align:right;color:var(--eff-text);}
+  .eff-dash .bar-value{font-size:13px;font-weight:800;text-align:right;color:var(--eff-text);}
   .eff-dash .shift-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--eff-muted);margin-top:12px;padding-top:10px;border-top:1px solid #eef0f3;}
   .eff-dash .shift-legend span{display:inline-flex;align-items:center;gap:6px;font-weight:600;}
+
+  /* Shift-split table sections (2.8) */
+  .eff-dash .shift-section{margin-bottom:18px;}
+  .eff-dash .shift-section:last-child{margin-bottom:0;}
+  .eff-dash .shift-section-title{font-size:12.5px;font-weight:800;color:#173a9e;text-transform:uppercase;letter-spacing:.03em;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid #eef0f4;}
 
   .eff-dash .vbars-wrap{display:flex;align-items:flex-end;justify-content:center;gap:38px;height:250px;padding:14px 14px 0;flex-wrap:wrap;}
   .eff-dash .vbar-col{display:flex;flex-direction:column;align-items:center;gap:9px;height:100%;justify-content:flex-end;width:100px;}
@@ -551,19 +568,32 @@
   .eff-dash .print-only{display:none;}
 
   @media print{
-    @page{ size:A4; margin:12mm 10mm; }
+    /* Wide tables/columns — always print landscape so nothing is squeezed (2.11) */
+    @page{ size:A4 landscape; margin:8mm; }
     body{ background:#fff !important; }
     nav, footer, .no-print{ display:none !important; }
-    .eff-dash .print-only{ display:block !important; margin-bottom:16px; }
-    .eff-dash .print-title{ font-size:19px; font-weight:800; color:#111; }
-    .eff-dash .print-meta{ font-size:11px; color:#555; margin-top:4px; }
+    .eff-dash .print-only{ display:block !important; margin-bottom:10px; }
+    .eff-dash .print-title{ font-size:16px; font-weight:800; color:#111; }
+    .eff-dash .print-meta{ font-size:10px; color:#555; margin-top:3px; }
     * { box-shadow:none !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-    .eff-dash .block{ border:1px solid #ddd; box-shadow:none; break-inside:avoid; page-break-inside:avoid; margin-bottom:12px; }
-    .eff-dash .grid-row.grid-2{ display:block; }
-    .eff-dash .grid-row.grid-2 > *{ margin-bottom:12px; }
-    .eff-dash .tile-col .tile{ break-inside:avoid; page-break-inside:avoid; }
-    .eff-dash table{ font-size:10.5px; }
-    .eff-dash th, .eff-dash td{ padding:5px 6px; }
+    .eff-dash .block{ border:1px solid #ddd; box-shadow:none; margin-bottom:8px; padding:10px 12px 12px; }
+    /* Only the small, self-contained blocks are forced to stay on one page —
+       tables are allowed to flow across pages with repeating headers below */
+    .eff-dash .tile-grid{ page-break-inside:avoid; break-inside:avoid; }
+    .eff-dash .tile{ break-inside:avoid; page-break-inside:avoid; }
+    /* 2.1: the group summary is the most important block for management —
+       keep it intact and force everything after it onto later pages */
+    #blk-summary{ break-inside:avoid; page-break-inside:avoid; page-break-after:always; }
+
+    .eff-dash table{ font-size:9.5px; width:100%; table-layout:auto; }
+    .eff-dash th, .eff-dash td{ padding:4px 5px; white-space:normal; }
+    /* Repeat column headers on every printed page for multi-page tables (2.11) */
+    .eff-dash thead{ display:table-header-group; }
+    .eff-dash tfoot{ display:table-footer-group; }
+    .eff-dash tr{ break-inside:avoid; page-break-inside:avoid; }
+    .eff-dash .table-scroll{ overflow:visible; }
+    .eff-dash .shift-section{ break-inside:auto; }
+    .eff-dash .shift-section-title{ break-after:avoid; page-break-after:avoid; }
   }
 </style>
 {% endblock %}
