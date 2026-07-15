@@ -79,7 +79,7 @@
                     {% if s.avg_type_eff is not None %}
                     <div class="d-flex justify-content-between">
                         <span class="text-muted">{{ s.type_eff_label }}:</span>
-                        <span class="{% if s.avg_type_eff >= 100 %}efficiency-good{% elif s.avg_type_eff >= 77 %}efficiency-warn{% else %}efficiency-bad{% endif %}">
+                        <span class="{% if s.avg_type_eff <= 100 %}efficiency-good{% elif s.avg_type_eff <= 130 %}efficiency-warn{% else %}efficiency-bad{% endif %}">
                             {{ s.avg_type_eff }}%
                         </span>
                     </div>
@@ -97,7 +97,7 @@
         <div class="small text-muted d-flex flex-wrap gap-3">
             <span><strong>Расход к норме:</strong> факт. расход ÷ (норма л/ч × норма смены ч) × 100%</span>
             <span><strong>Выход техники:</strong> время работы ÷ норму смены × 100%. <span class="output-good">≥80% — норма</span>, <span class="output-bad">&lt;80% — ниже нормы</span></span>
-            <span><strong>Эффективность:</strong> нормативное время ÷ факт. время × 100%. <span class="efficiency-good">чем больше — тем лучше</span></span>
+            <span><strong>Эффективность:</strong> факт. время ÷ нормативное время × 100%</span>
             <span><i class="bi bi-table me-1"></i>Строки <strong>«День итого»</strong> — сумма смен 1+2 за день.</span>
         </div>
     </div>
@@ -237,12 +237,12 @@
                         <td>
                             {% with pct=rec.type_efficiency_pct %}
                             {% if pct is not None %}
-                                <span class="{% if pct >= 100 %}efficiency-good{% elif pct >= 77 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ pct }}%</span>
+                                <span class="{% if pct <= 100 %}efficiency-good{% elif pct <= 130 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ pct }}%</span>
                                 {% if rec.is_bulldozer_or_loader %}<div class="text-muted small">хол.ход</div>
                                 {% elif rec.is_excavator %}<div class="text-muted small">прост.стрелы</div>
                                 {% elif rec.is_dumptruck %}<div class="text-muted small">без движения</div>
                                 {% endif %}
-                                {% if pct < 100 and row.over_str %}<div class="text-danger small font-monospace">+{{ row.over_str }}</div>{% endif %}
+                                {% if pct > 100 and row.over_str %}<div class="text-danger small font-monospace">+{{ row.over_str }}</div>{% endif %}
                             {% else %}<span class="text-muted">—</span>{% endif %}
                             {% endwith %}
                         </td>
@@ -320,12 +320,12 @@
                         </td>
                         <td>
                             {% if row.type_efficiency_pct is not None %}
-                            <span class="fw-bold {% if row.type_efficiency_pct >= 100 %}efficiency-good{% elif row.type_efficiency_pct >= 77 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ row.type_efficiency_pct }}%</span>
+                            <span class="fw-bold {% if row.type_efficiency_pct <= 100 %}efficiency-good{% elif row.type_efficiency_pct <= 130 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ row.type_efficiency_pct }}%</span>
                             {% if row.is_bulldozer_or_loader %}<div class="text-muted small">хол.ход</div>
                             {% elif row.is_excavator %}<div class="text-muted small">прост.стрелы</div>
                             {% elif row.is_dumptruck %}<div class="text-muted small">без движения</div>
                             {% endif %}
-                            {% if row.type_efficiency_pct < 100 and row.over_str %}<div class="text-danger small font-monospace">+{{ row.over_str }}</div>{% endif %}
+                            {% if row.type_efficiency_pct > 100 and row.over_str %}<div class="text-danger small font-monospace">+{{ row.over_str }}</div>{% endif %}
                             {% else %}<span class="text-muted">—</span>{% endif %}
                         </td>
                         <td class="text-muted small">
