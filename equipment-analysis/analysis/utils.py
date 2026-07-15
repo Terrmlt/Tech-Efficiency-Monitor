@@ -243,16 +243,20 @@ def calculate_metrics(record_data, report):
     if report.daily_norm_sec > 0:
         equipment_output = engine_time_sec / report.daily_norm_sec
 
+    # type_efficiency: норм. время ÷ факт. время. Чем БОЛЬШЕ процент — тем ЛУЧШЕ
+    # (техника простаивала меньше нормы). Если факт. время простоя равно 0,
+    # используем 1 секунду в знаменателе, чтобы не делить на 0 — это всегда
+    # наилучший случай, поэтому итоговый процент будет заведомо высоким.
     type_efficiency = None
     if group in ('Бульдозеры', 'Погрузчики'):
         if report.bulldozer_norm_sec > 0:
-            type_efficiency = engine_idle_sec / report.bulldozer_norm_sec
+            type_efficiency = report.bulldozer_norm_sec / max(engine_idle_sec, 1)
     elif group == 'Экскаваторы':
         if downtime_sec is not None and report.excavator_norm_sec > 0:
-            type_efficiency = downtime_sec / report.excavator_norm_sec
+            type_efficiency = report.excavator_norm_sec / max(downtime_sec, 1)
     elif group == 'Самосвалы':
         if report.dumptruck_norm_sec > 0:
-            type_efficiency = engine_no_move_sec / report.dumptruck_norm_sec
+            type_efficiency = report.dumptruck_norm_sec / max(engine_no_move_sec, 1)
 
     return {
         'fuel_efficiency':  fuel_efficiency,

@@ -189,7 +189,7 @@ def upload(request):
                         for rec in report.vehiclerecord_set.filter(group='Самосвалы'):
                             norm_sec = norm_map.get((rec.name, rec.shift if rec.shift else None, rec.date))
                             if norm_sec and norm_sec > 0:
-                                rec.type_efficiency = rec.engine_no_move_sec / norm_sec
+                                rec.type_efficiency = norm_sec / max(rec.engine_no_move_sec or 0, 1)
                                 rec.save(update_fields=['type_efficiency'])
 
                 messages.success(request, f'Отчёт успешно загружен: {report.vehiclerecord_set.count()} записей.')
@@ -371,7 +371,7 @@ def report_detail(request, pk):
             if total_norm_sec:
                 row['dt_norm_str'] = secs_to_hhmmss(total_norm_sec)
                 no_move_sec = row.get('engine_no_move_sec') or 0
-                row['type_efficiency_pct'] = round(no_move_sec / total_norm_sec * 100, 1)
+                row['type_efficiency_pct'] = round(total_norm_sec / max(no_move_sec, 1) * 100, 1)
                 overage_sec = no_move_sec - total_norm_sec
                 row['over_str'] = secs_to_hhmmss(overage_sec) if overage_sec > 0 else ''
             else:
@@ -491,7 +491,7 @@ def set_vehicle_norms(request, pk):
                 rec_qs = rec_qs.filter(date=date_str)
 
             for rec in rec_qs:
-                rec.type_efficiency = rec.engine_no_move_sec / norm_sec
+                rec.type_efficiency = norm_sec / max(rec.engine_no_move_sec or 0, 1)
                 rec.save(update_fields=['type_efficiency'])
                 updated_records += 1
 
@@ -1019,17 +1019,23 @@ def analytics_efficiency(request):
         for vn in VehicleNorm.objects.filter(report_id__in=report_ids):
             vn_map[(vn.report_id, vn.vehicle_name, vn.shift, vn.date)] = vn.dumptruck_norm_sec
 
-    def _get_over_sec(rec):
-        """Seconds over norm for this record (0 if within norm)."""
+    # Простоем считается превышение нормы более чем на 30 минут — меньшее
+    # отклонение не показываем в дашборде вообще (п.2.2).
+    DOWNTIME_THRESHOLD_SEC = 30 * 60
+
+    def _get_downtime_detail(rec):
+        """Returns (norm_sec, actual_sec, over_sec) for this record's downtime metric."""
         grp = rec.group
         if grp in ('Бульдозеры', 'Погрузчики'):
             norm = rec.report.bulldozer_norm_sec
+            actual = rec.engine_idle_sec or 0
             if norm is not None and norm > 0:
-                return max(0.0, (rec.engine_idle_sec or 0) - norm)
+                return norm, actual, max(0.0, actual - norm)
         elif grp == 'Экскаваторы':
             norm = rec.report.excavator_norm_sec
+            actual = rec.downtime_sec or 0
             if norm is not None and norm > 0 and rec.downtime_sec is not None:
-                return max(0.0, rec.downtime_sec - norm)
+                return norm, actual, max(0.0, actual - norm)
         elif grp == 'Самосвалы':
             shift_key = rec.shift if rec.shift else None
             # Explicit precedence: exact-shift VehicleNorm → shiftless VehicleNorm → report default
@@ -1038,9 +1044,14 @@ def analytics_efficiency(request):
                 norm = vn_map.get((rec.report_id, rec.name, None, rec.date))
             if norm is None:
                 norm = rec.report.dumptruck_norm_sec
+            actual = rec.engine_no_move_sec or 0
             if norm is not None and norm > 0:
-                return max(0.0, (rec.engine_no_move_sec or 0) - norm)
-        return 0.0
+                return norm, actual, max(0.0, actual - norm)
+        return 0.0, 0.0, 0.0
+
+    def _get_over_sec(rec):
+        _, _, over = _get_downtime_detail(rec)
+        return over if over >= DOWNTIME_THRESHOLD_SEC else 0.0
 
     def _shift_label(rec):
         return {1: 'Смена 1', 2: 'Смена 2'}.get(rec.shift, '—')
@@ -1055,28 +1066,33 @@ def analytics_efficiency(request):
     })
     daily_over = _dd(float)     # date -> total over_sec
     group_over = _dd(float)     # group -> total over_sec
-    group_units = _dd(set)      # group -> {vehicle names}
+    group_units = _dd(set)      # group -> {vehicle names with over-norm downtime}
+    group_mileage = _dd(float)     # group -> total mileage
+    group_refueling = _dd(float)   # group -> total refueling
+    group_all_units = _dd(set)     # group -> {all vehicle names}
 
     total_over_sec_all = 0.0
     records_with_over  = 0
 
-    idle_count = 0    # type_efficiency > 100%
-    low_count  = 0    # equipment_output < 80%
-    good_count = 0    # equipment_output >= 80%
+    idle_count = 0                        # shifts with over-norm downtime (> 30 мин)
+    low_count_by_shift  = {1: 0, 2: 0}     # equipment_output < 80%
+    good_count_by_shift = {1: 0, 2: 0}     # equipment_output >= 80%
+    considered_by_shift = {1: 0, 2: 0}
 
-    reasons_rows = []       # shift-level rows with over_sec > 0, for the "причины" table
+    reasons_rows = []       # shift-level rows with over_sec > threshold, for the "причины" table
     non_working_rows = []   # shift-level rows with zero engine time
-    total_mileage = 0.0
-    total_refueling = 0.0
 
     for rec in dated_recs:
-        over = _get_over_sec(rec)
+        norm_sec, actual_sec, over_raw = _get_downtime_detail(rec)
+        over = over_raw if over_raw >= DOWNTIME_THRESHOLD_SEC else 0.0
         d = rec.record_date.isoformat()
         d_display = rec.record_date.strftime('%d.%m.%Y')
         daily_over[d] += over
         total_over_sec_all += over
         group_over[rec.group] += over
-        group_units[rec.group].add(rec.name)
+        group_all_units[rec.group].add(rec.name)
+        group_mileage[rec.group] += rec.mileage or 0
+        group_refueling[rec.group] += rec.refueling or 0
 
         v = vehicle_agg[rec.name]
         v['group']          = rec.group
@@ -1092,6 +1108,7 @@ def analytics_efficiency(request):
         has_reason = bool(rec.comment and rec.comment.strip())
 
         if over > 0:
+            group_units[rec.group].add(rec.name)
             v['shifts_with_over'] += 1
             v['shifts'].append({
                 'date': d_display, 'sort_date': d,
@@ -1100,9 +1117,13 @@ def analytics_efficiency(request):
                 'comment': rec.comment,
             })
             records_with_over += 1
+            idle_count += 1
             reasons_rows.append({
                 'date': d_display, 'sort_date': d, 'shift': _shift_label(rec),
+                'shift_num': rec.shift,
                 'group': rec.group, 'name': rec.name,
+                'norm_sec': norm_sec, 'norm_str': secs_to_hm(norm_sec),
+                'actual_sec': actual_sec, 'actual_str': secs_to_hm(actual_sec),
                 'over_sec': over, 'over_str': secs_to_hm(over),
                 'has_reason': has_reason, 'comment': rec.comment,
             })
@@ -1110,24 +1131,39 @@ def analytics_efficiency(request):
         if (rec.engine_time_sec or 0) == 0:
             non_working_rows.append({
                 'date': d_display, 'sort_date': d, 'shift': _shift_label(rec),
+                'shift_num': rec.shift,
                 'group': rec.group, 'name': rec.name,
                 'section': rec.report.section.name if rec.report.section_id else '—',
                 'has_reason': has_reason, 'comment': rec.comment,
             })
 
-        if rec.type_efficiency is not None and rec.type_efficiency * 100 > 100:
-            idle_count += 1
-        if rec.equipment_output is not None:
+        if rec.shift in (1, 2) and rec.equipment_output is not None:
+            considered_by_shift[rec.shift] += 1
             if rec.equipment_output * 100 < 80:
-                low_count += 1
+                low_count_by_shift[rec.shift] += 1
             else:
-                good_count += 1
-
-        total_mileage += rec.mileage or 0
-        total_refueling += rec.refueling or 0
+                good_count_by_shift[rec.shift] += 1
 
     reasons_rows.sort(key=lambda r: r['over_sec'], reverse=True)
     non_working_rows.sort(key=lambda r: r['sort_date'])
+    reasons_shift1 = [r for r in reasons_rows if r['shift_num'] == 1]
+    reasons_shift2 = [r for r in reasons_rows if r['shift_num'] == 2]
+    reasons_other  = [r for r in reasons_rows if r['shift_num'] not in (1, 2)]
+    non_working_shift1 = [r for r in non_working_rows if r['shift_num'] == 1]
+    non_working_shift2 = [r for r in non_working_rows if r['shift_num'] == 2]
+    non_working_other  = [r for r in non_working_rows if r['shift_num'] not in (1, 2)]
+
+    # ── Пробег и заправки по группам техники (справочно, п.2.9) ─────────────────
+    mileage_by_group = []
+    for g in sorted(group_all_units.keys()):
+        units_n = len(group_all_units[g])
+        mileage_by_group.append({
+            'name': g,
+            'mileage': round(group_mileage[g], 1),
+            'refueling': round(group_refueling[g], 1),
+            'units': units_n,
+            'avg_mileage': round(group_mileage[g] / units_n, 1) if units_n else 0,
+        })
 
     # Build sorted vehicle list
     vehicle_stats = []
@@ -1177,17 +1213,27 @@ def analytics_efficiency(request):
 
     # ── Hero donut (share of over-norm time per group) ──────────────────────────
     group_donut_svg = build_donut_svg(
-        [(g['share_pct'], g['color']) for g in group_chart], size=200, stroke_width=6,
+        [(g['share_pct'], g['color']) for g in group_chart], size=120, stroke_width=6,
     )
 
-    # ── KPI tiles + rings ─────────────────────────────────────────────────────────
-    considered = len(dated_recs) or 1
-    idle_pct = round(idle_count / considered * 100)
-    low_pct  = round(low_count / considered * 100)
-    good_pct = round(good_count / considered * 100)
-    ring_idle_svg = build_donut_svg([(idle_pct, '#ffffff')], size=56, stroke_width=7, base_color='rgba(255,255,255,.28)')
-    ring_low_svg  = build_donut_svg([(low_pct, '#ffffff')],  size=56, stroke_width=7, base_color='rgba(255,255,255,.28)')
-    ring_good_svg = build_donut_svg([(good_pct, '#ffffff')], size=56, stroke_width=7, base_color='rgba(255,255,255,.28)')
+    # ── KPI tiles + rings (компактные, п.2.4/2.5) ────────────────────────────────
+    considered_all = len(dated_recs) or 1
+    idle_pct = round(idle_count / considered_all * 100)
+    ring_idle_svg = build_donut_svg([(idle_pct, '#ffffff')], size=40, stroke_width=5, base_color='rgba(255,255,255,.28)')
+
+    shift_tiles = []
+    for sh in (1, 2):
+        considered = considered_by_shift[sh] or 1
+        low_c, good_c = low_count_by_shift[sh], good_count_by_shift[sh]
+        low_pct = round(low_c / considered * 100)
+        good_pct = round(good_c / considered * 100)
+        shift_tiles.append({
+            'shift': sh,
+            'low_count': low_c, 'low_pct': low_pct,
+            'good_count': good_c, 'good_pct': good_pct,
+            'ring_low_svg':  build_donut_svg([(low_pct, '#ffffff')],  size=40, stroke_width=5, base_color='rgba(255,255,255,.28)'),
+            'ring_good_svg': build_donut_svg([(good_pct, '#ffffff')], size=40, stroke_width=5, base_color='rgba(255,255,255,.28)'),
+        })
 
     equip_count = len({r.name for r in dated_recs})
     affected_equip_count = len({v['name'] for v in vehicle_stats if v['total_over_sec'] > 0})
@@ -1237,6 +1283,7 @@ def analytics_efficiency(request):
             'output': round(rec.equipment_output * 100, 1) if rec.equipment_output is not None else None,
             'eff': round(rec.type_efficiency * 100, 1) if rec.type_efficiency is not None else None,
             'over_sec': _get_over_sec(rec),
+            'work_sec_val': rec.engine_time_sec or 0,
         })
     detail_rows.sort(key=lambda r: r['over_sec'], reverse=True)
     for r in detail_rows:
@@ -1269,6 +1316,7 @@ def analytics_efficiency(request):
         'selected_section_name': selected_section_name,
         'group_filters':        group_filters,
         'period_label':         period_label,
+        'downtime_threshold_min': int(DOWNTIME_THRESHOLD_SEC / 60),
 
         # dashboard blocks
         'equip_count':          equip_count,
@@ -1285,16 +1333,17 @@ def analytics_efficiency(request):
         'unjust_count':         len(unjustified_rows),
 
         'idle_count': idle_count, 'idle_pct': idle_pct, 'ring_idle_svg': ring_idle_svg,
-        'low_count': low_count, 'low_pct': low_pct, 'ring_low_svg': ring_low_svg,
-        'good_count': good_count, 'good_pct': good_pct, 'ring_good_svg': ring_good_svg,
+        'shift_tiles': shift_tiles,
 
         'chart_units':          chart_units,
-        'reasons_rows':         reasons_rows,
-        'non_working_rows':     non_working_rows,
+        'reasons_by_shift':     [
+            ('Смена 1', reasons_shift1), ('Смена 2', reasons_shift2),
+        ] + ([('Без указания смены', reasons_other)] if reasons_other else []),
+        'non_working_by_shift': [
+            ('Смена 1', non_working_shift1), ('Смена 2', non_working_shift2),
+        ] + ([('Без указания смены', non_working_other)] if non_working_other else []),
         'detail_rows':          detail_rows,
-        'total_mileage':        round(total_mileage, 1),
-        'total_refueling':      round(total_refueling, 1),
-        'avg_mileage':          round(total_mileage / equip_count, 1) if equip_count else 0,
+        'mileage_by_group':     mileage_by_group,
     }
     return render(request, 'analysis/analytics_efficiency.html', context)
 

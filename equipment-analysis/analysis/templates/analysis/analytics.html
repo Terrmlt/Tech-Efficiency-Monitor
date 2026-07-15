@@ -227,10 +227,10 @@
                             {% if s2.fuel_eff is not None %}<span class="{% if s2.fuel_eff <= 100 %}efficiency-good{% elif s2.fuel_eff <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s2.fuel_eff }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
                         </td>
                         <td class="text-center small">
-                            {% if s1.type_eff is not None %}<span class="{% if s1.type_eff <= 100 %}efficiency-good{% elif s1.type_eff <= 130 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s1.type_eff }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                            {% if s1.type_eff is not None %}<span class="{% if s1.type_eff >= 100 %}efficiency-good{% elif s1.type_eff >= 77 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s1.type_eff }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
                         </td>
                         <td class="text-center small">
-                            {% if s2.type_eff is not None %}<span class="{% if s2.type_eff <= 100 %}efficiency-good{% elif s2.type_eff <= 130 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s2.type_eff }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                            {% if s2.type_eff is not None %}<span class="{% if s2.type_eff >= 100 %}efficiency-good{% elif s2.type_eff >= 77 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s2.type_eff }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
                         </td>
                         {% endwith %}
                     </tr>
@@ -290,10 +290,10 @@
                             {% if s2.fuel_eff is not None %}<span class="{% if s2.fuel_eff <= 100 %}efficiency-good{% elif s2.fuel_eff <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s2.fuel_eff }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
                         </td>
                         <td class="text-center small">
-                            {% if s1.type_eff is not None %}<span class="{% if s1.type_eff <= 100 %}efficiency-good{% elif s1.type_eff <= 130 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s1.type_eff }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                            {% if s1.type_eff is not None %}<span class="{% if s1.type_eff >= 100 %}efficiency-good{% elif s1.type_eff >= 77 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s1.type_eff }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
                         </td>
                         <td class="text-center small">
-                            {% if s2.type_eff is not None %}<span class="{% if s2.type_eff <= 100 %}efficiency-good{% elif s2.type_eff <= 130 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s2.type_eff }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                            {% if s2.type_eff is not None %}<span class="{% if s2.type_eff >= 100 %}efficiency-good{% elif s2.type_eff >= 77 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s2.type_eff }}%</span>{% else %}<span class="text-muted">—</span>{% endif %}
                         </td>
                         {% endwith %}
                     </tr>
@@ -344,7 +344,7 @@
                     {% if s.avg_type_eff is not None %}
                     <div class="d-flex justify-content-between">
                         <span class="text-muted">Эффективность:</span>
-                        <span class="{% if s.avg_type_eff <= 100 %}efficiency-good{% elif s.avg_type_eff <= 130 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s.avg_type_eff }}%</span>
+                        <span class="{% if s.avg_type_eff >= 100 %}efficiency-good{% elif s.avg_type_eff >= 77 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ s.avg_type_eff }}%</span>
                     </div>
                     {% endif %}
                 </div>
@@ -395,7 +395,7 @@
                         </td>
                         <td class="text-center small">
                             {% if v.avg_type_eff is not None %}
-                            <span class="{% if v.avg_type_eff <= 100 %}efficiency-good{% elif v.avg_type_eff <= 130 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ v.avg_type_eff }}%</span>
+                            <span class="{% if v.avg_type_eff >= 100 %}efficiency-good{% elif v.avg_type_eff >= 77 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ v.avg_type_eff }}%</span>
                             {% else %}<span class="text-muted">—</span>{% endif %}
                         </td>
                     </tr>
