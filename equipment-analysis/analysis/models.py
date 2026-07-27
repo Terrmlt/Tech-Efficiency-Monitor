@@ -153,6 +153,12 @@ class VehicleRecord(models.Model):
             return 100.0          # zero actual time → fully within norm
         return min(100.0, round(100.0 / self.type_efficiency, 1))
 
+    def sensor_warning(self):
+        """Return a warning string if engine_time_sec is zero (likely faulty sensor), else None."""
+        if self.engine_time_sec == 0:
+            return 'Подозрение на неисправный датчик'
+        return None
+
     def is_bulldozer_or_loader(self):
         return self.group in [self.GROUP_BULLDOZER, self.GROUP_LOADER]
 
