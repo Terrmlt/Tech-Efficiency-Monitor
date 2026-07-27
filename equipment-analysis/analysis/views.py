@@ -267,9 +267,11 @@ def _build_daily_view(records, report):
 
             type_eff = None
             if group in ('Бульдозеры', 'Погрузчики') and report.bulldozer_norm_sec > 0:
-                type_eff = round(total_idle / (report.bulldozer_norm_sec * n) * 100, 1)
+                norm_n = report.bulldozer_norm_sec * n
+                type_eff = min(100.0, round(norm_n / total_idle * 100, 1)) if total_idle > 0 else 100.0
             elif group == 'Экскаваторы' and total_downtime is not None and report.excavator_norm_sec > 0:
-                type_eff = round(total_downtime / (report.excavator_norm_sec * n) * 100, 1)
+                norm_n = report.excavator_norm_sec * n
+                type_eff = min(100.0, round(norm_n / total_downtime * 100, 1)) if total_downtime > 0 else 100.0
             # Dump truck daily_total efficiency is computed later in report_detail
             # after per-shift VehicleNorm data is loaded.
 
@@ -371,7 +373,7 @@ def report_detail(request, pk):
             if total_norm_sec:
                 row['dt_norm_str'] = secs_to_hhmmss(total_norm_sec)
                 no_move_sec = row.get('engine_no_move_sec') or 0
-                row['type_efficiency_pct'] = round(no_move_sec / total_norm_sec * 100, 1)
+                row['type_efficiency_pct'] = min(100.0, round(total_norm_sec / no_move_sec * 100, 1)) if no_move_sec > 0 else 100.0
                 overage_sec = no_move_sec - total_norm_sec
                 row['over_str'] = secs_to_hhmmss(overage_sec) if overage_sec > 0 else ''
             else:
@@ -772,7 +774,8 @@ def analytics(request):
     def _avg(recs):
         fe = [r.fuel_efficiency * 100 for r in recs if r.fuel_efficiency is not None]
         ou = [r.equipment_output * 100 for r in recs if r.equipment_output is not None]
-        te = [r.type_efficiency  * 100 for r in recs if r.type_efficiency  is not None]
+        te = [min(100.0, 100.0 / r.type_efficiency) for r in recs
+              if r.type_efficiency is not None and r.type_efficiency > 0]
         return (
             round(sum(fe) / len(fe), 1) if fe else None,
             round(sum(ou) / len(ou), 1) if ou else None,
@@ -904,7 +907,8 @@ def analytics(request):
         total_hours = sum(r.engine_time_sec for r in recs) / 3600
         fe_vals = [r.fuel_efficiency * 100 for r in recs if r.fuel_efficiency is not None]
         ou_vals = [r.equipment_output * 100 for r in recs if r.equipment_output is not None]
-        te_vals = [r.type_efficiency  * 100 for r in recs if r.type_efficiency  is not None]
+        te_vals = [min(100.0, 100.0 / r.type_efficiency) for r in recs
+                   if r.type_efficiency is not None and r.type_efficiency > 0]
         group_stats.append({
             'group':        group,
             'count':        len(recs),
@@ -930,7 +934,8 @@ def analytics(request):
         vhours = sum(r.engine_time_sec for r in vrecs) / 3600
         vfe = [r.fuel_efficiency * 100 for r in vrecs if r.fuel_efficiency is not None]
         vou = [r.equipment_output * 100 for r in vrecs if r.equipment_output is not None]
-        vte = [r.type_efficiency  * 100 for r in vrecs if r.type_efficiency  is not None]
+        vte = [min(100.0, 100.0 / r.type_efficiency) for r in vrecs
+               if r.type_efficiency is not None and r.type_efficiency > 0]
         vehicle_stats.append({
             'name':         vname,
             'group':        vehicle_name_group[vname],
@@ -1297,7 +1302,7 @@ def analytics_efficiency(request):
             'work_str': secs_to_hm(rec.engine_time_sec or 0),
             'work_sec': rec.engine_time_sec or 0,
             'output': round(rec.equipment_output * 100, 1) if rec.equipment_output is not None else None,
-            'eff': round(rec.type_efficiency * 100, 1) if rec.type_efficiency is not None else None,
+            'eff': (min(100.0, round(100.0 / rec.type_efficiency, 1)) if rec.type_efficiency > 0 else 100.0) if rec.type_efficiency is not None else None,
             'over_sec': _get_over_sec(rec),
         })
     detail_rows.sort(key=lambda r: r['over_sec'], reverse=True)
@@ -1381,7 +1386,8 @@ def analytics_compare(request):
     def _avg(recs):
         fe = [r.fuel_efficiency * 100 for r in recs if r.fuel_efficiency is not None]
         ou = [r.equipment_output * 100 for r in recs if r.equipment_output is not None]
-        te = [r.type_efficiency  * 100 for r in recs if r.type_efficiency  is not None]
+        te = [min(100.0, 100.0 / r.type_efficiency) for r in recs
+              if r.type_efficiency is not None and r.type_efficiency > 0]
         return (
             round(sum(fe) / len(fe), 1) if fe else None,
             round(sum(ou) / len(ou), 1) if ou else None,
@@ -1427,7 +1433,8 @@ def analytics_compare(request):
             total_hours = round(sum(r.engine_time_sec for r in recs) / 3600, 1)
             fe_vals = [r.fuel_efficiency * 100 for r in recs if r.fuel_efficiency is not None]
             ou_vals = [r.equipment_output * 100 for r in recs if r.equipment_output is not None]
-            te_vals = [r.type_efficiency  * 100 for r in recs if r.type_efficiency  is not None]
+            te_vals = [min(100.0, 100.0 / r.type_efficiency) for r in recs
+                       if r.type_efficiency is not None and r.type_efficiency > 0]
 
             # Per-group breakdown
             groups_map = _dd(list)
@@ -1438,7 +1445,8 @@ def analytics_compare(request):
                 g = groups_map[grp]
                 gfe = [r.fuel_efficiency * 100 for r in g if r.fuel_efficiency is not None]
                 go  = [r.equipment_output * 100 for r in g if r.equipment_output is not None]
-                gte = [r.type_efficiency  * 100 for r in g if r.type_efficiency  is not None]
+                gte = [min(100.0, 100.0 / r.type_efficiency) for r in g
+                       if r.type_efficiency is not None and r.type_efficiency > 0]
                 group_stats.append({
                     'group':        grp,
                     'count':        len(g),
@@ -1789,7 +1797,7 @@ def export_records_excel(request):
         rpt = rec.report
         fuel_eff_pct  = round(rec.fuel_efficiency  * 100, 1) if rec.fuel_efficiency  is not None else None
         output_pct    = round(rec.equipment_output * 100, 1) if rec.equipment_output is not None else None
-        type_eff_pct  = round(rec.type_efficiency  * 100, 1) if rec.type_efficiency  is not None else None
+        type_eff_pct  = (min(100.0, round(100.0 / rec.type_efficiency, 1)) if rec.type_efficiency > 0 else 100.0) if rec.type_efficiency is not None else None
 
         ov = 0
         if rec.group in ('Бульдозеры', 'Погрузчики') and rpt.bulldozer_norm_sec > 0:
@@ -2111,7 +2119,7 @@ def _build_excel_workbook(report, all_records, summary):
     def write_rec_row(rec, outline_level=0):
         fuel_eff_pct = round(rec.fuel_efficiency  * 100, 1) if rec.fuel_efficiency  is not None else None
         output_pct   = round(rec.equipment_output * 100, 1) if rec.equipment_output is not None else None
-        type_eff_pct = round(rec.type_efficiency  * 100, 1) if rec.type_efficiency  is not None else None
+        type_eff_pct = (min(100.0, round(100.0 / rec.type_efficiency, 1)) if rec.type_efficiency > 0 else 100.0) if rec.type_efficiency is not None else None
 
         norm_bd_str = over_bd_str = ''
         if rec.group == 'Самосвалы':

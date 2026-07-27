@@ -145,9 +145,13 @@ class VehicleRecord(models.Model):
         return None
 
     def type_efficiency_pct(self):
-        if self.type_efficiency is not None:
-            return round(self.type_efficiency * 100, 1)
-        return None
+        """Display as norm÷fact × 100%, capped at 100%.
+        Values below 100% indicate downtime over norm."""
+        if self.type_efficiency is None:
+            return None
+        if self.type_efficiency <= 0:
+            return 100.0          # zero actual time → fully within norm
+        return min(100.0, round(100.0 / self.type_efficiency, 1))
 
     def is_bulldozer_or_loader(self):
         return self.group in [self.GROUP_BULLDOZER, self.GROUP_LOADER]

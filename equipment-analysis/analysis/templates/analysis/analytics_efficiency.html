@@ -384,8 +384,9 @@
                     </td>
                     <td data-v="{{ r.eff|default_if_none:-1 }}">
                         {% if r.eff == None %}<span class="pill gray">— нет данных</span>
-                        {% elif r.eff > 100 %}<span class="pill red">⛔ Простой <span class="pill-pct">{{ r.eff }}%</span></span>
-                        {% else %}<span class="pill green">✅ Норма <span class="pill-pct">{{ r.eff }}%</span></span>{% endif %}
+                        {% elif r.eff >= 90 %}<span class="pill green">✅ Норма <span class="pill-pct">{{ r.eff }}%</span></span>
+                        {% elif r.eff >= 70 %}<span class="pill amber">⚠ Внимание <span class="pill-pct">{{ r.eff }}%</span></span>
+                        {% else %}<span class="pill red">⛔ Простой <span class="pill-pct">{{ r.eff }}%</span></span>{% endif %}
                     </td>
                     <td class="downtime-cell {% if r.over_sec > 0 %}has{% endif %}" data-v="{{ r.over_sec }}">{% if r.over_str %}{{ r.over_str }}{% else %}—{% endif %}</td>
                 </tr>
@@ -398,7 +399,8 @@
     <div class="legend-row">
         <span><i style="background:#1f9d55"></i>✅ Выход ≥ 80% — техника работает в норме</span>
         <span><i style="background:#d99a1b"></i>⚠ Выход &lt; 80% — требует внимания</span>
-        <span><i style="background:#d33a3a"></i>⛔ Эффективность &gt; 100% — простой сверх нормы</span>
+        <span><i style="background:#d33a3a"></i>⛔ Эффективность &lt; 70% — значительный простой сверх нормы</span>
+        <span><i style="background:#d99a1b"></i>⚠ Эффективность 70–89% — умеренный простой сверх нормы</span>
     </div>
 </div>
 
