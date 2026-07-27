@@ -1980,8 +1980,18 @@ def export_records_excel(request):
     wb.save(buf)
     buf.seek(0)
 
-    period_str = f'{date_from}__{date_to}' if date_from or date_to else 'все'
-    filename = f'records_{period_str}.xlsx'
+    if section_id:
+        try:
+            from .models import Section as _Section
+            section_name_raw = _Section.objects.filter(pk=section_id).values_list('name', flat=True).first() or 'участок'
+        except Exception:
+            section_name_raw = 'участок'
+    else:
+        section_name_raw = 'все участки'
+    period_str = f'{date_from}—{date_to}' if date_from and date_to else (date_from or date_to or 'все даты')
+    safe_section = re.sub(r'[^\w\-]', '_', section_name_raw)[:40]
+    safe_period  = re.sub(r'[^\w\-]', '_', period_str)[:30]
+    filename = f'{safe_section}_{safe_period}.xlsx'
     response = HttpResponse(
         buf.read(),
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
