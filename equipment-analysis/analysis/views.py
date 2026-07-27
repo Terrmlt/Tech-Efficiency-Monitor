@@ -1673,11 +1673,13 @@ def export_excel(request, pk):
 
     safe_name = re.sub(r'[^\w\-]', '_', report.name)[:40]
     filename = f'analysis_{safe_name}.xlsx'
+    from urllib.parse import quote as _quote
+    encoded = _quote(filename, safe='')
     response = HttpResponse(
         buf.read(),
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     )
-    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    response['Content-Disposition'] = f"attachment; filename=\"{filename}\"; filename*=UTF-8''{encoded}"
     return response
 
 
@@ -1992,11 +1994,13 @@ def export_records_excel(request):
     safe_section = re.sub(r'[^\w\-]', '_', section_name_raw)[:40]
     safe_period  = re.sub(r'[^\w\-]', '_', period_str)[:30]
     filename = f'{safe_section}_{safe_period}.xlsx'
+    from urllib.parse import quote as _quote
+    encoded = _quote(filename, safe='')
     response = HttpResponse(
         buf.read(),
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     )
-    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    response['Content-Disposition'] = f"attachment; filename=\"{filename}\"; filename*=UTF-8''{encoded}"
     return response
 
 
