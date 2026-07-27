@@ -3,6 +3,14 @@
 {% block title %}{{ report.name }} — Анализ техники{% endblock %}
 
 {% block content %}
+<datalist id="comment-presets">
+  <option value="Отсутствие экипажа">
+  <option value="Ремонт">
+  <option value="Консервация">
+  <option value="ОФР">
+  <option value="ГВР">
+  <option value="Погодные условия">
+</datalist>
 <div class="d-flex align-items-center mb-3">
     <a href="{% url 'index' %}" class="btn btn-sm btn-outline-secondary me-3">
         <i class="bi bi-arrow-left"></i>
@@ -275,7 +283,8 @@
                             {% endwith %}
                         </td>
                         <td class="comment-cell">
-                            <input type="text" class="comment-input" data-rec-id="{{ rec.pk }}"
+                            <input type="text" class="comment-input" list="comment-presets"
+                                   data-rec-id="{{ rec.pk }}"
                                    value="{{ rec.comment }}" placeholder="Комментарий…">
                         </td>
                     </tr>

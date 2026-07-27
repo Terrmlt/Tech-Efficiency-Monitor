@@ -1844,9 +1844,13 @@ def export_records_excel(request):
             ws.cell(row=r, column=11).fill = f
         if output_pct is not None:
             ws.cell(row=r, column=12).fill = _fill(GREEN_BG) if output_pct >= 80 else _fill(RED_BG)
-        f = _pct_fill(type_eff_pct, 100, 130)
-        if f:
-            ws.cell(row=r, column=13).fill = f
+        if type_eff_pct is not None:
+            if type_eff_pct >= 90:
+                ws.cell(row=r, column=13).fill = _fill(GREEN_BG)
+            elif type_eff_pct >= 70:
+                ws.cell(row=r, column=13).fill = _fill(ORANGE_BG)
+            else:
+                ws.cell(row=r, column=13).fill = _fill(RED_BG)
         if over_str:
             ws.cell(row=r, column=14).fill = _fill('FFB3B3')
             ws.cell(row=r, column=14).font = Font(bold=True, color='C00000', name='Calibri', size=10)
@@ -1878,16 +1882,18 @@ def export_records_excel(request):
 
         type_eff_pct = None
         if group in ('Бульдозеры', 'Погрузчики') and rpt.bulldozer_norm_sec > 0:
-            type_eff_pct = round(total_idle / (rpt.bulldozer_norm_sec * n) * 100, 1)
+            norm_total = rpt.bulldozer_norm_sec * n
+            type_eff_pct = round(min(100.0, norm_total / total_idle * 100), 1) if total_idle > 0 else 100.0
         elif group == 'Экскаваторы' and total_dt is not None and rpt.excavator_norm_sec > 0:
-            type_eff_pct = round(total_dt / (rpt.excavator_norm_sec * n) * 100, 1)
+            norm_total = rpt.excavator_norm_sec * n
+            type_eff_pct = round(min(100.0, norm_total / total_dt * 100), 1) if total_dt > 0 else 100.0
         elif group == 'Самосвалы':
             dt_total = sum(
                 export_dt_norms.get((rpt.pk, recs[0].name, r.shift, r.date), 0)
                 for r in recs
             )
             if dt_total > 0:
-                type_eff_pct = round(total_no_move / dt_total * 100, 1)
+                type_eff_pct = round(min(100.0, dt_total / total_no_move * 100), 1) if total_no_move > 0 else 100.0
 
         ov = 0
         if group in ('Бульдозеры', 'Погрузчики') and rpt.bulldozer_norm_sec > 0:
@@ -1921,9 +1927,13 @@ def export_records_excel(request):
             ws.cell(row=r, column=11).fill = f
         if output_pct is not None:
             ws.cell(row=r, column=12).fill = _fill(GREEN_BG) if output_pct >= 80 else _fill(RED_BG)
-        f = _pct_fill(type_eff_pct, 100, 130)
-        if f:
-            ws.cell(row=r, column=13).fill = f
+        if type_eff_pct is not None:
+            if type_eff_pct >= 90:
+                ws.cell(row=r, column=13).fill = _fill(GREEN_BG)
+            elif type_eff_pct >= 70:
+                ws.cell(row=r, column=13).fill = _fill(ORANGE_BG)
+            else:
+                ws.cell(row=r, column=13).fill = _fill(RED_BG)
 
     # ── Build hierarchy: group → vehicle → date → shifts ──────────────
     by_group = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
@@ -2107,9 +2117,13 @@ def _build_excel_workbook(report, all_records, summary):
             ws.cell(row=r, column=9).fill = f
         if output_pct is not None:
             ws.cell(row=r, column=10).fill = _fill(GREEN_BG) if output_pct >= 80 else _fill(RED_BG)
-        f = _pct_fill(type_eff_pct, 100, 130)
-        if f:
-            ws.cell(row=r, column=11).fill = f
+        if type_eff_pct is not None:
+            if type_eff_pct >= 90:
+                ws.cell(row=r, column=11).fill = _fill(GREEN_BG)
+            elif type_eff_pct >= 70:
+                ws.cell(row=r, column=11).fill = _fill(YELLOW_BG)
+            else:
+                ws.cell(row=r, column=11).fill = _fill(ORANGE_BG)
         if over_bd_str:
             ws.cell(row=r, column=14).fill = _fill('FFB3B3')
             ws.cell(row=r, column=14).font = Font(bold=True, color='C00000', name='Calibri', size=10)
@@ -2174,13 +2188,15 @@ def _build_excel_workbook(report, all_records, summary):
 
         type_eff_pct = None
         if group in ('Бульдозеры', 'Погрузчики') and report.bulldozer_norm_sec > 0:
-            type_eff_pct = round(total_idle / (report.bulldozer_norm_sec * n) * 100, 1)
+            norm_total = report.bulldozer_norm_sec * n
+            type_eff_pct = round(min(100.0, norm_total / total_idle * 100), 1) if total_idle > 0 else 100.0
         elif group == 'Экскаваторы' and total_dt is not None and report.excavator_norm_sec > 0:
-            type_eff_pct = round(total_dt / (report.excavator_norm_sec * n) * 100, 1)
+            norm_total = report.excavator_norm_sec * n
+            type_eff_pct = round(min(100.0, norm_total / total_dt * 100), 1) if total_dt > 0 else 100.0
         elif group == 'Самосвалы':
             dt_total = sum(dt_norms.get((recs[0].name, r.shift, r.date), 0) for r in recs)
             if dt_total > 0:
-                type_eff_pct = round(total_no_move / dt_total * 100, 1)
+                type_eff_pct = round(min(100.0, dt_total / total_no_move * 100), 1) if total_no_move > 0 else 100.0
 
         over_bd_str = ''
         if group in ('Бульдозеры', 'Погрузчики') and report.bulldozer_norm_sec > 0:
@@ -2261,7 +2277,7 @@ def _build_excel_workbook(report, all_records, summary):
         # Group total row
         g_avg_fuel = round(sum(g_fuel_eff_vals) / len(g_fuel_eff_vals), 1) if g_fuel_eff_vals else None
         g_avg_out  = round(sum(g_output_vals)    / len(g_output_vals),    1) if g_output_vals    else None
-        g_avg_type = round(sum(g_type_eff_vals)  / len(g_type_eff_vals),  1) if g_type_eff_vals  else None
+        g_avg_type = round(sum(g_type_eff_vals) / len(g_type_eff_vals), 1) if g_type_eff_vals else None
 
         ws.append([
             '', f'ИТОГО {group_name}', '', '', '',
@@ -2282,9 +2298,13 @@ def _build_excel_workbook(report, all_records, summary):
             ws.cell(row=tr, column=9).fill = f
         if g_avg_out is not None:
             ws.cell(row=tr, column=10).fill = _fill(GREEN_BG) if g_avg_out >= 80 else _fill(RED_BG)
-        f = _pct_fill(g_avg_type, 100, 130)
-        if f:
-            ws.cell(row=tr, column=11).fill = f
+        if g_avg_type is not None:
+            if g_avg_type >= 90:
+                ws.cell(row=tr, column=11).fill = _fill(GREEN_BG)
+            elif g_avg_type >= 70:
+                ws.cell(row=tr, column=11).fill = _fill(YELLOW_BG)
+            else:
+                ws.cell(row=tr, column=11).fill = _fill(ORANGE_BG)
 
     # ── Column widths ──────────────────────────────────────────────────
     col_widths = [5, 30, 14, 12, 8, 16, 13, 13, 13, 13, 14, 16, 15, 15, 12, 12, 45, 35]
