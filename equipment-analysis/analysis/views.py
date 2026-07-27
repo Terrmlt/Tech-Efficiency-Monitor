@@ -619,11 +619,13 @@ def _build_daily_view_records(records):
 
             type_eff = None
             if group in ('Бульдозеры', 'Погрузчики') and report.bulldozer_norm_sec > 0:
-                type_eff = round(total_idle / (report.bulldozer_norm_sec * n) * 100, 1)
+                norm_total = report.bulldozer_norm_sec * n
+                type_eff = min(100.0, round(norm_total / total_idle * 100, 1)) if total_idle > 0 else 100.0
             elif group == 'Экскаваторы' and total_downtime is not None and report.excavator_norm_sec > 0:
-                type_eff = round(total_downtime / (report.excavator_norm_sec * n) * 100, 1)
+                norm_total = report.excavator_norm_sec * n
+                type_eff = min(100.0, round(norm_total / total_downtime * 100, 1)) if total_downtime > 0 else 100.0
             elif group == 'Самосвалы' and dt_total_norm > 0:
-                type_eff = round(total_no_move / dt_total_norm * 100, 1)
+                type_eff = min(100.0, round(dt_total_norm / total_no_move * 100, 1)) if total_no_move > 0 else 100.0
 
             ov_total = 0
             if group in ('Бульдозеры', 'Погрузчики') and report.bulldozer_norm_sec > 0:
