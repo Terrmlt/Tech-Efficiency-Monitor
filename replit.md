@@ -8,7 +8,7 @@ Django-приложение для загрузки и анализа Excel-от
 - Приложение слушает порт 5000 (требование Replit preview)
 - `cd equipment-analysis && python3 manage.py migrate` — применить миграции БД
 - `cd equipment-analysis && python3 manage.py makemigrations analysis` — создать миграции после изменений моделей
-- В базе уже загружены исходные данные из `dump.json` (пользователи, отчёты, записи по ТС) через `loaddata`
+- В базе загружены данные из `dump13072026.json` (pg_dump от 13.07.2026) через `psql`: 6 пользователей, 27 отчётов, 1156 записей по ТС
 
 ## Stack
 
