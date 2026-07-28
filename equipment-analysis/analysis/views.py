@@ -1746,7 +1746,7 @@ def export_records_excel(request):
     RED_BG    = 'FFE0E0'
     ORANGE_BG = 'FCE4D6'
 
-    NCOLS = 18
+    NCOLS = 20
 
     def _side():
         return Side(style='thin', color='BFBFBF')
@@ -1784,6 +1784,7 @@ def export_records_excel(request):
         'Дата', 'Смена', 'Участок', 'Отчёт', '№', 'Техника', 'Группа',
         'Время\nработы', 'Факт. расход\n(л)', 'Норма\n(л/ч)',
         'Расход к норме\n(%)', 'Выход техники\n(%)', 'Эффективность\n(%)',
+        'Факт. знач.\n(чч:мм:сс)', 'Норма\n(чч:мм:сс)',
         'Простой свыше\nнормы',
         'Пробег\n(км)', 'Заправка\n(л)', 'Аномалии', 'Комментарий',
     ]
@@ -1803,14 +1804,25 @@ def export_records_excel(request):
         output_pct    = round(rec.equipment_output * 100, 1) if rec.equipment_output is not None else None
         type_eff_pct  = (min(100.0, round(100.0 / rec.type_efficiency, 1)) if rec.type_efficiency > 0 else 100.0) if rec.type_efficiency is not None else None
 
+        fact_val_str = ''
+        norm_val_str = ''
         ov = 0
-        if rec.group in ('Бульдозеры', 'Погрузчики') and rpt.bulldozer_norm_sec > 0:
-            ov = (rec.engine_idle_sec or 0) - rpt.bulldozer_norm_sec
-        elif rec.group == 'Экскаваторы' and rpt.excavator_norm_sec > 0 and rec.downtime_sec is not None:
-            ov = rec.downtime_sec - rpt.excavator_norm_sec
+        if rec.group in ('Бульдозеры', 'Погрузчики'):
+            fact_val_str = _s2h(rec.engine_idle_sec) if rec.engine_idle_sec is not None else ''
+            if rpt.bulldozer_norm_sec > 0:
+                norm_val_str = _s2h(rpt.bulldozer_norm_sec)
+                ov = (rec.engine_idle_sec or 0) - rpt.bulldozer_norm_sec
+        elif rec.group == 'Экскаваторы':
+            fact_val_str = _s2h(rec.downtime_sec) if rec.downtime_sec is not None else ''
+            if rpt.excavator_norm_sec > 0:
+                norm_val_str = _s2h(rpt.excavator_norm_sec)
+                if rec.downtime_sec is not None:
+                    ov = rec.downtime_sec - rpt.excavator_norm_sec
         elif rec.group == 'Самосвалы':
+            fact_val_str = _s2h(rec.engine_no_move_sec) if rec.engine_no_move_sec is not None else ''
             vn_sec = export_dt_norms.get((rpt.pk, rec.name, rec.shift, rec.date))
             if vn_sec:
+                norm_val_str = _s2h(vn_sec)
                 ov = (rec.engine_no_move_sec or 0) - vn_sec
         over_str = _s2h(ov) if ov > 0 else ''
 
@@ -1822,7 +1834,8 @@ def export_records_excel(request):
             f'С{rec.shift}' if rec.shift else '—',
             section_name, rpt.name, rec.row_number, rec.name, rec.group,
             rec.engine_time_str(), rec.fuel_actual, rec.fuel_norm,
-            fuel_eff_pct, output_pct, type_eff_pct, over_str,
+            fuel_eff_pct, output_pct, type_eff_pct,
+            fact_val_str, norm_val_str, over_str,
             rec.mileage, rec.refueling,
             '; '.join(rec.anomaly_details) if rec.has_anomaly else '',
             rec.comment,
@@ -1838,8 +1851,8 @@ def export_records_excel(request):
             if base_fill and col not in (11, 12, 13):
                 c.fill = base_fill
         ws.cell(row=r, column=6).alignment  = _align('left')
-        ws.cell(row=r, column=17).alignment = _align('left', wrap=True)
-        ws.cell(row=r, column=18).alignment = _align('left', wrap=True)
+        ws.cell(row=r, column=19).alignment = _align('left', wrap=True)
+        ws.cell(row=r, column=20).alignment = _align('left', wrap=True)
         # Colour KPI cells
         f = _pct_fill(fuel_eff_pct, 100, 115)
         if f:
@@ -1854,8 +1867,8 @@ def export_records_excel(request):
             else:
                 ws.cell(row=r, column=13).fill = _fill(RED_BG)
         if over_str:
-            ws.cell(row=r, column=14).fill = _fill('FFB3B3')
-            ws.cell(row=r, column=14).font = Font(bold=True, color='C00000', name='Calibri', size=10)
+            ws.cell(row=r, column=16).fill = _fill('FFB3B3')
+            ws.cell(row=r, column=16).font = Font(bold=True, color='C00000', name='Calibri', size=10)
 
     # ── Helper: write a daily-total row for multi-shift vehicle+date ───
     def write_total_row(recs, outline_level=0):
@@ -1904,13 +1917,31 @@ def export_records_excel(request):
             ov = total_dt - rpt.excavator_norm_sec * n
         over_str = _s2h(ov) if ov > 0 else ''
 
+        fact_val_total = ''
+        norm_val_total = ''
+        if group in ('Бульдозеры', 'Погрузчики'):
+            fact_val_total = _s2h(total_idle)
+            norm_val_total = _s2h(rpt.bulldozer_norm_sec * n)
+        elif group == 'Экскаваторы' and total_dt is not None:
+            fact_val_total = _s2h(total_dt)
+            norm_val_total = _s2h(rpt.excavator_norm_sec * n)
+        elif group == 'Самосвалы':
+            fact_val_total = _s2h(total_no_move)
+            dt_total_val = sum(
+                export_dt_norms.get((rpt.pk, recs[0].name, r.shift, r.date), 0)
+                for r in recs
+            )
+            if dt_total_val > 0:
+                norm_val_total = _s2h(dt_total_val)
+
         anomaly_cnt = sum(1 for r in recs if r.has_anomaly)
 
         ws.append([
             date_display, 'Итого', section_name, rpt.name, '',
             recs[0].name, group,
             _s2h(total_engine), total_fuel, fuel_norm,
-            fuel_eff_pct, output_pct, type_eff_pct, over_str,
+            fuel_eff_pct, output_pct, type_eff_pct,
+            fact_val_total, norm_val_total, over_str,
             total_mileage, total_ref,
             f'Аномалий: {anomaly_cnt}' if anomaly_cnt else '', '',
         ])
@@ -1923,7 +1954,7 @@ def export_records_excel(request):
             c.alignment = _align()
             c.border = _border()
         ws.cell(row=r, column=6).alignment  = _align('left')
-        ws.cell(row=r, column=17).alignment = _align('left')
+        ws.cell(row=r, column=19).alignment = _align('left')
         f = _pct_fill(fuel_eff_pct, 100, 115)
         if f:
             ws.cell(row=r, column=11).fill = f
@@ -1974,7 +2005,7 @@ def export_records_excel(request):
                     write_total_row(shifts, outline_level=0)
 
     # ── Column widths ──────────────────────────────────────────────────
-    col_widths = [12, 8, 16, 25, 5, 30, 14, 14, 14, 10, 14, 14, 14, 14, 12, 12, 45, 35]
+    col_widths = [12, 8, 16, 25, 5, 30, 14, 14, 14, 10, 14, 14, 14, 15, 15, 14, 12, 12, 45, 35]
     for i, w in enumerate(col_widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
@@ -2040,8 +2071,8 @@ def _build_excel_workbook(report, all_records, summary):
 
     # Columns: 1=№ 2=Техника 3=Группа 4=Дата 5=Смена 6=Время работы
     # 7=Факт.расход 8=Норма(л/ч) 9=Расход% 10=Выход% 11=Эффект%
-    # 12=Тип 13=Норма б/д 14=Превышение 15=Пробег 16=Заправка 17=Аномалии 18=Комментарий
-    NCOLS = 18
+    # 12=Тип 13=Факт.знач 14=Норма б/д 15=Превышение 16=Пробег 17=Заправка 18=Аномалии 19=Комментарий
+    NCOLS = 19
 
     # Load dump-truck per-shift norms: (vehicle_name, shift, date) → seconds
     dt_norms = {
@@ -2089,7 +2120,7 @@ def _build_excel_workbook(report, all_records, summary):
         '№', 'Техника', 'Группа', 'Дата', 'Смена',
         'Время работы\n(чч:мм:сс)', 'Факт. расход\n(л)', 'Норма расхода\n(л/ч)',
         'Расход\nк норме (%)', 'Выход\nтехники (%)', 'Эффективность\n(%)',
-        'Тип\nэффективности', 'Норма\nб/д (чч:мм:сс)', 'Превышение\nнормы б/д',
+        'Тип\nэффективности', 'Факт. знач.\n(чч:мм:сс)', 'Норма\n(чч:мм:сс)', 'Превышение\nнормы б/д',
         'Пробег\n(км)', 'Заправка\n(л)', 'Аномалии', 'Комментарий',
     ]
     ws.append(COL_HEADERS)
@@ -2124,8 +2155,8 @@ def _build_excel_workbook(report, all_records, summary):
             elif rec_has_anomaly and col not in (9, 10, 11):
                 c.fill = _fill(YELLOW_BG)
         ws.cell(row=r, column=2).alignment = _align('left')
-        ws.cell(row=r, column=17).alignment = _align('left', wrap=True)
         ws.cell(row=r, column=18).alignment = _align('left', wrap=True)
+        ws.cell(row=r, column=19).alignment = _align('left', wrap=True)
         f = _pct_fill(fuel_eff_pct, 100, 115)
         if f:
             ws.cell(row=r, column=9).fill = f
@@ -2139,8 +2170,8 @@ def _build_excel_workbook(report, all_records, summary):
             else:
                 ws.cell(row=r, column=11).fill = _fill(ORANGE_BG)
         if over_bd_str:
-            ws.cell(row=r, column=14).fill = _fill('FFB3B3')
-            ws.cell(row=r, column=14).font = Font(bold=True, color='C00000', name='Calibri', size=10)
+            ws.cell(row=r, column=15).fill = _fill('FFB3B3')
+            ws.cell(row=r, column=15).font = Font(bold=True, color='C00000', name='Calibri', size=10)
         if fuel_actual is not None and fuel_actual < 0:
             ws.cell(row=r, column=7).fill = _fill('FFB3B3')
             ws.cell(row=r, column=7).font = Font(bold=True, color='C00000', name='Calibri', size=10)
@@ -2151,11 +2182,18 @@ def _build_excel_workbook(report, all_records, summary):
         output_pct   = round(rec.equipment_output * 100, 1) if rec.equipment_output is not None else None
         type_eff_pct = (min(100.0, round(100.0 / rec.type_efficiency, 1)) if rec.type_efficiency > 0 else 100.0) if rec.type_efficiency is not None else None
 
-        norm_bd_str = over_bd_str = ''
-        if rec.group == 'Самосвалы':
+        fact_val_str = norm_val_str = over_bd_str = ''
+        if rec.group in ('Бульдозеры', 'Погрузчики'):
+            fact_val_str = secs_to_hhmmss(rec.engine_idle_sec)
+            norm_val_str = secs_to_hhmmss(report.bulldozer_norm_sec)
+        elif rec.group == 'Экскаваторы':
+            fact_val_str = secs_to_hhmmss(rec.downtime_sec)
+            norm_val_str = secs_to_hhmmss(report.excavator_norm_sec)
+        elif rec.group == 'Самосвалы':
+            fact_val_str = secs_to_hhmmss(rec.engine_no_move_sec)
             norm_sec = dt_norms.get((rec.name, rec.shift, rec.date))
             if norm_sec:
-                norm_bd_str = secs_to_hhmmss(norm_sec)
+                norm_val_str = secs_to_hhmmss(norm_sec)
                 ov = (rec.engine_no_move_sec or 0) - norm_sec
                 if ov > 0:
                     over_bd_str = f'+{secs_to_hhmmss(ov)}'
@@ -2169,7 +2207,7 @@ def _build_excel_workbook(report, all_records, summary):
             rec.engine_time_str(), rec.fuel_actual, rec.fuel_norm,
             fuel_eff_pct, output_pct, type_eff_pct,
             TYPE_LABEL.get(rec.group, ''),
-            norm_bd_str, over_bd_str,
+            fact_val_str, norm_val_str, over_bd_str,
             rec.mileage, rec.refueling, anomaly_text, rec.comment,
         ])
         r = ws.max_row
@@ -2222,13 +2260,27 @@ def _build_excel_workbook(report, all_records, summary):
             if ov > 0:
                 over_bd_str = f'+{secs_to_hhmmss(ov)}'
 
+        fact_val_daily = ''
+        norm_val_daily = ''
+        if group in ('Бульдозеры', 'Погрузчики'):
+            fact_val_daily = secs_to_hhmmss(total_idle)
+            norm_val_daily = secs_to_hhmmss(report.bulldozer_norm_sec * n)
+        elif group == 'Экскаваторы' and total_dt is not None:
+            fact_val_daily = secs_to_hhmmss(total_dt)
+            norm_val_daily = secs_to_hhmmss(report.excavator_norm_sec * n)
+        elif group == 'Самосвалы':
+            fact_val_daily = secs_to_hhmmss(total_no_move)
+            dt_total_daily = sum(dt_norms.get((recs[0].name, r.shift, r.date), 0) for r in recs)
+            if dt_total_daily > 0:
+                norm_val_daily = secs_to_hhmmss(dt_total_daily)
+
         anomaly_cnt = sum(1 for r in recs if r.has_anomaly)
 
         ws.append([
             '', recs[0].name, group, date_display, 'Итого',
             secs_to_hhmmss(total_engine), total_fuel, fuel_norm,
             fuel_eff_pct, output_pct, type_eff_pct,
-            TYPE_LABEL.get(group, ''), '', over_bd_str,
+            TYPE_LABEL.get(group, ''), fact_val_daily, norm_val_daily, over_bd_str,
             total_mileage, total_ref,
             f'Аномалий: {anomaly_cnt}' if anomaly_cnt else '', '',
         ])
@@ -2296,7 +2348,7 @@ def _build_excel_workbook(report, all_records, summary):
         ws.append([
             '', f'ИТОГО {group_name}', '', '', '',
             f'{round(g_engine_h_sum, 1)} ч', round(g_fuel_sum, 1),
-            '', g_avg_fuel, g_avg_out, g_avg_type, '', '', '', '', '',
+            '', g_avg_fuel, g_avg_out, g_avg_type, '', '', '', '', '', '',
             f'Аномалий: {g_anomaly_cnt}' if g_anomaly_cnt else '', '',
         ])
         tr = ws.max_row
@@ -2321,7 +2373,7 @@ def _build_excel_workbook(report, all_records, summary):
                 ws.cell(row=tr, column=11).fill = _fill(ORANGE_BG)
 
     # ── Column widths ──────────────────────────────────────────────────
-    col_widths = [5, 30, 14, 12, 8, 16, 13, 13, 13, 13, 14, 16, 15, 15, 12, 12, 45, 35]
+    col_widths = [5, 30, 14, 12, 8, 16, 13, 13, 13, 13, 14, 16, 15, 15, 15, 12, 12, 45, 35]
     for i, w in enumerate(col_widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
