@@ -1,1 +1,2 @@
 - [Django migration approach](django-migration-approach.md) — manage.py migrate hangs while dev server runs; apply DDL via standalone sqlite3 script instead.
+- [Imported database dumps](imported-database-dumps.md) — verify content instead of trusting the file extension; PostgreSQL plain-text dumps may be named `.json`.
