@@ -13,11 +13,71 @@
 </datalist>
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h4 class="mb-0 fw-bold"><i class="bi bi-table me-2"></i>Все записи</h4>
-    <a href="{% url 'export_records_excel' %}?date_from={{ date_from }}&date_to={{ date_to }}&section={{ section_id }}&group={{ group_filter }}&anomaly={{ anomaly_filter }}&shift={{ shift_filter }}"
-       class="btn btn-success">
-        <i class="bi bi-file-earmark-excel me-1"></i>Скачать Excel
-    </a>
+    <div class="d-flex gap-2">
+        {% if user.is_staff %}
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#bulkSectionModal">
+            <i class="bi bi-geo-alt me-1"></i>Сменить участок
+        </button>
+        {% endif %}
+        <a href="{% url 'export_records_excel' %}?date_from={{ date_from }}&date_to={{ date_to }}&section={{ section_id }}&group={{ group_filter }}&anomaly={{ anomaly_filter }}&shift={{ shift_filter }}"
+           class="btn btn-success">
+            <i class="bi bi-file-earmark-excel me-1"></i>Скачать Excel
+        </a>
+    </div>
 </div>
+
+{% if user.is_staff %}
+<!-- ── Модальное окно: массовая смена участка ───────────────────────────── -->
+<div class="modal fade" id="bulkSectionModal" tabindex="-1" aria-labelledby="bulkSectionModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="bulkSectionModalLabel">
+                    <i class="bi bi-geo-alt me-2"></i>Массовая смена участка
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">
+                    Участок будет изменён для всех записей выбранной техники в указанном диапазоне дат — обе смены одновременно.
+                </p>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Техника</label>
+                    <select id="bsrVehicle" class="form-select">
+                        <option value="">— загрузка... —</option>
+                    </select>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Дата с</label>
+                        <input type="date" id="bsrDateFrom" class="form-control" value="{{ date_from }}">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Дата по</label>
+                        <input type="date" id="bsrDateTo" class="form-control" value="{{ date_to }}">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Новый участок</label>
+                    <select id="bsrSection" class="form-select">
+                        <option value="">— как у отчёта (сбросить переопределение) —</option>
+                        {% for s in sections %}
+                        <option value="{{ s.pk }}">{{ s.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div id="bsrResult" class="d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" id="bsrSubmit">
+                    <i class="bi bi-check-lg me-1"></i>Применить
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Фильтры -->
 <div class="card mb-4">
@@ -145,7 +205,7 @@
                         <td class="text-muted small">
                             {% if rec.shift %}<span class="badge bg-light text-dark border">С{{ rec.shift }}</span>{% else %}—{% endif %}
                         </td>
-                        <td class="small">{% if rec.report.section %}{{ rec.report.section.name }}{% else %}—{% endif %}</td>
+                        <td class="small">{% if rec.section %}{{ rec.section.name }}{% elif rec.report.section %}{{ rec.report.section.name }}{% else %}—{% endif %}</td>
                         <td>
                             <div class="fw-semibold">{{ rec.engine_time_str }}</div>
                             {% if rec.is_excavator and rec.downtime_sec is not None %}
@@ -242,7 +302,7 @@
                             {% if row.record_date %}{{ row.record_date|date:"d.m.Y" }}{% else %}{{ row.date }}{% endif %}
                         </td>
                         <td><span class="badge bg-primary">День</span></td>
-                        <td class="small">{% if row.report.section %}{{ row.report.section.name }}{% else %}—{% endif %}</td>
+                        <td class="small">{{ row.effective_section_name|default:"—" }}</td>
                         <td>
                             <div class="fw-bold">{{ row.engine_time_str }}</div>
                             {% if row.is_excavator %}<div class="text-muted small">Прост.стрелы: {{ row.downtime_str }}</div>{% endif %}
@@ -304,6 +364,101 @@
 
 {% block extra_js %}
 <script>
+// ── Массовая смена участка ──────────────────────────────────────────────────
+(function () {
+    var modal = document.getElementById('bulkSectionModal');
+    if (!modal) return;
+
+    var vehicleSelect = document.getElementById('bsrVehicle');
+    var dateFrom     = document.getElementById('bsrDateFrom');
+    var dateTo       = document.getElementById('bsrDateTo');
+    var sectionSel   = document.getElementById('bsrSection');
+    var submitBtn    = document.getElementById('bsrSubmit');
+    var resultDiv    = document.getElementById('bsrResult');
+    var namesLoaded  = false;
+
+    // Загружаем список техники при первом открытии модала
+    modal.addEventListener('show.bs.modal', function () {
+        if (namesLoaded) return;
+        fetch('{% url "vehicle_names_list" %}', {
+            headers: {'X-CSRFToken': '{{ csrf_token }}'}
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            vehicleSelect.innerHTML = '<option value="">— выберите технику —</option>';
+            (data.names || []).forEach(function (name) {
+                var opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name;
+                vehicleSelect.appendChild(opt);
+            });
+            namesLoaded = true;
+        })
+        .catch(function () {
+            vehicleSelect.innerHTML = '<option value="">— ошибка загрузки —</option>';
+        });
+    });
+
+    // Сброс результата при каждом открытии
+    modal.addEventListener('shown.bs.modal', function () {
+        resultDiv.className = 'd-none';
+        resultDiv.innerHTML = '';
+    });
+
+    function showResult(ok, text) {
+        resultDiv.className = 'alert ' + (ok ? 'alert-success' : 'alert-danger');
+        resultDiv.innerHTML = text;
+    }
+
+    submitBtn.addEventListener('click', function () {
+        var vname   = vehicleSelect.value.trim();
+        var dfrom   = dateFrom.value.trim();
+        var dto     = dateTo.value.trim();
+        var secId   = sectionSel.value || null;
+
+        if (!vname) { showResult(false, 'Выберите технику.'); return; }
+        if (!dfrom || !dto) { showResult(false, 'Укажите период (дата с и дата по).'); return; }
+        if (dfrom > dto) { showResult(false, 'Дата начала позже даты окончания.'); return; }
+
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Применяю…';
+
+        fetch('{% url "bulk_section_reassign" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                vehicle_name: vname,
+                date_from: dfrom,
+                date_to: dto,
+                section_id: secId ? parseInt(secId) : null
+            })
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Применить';
+            if (data.ok) {
+                var secLabel = data.section_name || '(как у отчёта)';
+                showResult(true,
+                    '<i class="bi bi-check-circle me-1"></i>Обновлено <strong>' +
+                    data.updated_count + '</strong> записей → участок <strong>' +
+                    secLabel + '</strong>. Перезагрузите страницу для отображения изменений.');
+            } else {
+                showResult(false, '<i class="bi bi-x-circle me-1"></i>' + (data.error || 'Неизвестная ошибка'));
+            }
+        })
+        .catch(function () {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Применить';
+            showResult(false, 'Ошибка сети — проверьте соединение.');
+        });
+    });
+})();
+
+// ── Комментарии ─────────────────────────────────────────────────────────────
 document.querySelectorAll('.comment-input').forEach(function(input) {
     var timer;
     input.addEventListener('input', function() {

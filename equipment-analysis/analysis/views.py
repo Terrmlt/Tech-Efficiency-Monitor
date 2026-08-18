@@ -532,6 +532,74 @@ def save_comment(request, pk):
         return JsonResponse({'ok': False, 'error': str(e)}, status=400)
 
 
+# ─── Vehicle names list (AJAX, for bulk reassign modal) ──────────────────────
+
+@staff_required
+def vehicle_names_list(request):
+    """Return sorted distinct VehicleRecord.name values as JSON."""
+    names = list(
+        VehicleRecord.objects.values_list('name', flat=True).distinct().order_by('name')
+    )
+    return JsonResponse({'names': names})
+
+
+# ─── Bulk section reassign (AJAX) ─────────────────────────────────────────────
+
+@staff_required
+@require_POST
+def bulk_section_reassign(request):
+    """Reassign the section override for all VehicleRecord rows that match
+    a given vehicle name and date range (both shifts together).
+
+    POST JSON: {vehicle_name, date_from, date_to, section_id}
+      section_id = null  →  clear the override (inherit from report)
+    Returns: {ok, updated_count, section_name}
+    """
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        return JsonResponse({'ok': False, 'error': 'Неверный формат данных'}, status=400)
+
+    vehicle_name = (data.get('vehicle_name') or '').strip()
+    date_from_str = (data.get('date_from') or '').strip()
+    date_to_str = (data.get('date_to') or '').strip()
+    section_id = data.get('section_id')
+
+    if not vehicle_name:
+        return JsonResponse({'ok': False, 'error': 'Не указана техника'}, status=400)
+    if not date_from_str or not date_to_str:
+        return JsonResponse({'ok': False, 'error': 'Не указан период'}, status=400)
+
+    try:
+        date_from = datetime.date.fromisoformat(date_from_str)
+        date_to = datetime.date.fromisoformat(date_to_str)
+    except ValueError:
+        return JsonResponse({'ok': False, 'error': 'Неверный формат даты'}, status=400)
+
+    if date_from > date_to:
+        return JsonResponse({'ok': False, 'error': 'Дата начала позже даты окончания'}, status=400)
+
+    section = None
+    section_name = None
+    if section_id:
+        try:
+            section = Section.objects.get(pk=section_id)
+            section_name = section.name
+        except Section.DoesNotExist:
+            return JsonResponse({'ok': False, 'error': 'Участок не найден'}, status=400)
+
+    try:
+        with transaction.atomic():
+            updated = VehicleRecord.objects.filter(
+                name=vehicle_name,
+                record_date__range=(date_from, date_to),
+            ).update(section=section)
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
+
+    return JsonResponse({'ok': True, 'updated_count': updated, 'section_name': section_name})
+
+
 # ─── Save record section (AJAX) ───────────────────────────────────────────────
 
 @staff_required
@@ -659,14 +727,22 @@ def _build_daily_view_records(records):
             elif group == 'Самосвалы' and dt_total_norm > 0:
                 ov_total = total_no_move - dt_total_norm
 
+            # Effective section for the daily total: first per-record override wins,
+            # else fall back to the report-level section (business rule: both shifts
+            # must be on the same section, so any override is consistent across the group).
+            _eff_section = next((r.section.name for r in recs if r.section_id), None)
+            if _eff_section is None and report.section_id:
+                _eff_section = report.section.name
+
             rows.append({
-                'type':                 'daily_total',
-                'name':                 name,
-                'date':                 date,
-                'record_date':          recs[0].record_date,
-                'group':                group,
-                'report':               report,
-                'has_anomaly':          any(r.has_anomaly for r in recs),
+                'type':                   'daily_total',
+                'name':                   name,
+                'date':                   date,
+                'record_date':            recs[0].record_date,
+                'group':                  group,
+                'report':                 report,
+                'effective_section_name': _eff_section,
+                'has_anomaly':            any(r.has_anomaly for r in recs),
                 'engine_time_str':      secs_to_hhmmss(total_engine),
                 'engine_idle_str':      secs_to_hhmmss(total_idle),
                 'engine_idle_sec':      total_idle,
