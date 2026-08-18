@@ -186,7 +186,26 @@
                     {% with rec=row.obj %}
                     <tr class="{% if rec.has_anomaly %}anomaly-row{% endif %}">
                         <td class="ps-3 text-muted">{{ rec.row_number }}</td>
-                        <td><div class="fw-semibold">{{ rec.name }}</div></td>
+                        <td>
+                            <div class="fw-semibold">{{ rec.name }}</div>
+                            <div class="mt-1">
+                                <span class="section-badge {% if rec.section %}badge bg-primary{% else %}badge bg-light text-muted border{% endif %}"
+                                      data-rec-id="{{ rec.pk }}"
+                                      data-report-section-name="{{ report.section.name|default:'' }}"
+                                      style="cursor:pointer; font-size:0.75em"
+                                      title="Участок — нажмите, чтобы изменить">
+                                    <i class="bi bi-geo-alt{% if rec.section %}-fill{% endif %} me-1"></i>{% if rec.section %}{{ rec.section.name }}{% elif report.section %}{{ report.section.name }}{% else %}без участка{% endif %}<i class="bi bi-pencil ms-1" style="font-size:0.65em; opacity:0.6"></i>
+                                </span>
+                                <select class="section-select d-none form-select form-select-sm"
+                                        data-rec-id="{{ rec.pk }}"
+                                        style="width:auto; max-width:190px; font-size:0.8em">
+                                    <option value="">— как у отчёта{% if report.section %} ({{ report.section.name }}){% endif %} —</option>
+                                    {% for s in all_sections %}
+                                    <option value="{{ s.pk }}" {% if rec.section_id == s.pk %}selected{% endif %}>{{ s.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </td>
                         <td>
                             {% if rec.group == 'Бульдозеры' %}
                             <span class="badge bg-warning text-dark group-badge">{{ rec.group }}</span>
@@ -466,5 +485,54 @@ if (calcBtn) {
         });
     });
 }
+
+// ── Смена участка у единицы техники ────────────────────────────────────────────
+document.querySelectorAll('.section-badge').forEach(function(badge) {
+    var container = badge.parentElement;
+    var select = container.querySelector('.section-select');
+    var recId = badge.dataset.recId;
+    var reportSectionName = badge.dataset.reportSectionName;
+
+    badge.addEventListener('click', function(e) {
+        e.stopPropagation();
+        badge.classList.add('d-none');
+        select.classList.remove('d-none');
+        select.focus();
+    });
+
+    select.addEventListener('change', function() {
+        var sectionId = this.value;
+        fetch('/records/' + recId + '/section/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({section_id: sectionId ? parseInt(sectionId) : null})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.ok) {
+                select.classList.add('d-none');
+                badge.classList.remove('d-none');
+                if (data.section_name) {
+                    badge.className = 'section-badge badge bg-primary';
+                    badge.innerHTML = '<i class="bi bi-geo-alt-fill me-1"></i>' + data.section_name + '<i class="bi bi-pencil ms-1" style="font-size:0.65em; opacity:0.6"></i>';
+                } else {
+                    badge.className = 'section-badge badge bg-light text-muted border';
+                    var label = reportSectionName || 'без участка';
+                    badge.innerHTML = '<i class="bi bi-geo-alt me-1"></i>' + label + '<i class="bi bi-pencil ms-1" style="font-size:0.65em; opacity:0.6"></i>';
+                }
+            }
+        });
+    });
+
+    select.addEventListener('blur', function() {
+        setTimeout(function() {
+            select.classList.add('d-none');
+            badge.classList.remove('d-none');
+        }, 150);
+    });
+});
 </script>
 {% endblock %}

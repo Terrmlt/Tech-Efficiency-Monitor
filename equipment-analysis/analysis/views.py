@@ -309,7 +309,7 @@ def _build_daily_view(records, report):
 @staff_required
 def report_detail(request, pk):
     report = get_object_or_404(Report, pk=pk)
-    all_records = report.vehiclerecord_set.all()
+    all_records = report.vehiclerecord_set.select_related('section').all()
 
     group_filter  = request.GET.get('group', '')
     anomaly_filter = request.GET.get('anomaly', '')
@@ -407,6 +407,7 @@ def report_detail(request, pk):
         'total_count':    all_records.count(),
         'anomaly_count':  all_records.filter(has_anomaly=True).count(),
         'shown_count':    filtered.count(),
+        'all_sections':   Section.objects.all(),
     }
     return render(request, 'analysis/report_detail.html', context)
 
@@ -527,6 +528,29 @@ def save_comment(request, pk):
         rec.comment = data.get('comment', '').strip()
         rec.save(update_fields=['comment'])
         return JsonResponse({'ok': True})
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=400)
+
+
+# ─── Save record section (AJAX) ───────────────────────────────────────────────
+
+@staff_required
+@require_POST
+def save_record_section(request, pk):
+    """Set or clear the per-vehicle section override for a VehicleRecord."""
+    rec = get_object_or_404(VehicleRecord, pk=pk)
+    try:
+        data = json.loads(request.body)
+        section_id = data.get('section_id')
+        if section_id:
+            section = get_object_or_404(Section, pk=section_id)
+            rec.section = section
+            section_name = section.name
+        else:
+            rec.section = None
+            section_name = None
+        rec.save(update_fields=['section'])
+        return JsonResponse({'ok': True, 'section_name': section_name})
     except Exception as e:
         return JsonResponse({'ok': False, 'error': str(e)}, status=400)
 
@@ -668,7 +692,7 @@ def _build_daily_view_records(records):
 
 @staff_required
 def records(request):
-    qs = VehicleRecord.objects.select_related('report', 'report__section').all()
+    qs = VehicleRecord.objects.select_related('report', 'report__section', 'section').all()
 
     date_from = request.GET.get('date_from', '')
     date_to = request.GET.get('date_to', '')
@@ -688,7 +712,10 @@ def records(request):
         except ValueError:
             pass
     if section_id:
-        qs = qs.filter(report__section_id=section_id)
+        qs = qs.filter(
+            Q(section_id=section_id) |
+            Q(section__isnull=True, report__section_id=section_id)
+        )
     if group_filter:
         qs = qs.filter(group=group_filter)
     if anomaly_filter == 'yes':
@@ -742,7 +769,7 @@ def analytics(request):
     if shift_filter not in ('1', '2'):
         shift_filter = ''
 
-    qs = VehicleRecord.objects.select_related('report', 'report__section').all()
+    qs = VehicleRecord.objects.select_related('report', 'report__section', 'section').all()
 
     if date_from:
         try:
@@ -755,7 +782,10 @@ def analytics(request):
         except ValueError:
             pass
     if section_id:
-        qs = qs.filter(report__section_id=section_id)
+        qs = qs.filter(
+            Q(section_id=section_id) |
+            Q(section__isnull=True, report__section_id=section_id)
+        )
     if group_filters:
         qs = qs.filter(group__in=group_filters)
     if vehicle_filter:
@@ -996,7 +1026,7 @@ def analytics_efficiency(request):
     if shift_filter not in ('1', '2'):
         shift_filter = ''
 
-    qs = VehicleRecord.objects.select_related('report', 'report__section').all()
+    qs = VehicleRecord.objects.select_related('report', 'report__section', 'section').all()
 
     if date_from:
         try:
@@ -1009,7 +1039,10 @@ def analytics_efficiency(request):
         except ValueError:
             pass
     if section_id:
-        qs = qs.filter(report__section_id=section_id)
+        qs = qs.filter(
+            Q(section_id=section_id) |
+            Q(section__isnull=True, report__section_id=section_id)
+        )
     if group_filters:
         qs = qs.filter(group__in=group_filters)
     if vehicle_filter:
@@ -1139,7 +1172,7 @@ def analytics_efficiency(request):
                 'date': d_display, 'sort_date': d, 'shift': _shift_label(rec),
                 'shift_num': rec.shift,
                 'group': rec.group, 'name': rec.name,
-                'section': rec.report.section.name if rec.report.section_id else '—',
+                'section': rec.section.name if rec.section_id else (rec.report.section.name if rec.report.section_id else '—'),
                 'has_reason': has_reason, 'comment': rec.comment,
             })
 
@@ -1300,7 +1333,7 @@ def analytics_efficiency(request):
             'shift': _shift_label(rec),
             'group': rec.group,
             'name': rec.name,
-            'section': rec.report.section.name if rec.report.section_id else '—',
+            'section': rec.section.name if rec.section_id else (rec.report.section.name if rec.report.section_id else '—'),
             'work_str': secs_to_hm(rec.engine_time_sec or 0),
             'work_sec': rec.engine_time_sec or 0,
             'output': round(rec.equipment_output * 100, 1) if rec.equipment_output is not None else None,
@@ -1404,7 +1437,9 @@ def analytics_compare(request):
         for section in all_sections:
             if str(section.pk) not in selected_ids:
                 continue
-            qs = VehicleRecord.objects.select_related('report').filter(report__section=section)
+            qs = VehicleRecord.objects.select_related('report', 'section').filter(
+                Q(section=section) | Q(section__isnull=True, report__section=section)
+            )
             if date_from:
                 try:
                     qs = qs.filter(record_date__gte=datetime.date.fromisoformat(date_from))
@@ -1691,7 +1726,7 @@ def export_records_excel(request):
     from openpyxl.utils import get_column_letter
     from collections import defaultdict, OrderedDict
 
-    qs = VehicleRecord.objects.select_related('report', 'report__section').all()
+    qs = VehicleRecord.objects.select_related('report', 'report__section', 'section').all()
 
     date_from = request.GET.get('date_from', '')
     date_to = request.GET.get('date_to', '')
@@ -1711,7 +1746,10 @@ def export_records_excel(request):
         except ValueError:
             pass
     if section_id:
-        qs = qs.filter(report__section_id=section_id)
+        qs = qs.filter(
+            Q(section_id=section_id) |
+            Q(section__isnull=True, report__section_id=section_id)
+        )
     if group_filter:
         qs = qs.filter(group=group_filter)
     if anomaly_filter == 'yes':
@@ -1826,7 +1864,7 @@ def export_records_excel(request):
                 ov = (rec.engine_no_move_sec or 0) - vn_sec
         over_str = _s2h(ov) if ov > 0 else ''
 
-        section_name  = rpt.section.name if rpt.section else ''
+        section_name  = rec.section.name if rec.section_id else (rpt.section.name if rpt.section else '')
         date_display  = rec.record_date.strftime('%d.%m.%Y') if rec.record_date else rec.date
 
         ws.append([
@@ -1875,7 +1913,7 @@ def export_records_excel(request):
         rpt           = recs[0].report
         group         = recs[0].group
         date_display  = recs[0].record_date.strftime('%d.%m.%Y') if recs[0].record_date else recs[0].date
-        section_name  = rpt.section.name if rpt.section else ''
+        section_name  = recs[0].section.name if recs[0].section_id else (rpt.section.name if rpt.section else '')
         n             = len(recs)
 
         total_engine  = sum(r.engine_time_sec for r in recs)

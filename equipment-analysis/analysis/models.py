@@ -85,6 +85,11 @@ class VehicleRecord(models.Model):
     GROUP_LOADER = 'Погрузчики'
 
     report = models.ForeignKey(Report, on_delete=models.CASCADE, verbose_name='Отчёт')
+    section = models.ForeignKey(
+        Section, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='vehicle_records',
+        verbose_name='Участок (переопределение)',
+    )
     row_number = models.IntegerField(default=0, verbose_name='№')
     name = models.CharField(max_length=200, verbose_name='Название ТС')
     group = models.CharField(max_length=100, verbose_name='Группа ТС')
