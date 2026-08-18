@@ -148,9 +148,12 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div class="small text-muted">
-        Показано: <strong>{{ total_count }}</strong> записей
+        Записей: <strong>{{ total_count }}</strong>
         {% if anomaly_count > 0 %}
         · <span class="text-warning fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i>{{ anomaly_count }} аномалий</span>
+        {% endif %}
+        {% if paginator.num_pages > 1 %}
+        · Страница <strong>{{ page_obj.number }}</strong> из <strong>{{ paginator.num_pages }}</strong>
         {% endif %}
     </div>
 </div>
@@ -360,6 +363,40 @@
         </div>
     </div>
 </div>
+
+{% if paginator.num_pages > 1 %}
+<nav class="mt-3 d-flex justify-content-center" aria-label="Навигация по страницам">
+    <ul class="pagination pagination-sm mb-0">
+        {# ← Previous #}
+        <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
+            <a class="page-link" {% if page_obj.has_previous %}href="?{{ filter_qs }}{% if filter_qs %}&{% endif %}page={{ page_obj.previous_page_number }}"{% else %}href="#" tabindex="-1"{% endif %}>
+                <i class="bi bi-chevron-left"></i>
+            </a>
+        </li>
+
+        {% for p in page_range %}
+            {% if p == page_obj.paginator.ELLIPSIS %}
+            <li class="page-item disabled"><span class="page-link">…</span></li>
+            {% elif p == page_obj.number %}
+            <li class="page-item active" aria-current="page">
+                <span class="page-link">{{ p }}</span>
+            </li>
+            {% else %}
+            <li class="page-item">
+                <a class="page-link" href="?{{ filter_qs }}{% if filter_qs %}&{% endif %}page={{ p }}">{{ p }}</a>
+            </li>
+            {% endif %}
+        {% endfor %}
+
+        {# Next → #}
+        <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
+            <a class="page-link" {% if page_obj.has_next %}href="?{{ filter_qs }}{% if filter_qs %}&{% endif %}page={{ page_obj.next_page_number }}"{% else %}href="#" tabindex="-1"{% endif %}>
+                <i class="bi bi-chevron-right"></i>
+            </a>
+        </li>
+    </ul>
+</nav>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}

@@ -7,10 +7,12 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.db import transaction
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
 from django.db.models import Q, Avg, Count, Sum
+from urllib.parse import urlencode
 
 from .forms import ReportUploadForm, SectionForm, UserCreateForm, UserEditForm
 from .models import Report, VehicleRecord, Section, VehicleNorm, secs_to_hhmmss, UserProfile
@@ -766,6 +768,9 @@ def _build_daily_view_records(records):
     return rows
 
 
+_RECORDS_PAGE_SIZE = 150
+
+
 @staff_required
 def records(request):
     qs = VehicleRecord.objects.select_related('report', 'report__section', 'section').all()
@@ -776,6 +781,12 @@ def records(request):
     group_filter = request.GET.get('group', '')
     anomaly_filter = request.GET.get('anomaly', '')
     shift_filter = request.GET.get('shift', '')
+
+    # Default to last 30 days when neither date filter is set (first load without params)
+    if not date_from and not date_to:
+        today = datetime.date.today()
+        date_from = (today - datetime.timedelta(days=30)).isoformat()
+        date_to = today.isoformat()
 
     if date_from:
         try:
@@ -808,23 +819,50 @@ def records(request):
     anomaly_count = qs.filter(has_anomaly=True).count()
 
     ordered = qs.order_by('record_date', 'name', 'report_id', 'shift', 'row_number')
-    daily_view = _build_daily_view_records(ordered)
+    daily_view_full = _build_daily_view_records(ordered)
+
+    # ── Pagination ────────────────────────────────────────────────────────────
+    paginator = Paginator(daily_view_full, _RECORDS_PAGE_SIZE)
+    page_number = request.GET.get('page', 1)
+    try:
+        page_obj = paginator.page(page_number)
+    except (PageNotAnInteger, EmptyPage):
+        page_obj = paginator.page(1)
+
+    # Elided page range for compact pagination widget (Django 3.2+)
+    page_range = list(paginator.get_elided_page_range(
+        page_obj.number, on_each_side=2, on_ends=1
+    ))
+
+    # Filter query string without 'page' — used to build pagination links
+    filter_params = {}
+    if date_from:      filter_params['date_from'] = date_from
+    if date_to:        filter_params['date_to'] = date_to
+    if section_id:     filter_params['section'] = section_id
+    if group_filter:   filter_params['group'] = group_filter
+    if anomaly_filter: filter_params['anomaly'] = anomaly_filter
+    if shift_filter:   filter_params['shift'] = shift_filter
+    filter_qs = urlencode(filter_params)
 
     sections = Section.objects.all()
     groups = VehicleRecord.objects.values_list('group', flat=True).distinct().order_by('group')
 
     context = {
-        'daily_view': daily_view,
-        'sections': sections,
-        'groups': groups,
-        'date_from': date_from,
-        'date_to': date_to,
-        'section_id': section_id,
-        'group_filter': group_filter,
+        'daily_view':     page_obj.object_list,
+        'page_obj':       page_obj,
+        'paginator':      paginator,
+        'page_range':     page_range,
+        'filter_qs':      filter_qs,
+        'sections':       sections,
+        'groups':         groups,
+        'date_from':      date_from,
+        'date_to':        date_to,
+        'section_id':     section_id,
+        'group_filter':   group_filter,
         'anomaly_filter': anomaly_filter,
-        'shift_filter': shift_filter,
-        'total_count': total_count,
-        'anomaly_count': anomaly_count,
+        'shift_filter':   shift_filter,
+        'total_count':    total_count,
+        'anomaly_count':  anomaly_count,
     }
     return render(request, 'analysis/records.html', context)
 
