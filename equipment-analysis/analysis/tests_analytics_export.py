@@ -47,6 +47,19 @@ class AnalyticsExportTests(TestCase):
         self.assertEqual(response.context['date_from'], (today - datetime.timedelta(days=30)).isoformat())
         self.assertEqual(response.context['date_to'], today.isoformat())
 
+    def test_analytics_subsections_have_separate_pages(self):
+        general = self.client.get('/analytics/')
+        fuel = self.client.get('/analytics/fuel/')
+        mileage = self.client.get('/analytics/mileage/')
+
+        self.assertEqual(general.context['analytics_page'], 'general')
+        self.assertEqual(fuel.context['analytics_page'], 'fuel')
+        self.assertEqual(mileage.context['analytics_page'], 'mileage')
+        self.assertContains(fuel, 'Аналитика топлива')
+        self.assertNotContains(fuel, 'Общая аналитика эффективности')
+        self.assertContains(mileage, 'Аналитика пробега')
+        self.assertNotContains(mileage, 'Общая аналитика эффективности')
+
     def test_vehicle_search_matches_name_and_board_number(self):
         by_name = self.client.get('/analytics/', {
             'date_from': '2000-01-01',
@@ -171,3 +184,108 @@ class AnalyticsExportTests(TestCase):
         value = workbook.active.cell(row=2, column=1).value
 
         self.assertEqual(value, '\'=HYPERLINK(\"https://example.test\")')
+
+    def test_summary_export_combines_shifts_per_vehicle_and_day(self):
+        VehicleRecord.objects.create(
+            report=self.report,
+            row_number=2,
+            name=self.record.name,
+            group=self.record.group,
+            date=self.record.date,
+            record_date=self.record.record_date,
+            shift=2,
+            engine_time_sec=7200,
+            fuel_actual=180,
+            fuel_norm=60,
+            mileage=45.5,
+            refueling=None,
+        )
+
+        response = self.client.get('/analytics/export/', {
+            'dataset': 'fuel',
+            'export_mode': 'summary',
+            'columns': [
+                'date', 'shift', 'vehicle', 'engine_hours',
+                'fuel_actual', 'fuel_norm', 'fuel_efficiency', 'refueling',
+            ],
+        })
+        workbook = openpyxl.load_workbook(io.BytesIO(response.content))
+        rows = list(workbook.active.iter_rows(values_only=True))
+
+        self.assertEqual(
+            rows[0],
+            (
+                'Дата', 'Техника', 'Время работы, ч',
+                'Фактический расход, л', 'Норма расхода, л/ч',
+                'Расход к норме, %', 'Заправка, л',
+            ),
+        )
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[1][1], 'Volvo A40F №352')
+        self.assertEqual(rows[1][2], 3)
+        self.assertEqual(rows[1][3], 300)
+        self.assertEqual(rows[1][4], 50)
+        self.assertEqual(rows[1][5], 200)
+        self.assertEqual(rows[1][6], 25)
+
+    def test_mileage_summary_preserves_missing_values_and_sums_shifts(self):
+        VehicleRecord.objects.create(
+            report=self.report,
+            row_number=2,
+            name=self.record.name,
+            group=self.record.group,
+            date=self.record.date,
+            record_date=self.record.record_date,
+            shift=2,
+            engine_time_sec=3600,
+            fuel_norm=30,
+            mileage=10.5,
+        )
+
+        response = self.client.get('/analytics/export/', {
+            'dataset': 'mileage',
+            'export_mode': 'summary',
+            'columns': ['date', 'shift', 'vehicle', 'mileage'],
+        })
+        workbook = openpyxl.load_workbook(io.BytesIO(response.content))
+        rows = list(workbook.active.iter_rows(values_only=True))
+
+        self.assertEqual(rows[0], ('Дата', 'Техника', 'Пробег, км'))
+        self.assertEqual(rows[1][2], 65)
+
+    def test_summary_keeps_legacy_same_day_from_different_years_separate(self):
+        self.record.record_date = None
+        self.record.save(update_fields=['record_date'])
+        old_report = Report.objects.create(
+            name='Старый отчёт',
+            section=self.section,
+            year=self.report.year - 1,
+            daily_norm_sec=36000,
+            bulldozer_norm_sec=10800,
+            excavator_norm_sec=13200,
+            dumptruck_norm_sec=10800,
+        )
+        VehicleRecord.objects.create(
+            report=old_report,
+            row_number=1,
+            name=self.record.name,
+            group=self.record.group,
+            date=self.record.date,
+            record_date=None,
+            shift=2,
+            engine_time_sec=3600,
+            fuel_actual=50,
+            fuel_norm=30,
+        )
+
+        response = self.client.get('/analytics/export/', {
+            'dataset': 'fuel',
+            'export_mode': 'summary',
+            'date_from': 'invalid',
+            'date_to': 'invalid',
+            'columns': ['date', 'vehicle', 'fuel_actual'],
+        })
+        workbook = openpyxl.load_workbook(io.BytesIO(response.content))
+        rows = list(workbook.active.iter_rows(min_row=2, values_only=True))
+
+        self.assertEqual(len(rows), 2)

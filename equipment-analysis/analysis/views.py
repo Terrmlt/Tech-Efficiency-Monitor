@@ -930,7 +930,7 @@ def _filter_vehicle_search(queryset, search_text):
 
 
 @role_required(GROUP_ANALYST)
-def analytics(request):
+def analytics(request, page='general'):
     from collections import defaultdict as _dd
 
     date_from  = request.GET.get('date_from', '')
@@ -1182,6 +1182,12 @@ def analytics(request):
     sections = Section.objects.all()
 
     context = {
+        'analytics_page':       page,
+        'analytics_url_name':   {
+            'general': 'analytics',
+            'fuel': 'analytics_fuel',
+            'mileage': 'analytics_mileage',
+        }[page],
         'group_stats':         group_stats,
         'trend_json':          trend_json,
         'has_trend':           bool(all_dates),
@@ -1209,6 +1215,14 @@ def analytics(request):
         'total_refueling':             round(sum(refueling_values), 1) if refueling_values else None,
     }
     return render(request, 'analysis/analytics.html', context)
+
+
+def analytics_fuel(request):
+    return analytics(request, page='fuel')
+
+
+def analytics_mileage(request):
+    return analytics(request, page='mileage')
 
 
 # ─── Analytics: Efficiency / Downtime ────────────────────────────────────────
@@ -1949,7 +1963,8 @@ ANALYTICS_EXPORT_DATASETS = {
 }
 
 
-def _export_analytics_excel(records, dataset_key, requested_columns, date_from, date_to):
+def _export_analytics_excel(records, dataset_key, requested_columns, date_from, date_to,
+                            export_mode='shift'):
     """Build a compact allowlisted export for an analytics subsection."""
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment
@@ -1961,6 +1976,8 @@ def _export_analytics_excel(records, dataset_key, requested_columns, date_from, 
     selected = [key for key in requested_columns if key in allowed]
     if not selected:
         selected = list(dataset['default'])
+    if export_mode == 'summary':
+        selected = [key for key in selected if key != 'shift']
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -1994,7 +2011,7 @@ def _export_analytics_excel(records, dataset_key, requested_columns, date_from, 
 
     period = f'{date_from or "начало"}—{date_to or "сегодня"}'
     safe_period = re.sub(r'[^\w\-]', '_', period)[:35]
-    filename = f'{dataset_key}_{safe_period}.xlsx'
+    filename = f'{dataset_key}_{export_mode}_{safe_period}.xlsx'
     buffer = io.BytesIO()
     wb.save(buffer)
     buffer.seek(0)
@@ -2054,13 +2071,79 @@ def export_analytics_excel(request):
     records = list(qs.order_by('group', 'name', 'record_date', 'shift'))
     if dataset_key == 'mileage':
         records = [record for record in records if record.mileage is not None]
+    export_mode = request.GET.get('export_mode', 'shift')
+    if export_mode not in ('shift', 'summary'):
+        export_mode = 'shift'
+    if export_mode == 'summary':
+        records = _summarize_analytics_records(records)
     return _export_analytics_excel(
         records,
         dataset_key,
         request.GET.getlist('columns'),
         date_from,
         date_to,
+        export_mode,
     )
+
+
+def _summarize_analytics_records(records):
+    """Combine shifts into one vehicle row per calendar day."""
+    from collections import defaultdict
+    from types import SimpleNamespace
+
+    grouped = defaultdict(list)
+    for record in records:
+        if record.record_date:
+            calendar_day = record.record_date
+        else:
+            try:
+                day, month = (int(part) for part in record.date.split('.')[:2])
+                calendar_day = datetime.date(record.report.year, month, day)
+            except (TypeError, ValueError):
+                calendar_day = f'{record.report.year}:{record.date}'
+        grouped[(record.name, calendar_day)].append(record)
+
+    result = []
+    for (_name, _day), rows in sorted(
+        grouped.items(),
+        key=lambda item: (item[0][1], item[0][0].casefold()),
+    ):
+        first = rows[0]
+        fuel_values = [r.fuel_actual for r in rows if r.fuel_actual is not None]
+        mileage_values = [r.mileage for r in rows if r.mileage is not None]
+        refueling_values = [r.refueling for r in rows if r.refueling is not None]
+        engine_time_sec = sum(r.engine_time_sec for r in rows)
+        fuel_actual = sum(fuel_values) if fuel_values else None
+        hours = engine_time_sec / 3600
+        normative_fuel = sum(
+            r.fuel_norm * (r.engine_time_sec / 3600)
+            for r in rows
+            if r.fuel_norm is not None
+        )
+        fuel_norm = normative_fuel / hours if hours > 0 else first.fuel_norm
+        fuel_efficiency = (
+            fuel_actual / normative_fuel
+            if fuel_actual is not None and normative_fuel > 0
+            else None
+        )
+        summary_date = _day if isinstance(_day, datetime.date) else first.record_date
+        result.append(SimpleNamespace(
+            record_date=summary_date,
+            date=first.date,
+            shift=None,
+            section=first.section,
+            section_id=first.section_id,
+            report=first.report,
+            name=first.name,
+            group=first.group,
+            engine_time_sec=engine_time_sec,
+            fuel_actual=fuel_actual,
+            fuel_norm=fuel_norm,
+            fuel_efficiency=fuel_efficiency,
+            refueling=sum(refueling_values) if refueling_values else None,
+            mileage=sum(mileage_values) if mileage_values else None,
+        ))
+    return result
 
 
 @staff_required
