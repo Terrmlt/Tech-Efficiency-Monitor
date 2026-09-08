@@ -89,28 +89,24 @@ def index(request):
             return redirect('monitoring_index')
         if is_analyst(user):
             return redirect('analytics')
-    reports = Report.objects.select_related('section').all()
-
     section_id = request.GET.get('section', '').strip()
+    reports = None
+    selected_section_obj = None
     if section_id == 'none':
-        reports = reports.filter(section__isnull=True)
+        reports = Report.objects.select_related('section').filter(section__isnull=True)
     elif section_id:
-        reports = reports.filter(section_id=section_id)
+        selected_section_obj = get_object_or_404(Section, pk=section_id)
+        reports = Report.objects.select_related('section').filter(section=selected_section_obj)
 
-    sort = request.GET.get('sort', '')
-    if sort == 'section':
-        reports = reports.order_by('section__name', '-uploaded_at')
-    # default ordering ('-uploaded_at') already applied by Report.Meta.ordering
-
-    all_sections = Section.objects.all()
-    has_unassigned = Report.objects.filter(section__isnull=True).exists()
+    all_sections = Section.objects.annotate(report_count=Count('report')).order_by('name')
+    unassigned_count = Report.objects.filter(section__isnull=True).count()
 
     return render(request, 'analysis/index.html', {
         'reports': reports,
         'sections': all_sections,
-        'has_unassigned': has_unassigned,
+        'unassigned_count': unassigned_count,
         'selected_section': section_id,
-        'selected_sort': sort,
+        'selected_section_obj': selected_section_obj,
     })
 
 
