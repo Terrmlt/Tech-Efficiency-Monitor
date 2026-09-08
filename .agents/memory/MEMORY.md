@@ -1,3 +1,4 @@
 - [Django migration approach](django-migration-approach.md) — manage.py migrate hangs while dev server runs; apply DDL via standalone sqlite3 script instead.
 - [Imported database dumps](imported-database-dumps.md) — verify content instead of trusting the file extension; PostgreSQL plain-text dumps may be named `.json`.
 - [Restored-user credentials](restored-user-credentials.md) — a restored dump can contain valid users whose passwords do not match local defaults; credential recovery is separate.
+- [Unicode search on SQLite](unicode-search-sqlite.md) — SQLite `icontains` is not reliably case-insensitive for Cyrillic; use Unicode casefold matching.

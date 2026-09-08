@@ -869,16 +869,31 @@ def records(request):
 
 # ─── Analytics ────────────────────────────────────────────────────────────────
 
+def _filter_vehicle_search(queryset, search_text):
+    """Apply database-independent Unicode case-insensitive vehicle search."""
+    search_folded = search_text.casefold()
+    matching_names = [
+        name for name in queryset.values_list('name', flat=True).distinct()
+        if search_folded in name.casefold()
+    ]
+    return queryset.filter(name__in=matching_names) if matching_names else queryset.none()
+
+
 @role_required(GROUP_ANALYST)
 def analytics(request):
     from collections import defaultdict as _dd
 
     date_from  = request.GET.get('date_from', '')
     date_to    = request.GET.get('date_to', '')
+    if not date_from and not date_to:
+        today = datetime.date.today()
+        date_from = (today - datetime.timedelta(days=30)).isoformat()
+        date_to = today.isoformat()
+
     section_id = request.GET.get('section', '')
     group_filters = request.GET.getlist('group')
 
-    vehicle_filter = request.GET.get('vehicle', '')
+    vehicle_search = request.GET.get('vehicle_search', request.GET.get('vehicle', '')).strip()
     shift_filter = request.GET.get('shift', '')
     if shift_filter not in ('1', '2'):
         shift_filter = ''
@@ -902,19 +917,13 @@ def analytics(request):
         )
     if group_filters:
         qs = qs.filter(group__in=group_filters)
-    if vehicle_filter:
-        qs = qs.filter(name=vehicle_filter)
+    if vehicle_search:
+        qs = _filter_vehicle_search(qs, vehicle_search)
     if shift_filter:
         qs = qs.filter(shift=int(shift_filter))
 
     # All available groups for checkboxes
     all_groups = list(VehicleRecord.objects.values_list('group', flat=True).distinct().order_by('group'))
-
-    # Vehicles for dropdown — distinct (name, group) pairs, scoped to selected groups
-    vehicles_qs = VehicleRecord.objects.values('name', 'group').distinct().order_by('group', 'name')
-    if group_filters:
-        vehicles_qs = vehicles_qs.filter(group__in=group_filters)
-    all_vehicles = list(vehicles_qs)
 
     # ── helper ──────────────────────────────────────────────────────────────────
     def _avg(recs):
@@ -1074,6 +1083,8 @@ def analytics(request):
             vehicle_name_group[rec.name] = rec.group
 
     vehicle_stats = []
+    fuel_vehicle_stats = []
+    mileage_vehicle_stats = []
     for vname in sorted(vehicle_recs_map.keys(), key=lambda n: (vehicle_name_group[n], n)):
         vrecs = vehicle_recs_map[vname]
         vfuel  = sum(r.fuel_actual for r in vrecs if r.fuel_actual and r.fuel_actual > 0)
@@ -1082,6 +1093,8 @@ def analytics(request):
         vou = [r.equipment_output * 100 for r in vrecs if r.equipment_output is not None]
         vte = [min(100.0, 100.0 / r.type_efficiency) for r in vrecs
                if r.type_efficiency is not None and r.type_efficiency > 0]
+        mileage_values = [r.mileage for r in vrecs if r.mileage is not None]
+        refueling_values = [r.refueling for r in vrecs if r.refueling is not None]
         vehicle_stats.append({
             'name':         vname,
             'group':        vehicle_name_group[vname],
@@ -1091,11 +1104,30 @@ def analytics(request):
             'avg_output':   round(sum(vou) / len(vou), 1) if vou else None,
             'avg_type_eff': round(sum(vte) / len(vte), 1) if vte else None,
         })
+        if any(r.fuel_actual is not None for r in vrecs):
+            fuel_vehicle_stats.append({
+                'name': vname,
+                'group': vehicle_name_group[vname],
+                'total_hours': round(vhours, 1),
+                'total_fuel': round(vfuel, 1),
+                'avg_fuel_eff': round(sum(vfe) / len(vfe), 1) if vfe else None,
+                'total_refueling': round(sum(refueling_values), 1) if refueling_values else None,
+            })
+        if mileage_values:
+            mileage_vehicle_stats.append({
+                'name': vname,
+                'group': vehicle_name_group[vname],
+                'entries': len(mileage_values),
+                'total_mileage': round(sum(mileage_values), 1),
+                'avg_mileage': round(sum(mileage_values) / len(mileage_values), 1),
+            })
 
     # ── totals ───────────────────────────────────────────────────────────────────
     total_count = len(rec_list)
     total_fuel  = sum(r.fuel_actual for r in rec_list if r.fuel_actual and r.fuel_actual > 0)
     total_hours = sum(r.engine_time_sec for r in rec_list) / 3600
+    mileage_values = [r.mileage for r in rec_list if r.mileage is not None]
+    refueling_values = [r.refueling for r in rec_list if r.refueling is not None]
 
     sections = Section.objects.all()
 
@@ -1108,8 +1140,7 @@ def analytics(request):
         'total_hours':         round(total_hours, 1),
         'sections':            sections,
         'all_groups':          all_groups,
-        'all_vehicles':        all_vehicles,
-        'vehicle_filter':      vehicle_filter,
+        'vehicle_search':      vehicle_search,
         'shift_filter':        shift_filter,
         'date_from':           date_from,
         'date_to':             date_to,
@@ -1120,6 +1151,12 @@ def analytics(request):
         'shift_compare_vehicles':      shift_compare_vehicles_list,
         'has_shift_compare_vehicles':  bool(shift_compare_vehicles_list) and not shift_filter,
         'vehicle_stats':               vehicle_stats,
+        'fuel_vehicle_stats':          fuel_vehicle_stats,
+        'mileage_vehicle_stats':       mileage_vehicle_stats,
+        'total_mileage':               round(sum(mileage_values), 1) if mileage_values else None,
+        'avg_mileage':                 round(sum(mileage_values) / len(mileage_values), 1) if mileage_values else None,
+        'mileage_entries':             len(mileage_values),
+        'total_refueling':             round(sum(refueling_values), 1) if refueling_values else None,
     }
     return render(request, 'analysis/analytics.html', context)
 
@@ -1830,6 +1867,150 @@ def export_excel(request, pk):
     )
     response['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded}"
     return response
+
+
+ANALYTICS_EXPORT_COLUMNS = {
+    'date': ('Дата', 12, lambda r: r.record_date.strftime('%d.%m.%Y') if r.record_date else r.date),
+    'shift': ('Смена', 9, lambda r: f'С{r.shift}' if r.shift else '—'),
+    'section': ('Участок', 18, lambda r: r.section.name if r.section_id else (r.report.section.name if r.report.section else '')),
+    'vehicle': ('Техника', 32, lambda r: r.name),
+    'group': ('Группа', 18, lambda r: r.group),
+    'engine_hours': ('Время работы, ч', 17, lambda r: round(r.engine_time_sec / 3600, 2)),
+    'fuel_actual': ('Фактический расход, л', 22, lambda r: r.fuel_actual),
+    'fuel_norm': ('Норма расхода, л/ч', 21, lambda r: r.fuel_norm),
+    'fuel_efficiency': ('Расход к норме, %', 20, lambda r: round(r.fuel_efficiency * 100, 1) if r.fuel_efficiency is not None else None),
+    'refueling': ('Заправка, л', 14, lambda r: r.refueling),
+    'mileage': ('Пробег, км', 14, lambda r: r.mileage),
+}
+
+ANALYTICS_EXPORT_DATASETS = {
+    'fuel': {
+        'title': 'Аналитика топлива',
+        'allowed': ('date', 'shift', 'section', 'vehicle', 'group', 'engine_hours',
+                    'fuel_actual', 'fuel_norm', 'fuel_efficiency', 'refueling'),
+        'default': ('date', 'shift', 'section', 'vehicle', 'group', 'engine_hours',
+                    'fuel_actual', 'fuel_norm', 'fuel_efficiency', 'refueling'),
+    },
+    'mileage': {
+        'title': 'Аналитика пробега',
+        'allowed': ('date', 'shift', 'section', 'vehicle', 'group', 'mileage'),
+        'default': ('date', 'shift', 'section', 'vehicle', 'group', 'mileage'),
+    },
+}
+
+
+def _export_analytics_excel(records, dataset_key, requested_columns, date_from, date_to):
+    """Build a compact allowlisted export for an analytics subsection."""
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+
+    dataset_key = dataset_key if dataset_key in ANALYTICS_EXPORT_DATASETS else 'fuel'
+    dataset = ANALYTICS_EXPORT_DATASETS[dataset_key]
+    allowed = dataset['allowed']
+    selected = [key for key in requested_columns if key in allowed]
+    if not selected:
+        selected = list(dataset['default'])
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = dataset['title'][:31]
+
+    ws.append([ANALYTICS_EXPORT_COLUMNS[key][0] for key in selected])
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color='FFFFFF')
+        cell.fill = PatternFill('solid', fgColor='2E75B6')
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    ws.row_dimensions[1].height = 32
+    ws.freeze_panes = 'A2'
+    ws.auto_filter.ref = f'A1:{get_column_letter(len(selected))}1'
+
+    def safe_excel_value(value):
+        if isinstance(value, str) and value.startswith(('=', '+', '-', '@')):
+            return f"'{value}"
+        return value
+
+    for record in records:
+        ws.append([
+            safe_excel_value(ANALYTICS_EXPORT_COLUMNS[key][2](record))
+            for key in selected
+        ])
+
+    for index, key in enumerate(selected, 1):
+        ws.column_dimensions[get_column_letter(index)].width = ANALYTICS_EXPORT_COLUMNS[key][1]
+    for row in ws.iter_rows(min_row=2):
+        for cell in row:
+            cell.alignment = Alignment(vertical='center')
+
+    period = f'{date_from or "начало"}—{date_to or "сегодня"}'
+    safe_period = re.sub(r'[^\w\-]', '_', period)[:35]
+    filename = f'{dataset_key}_{safe_period}.xlsx'
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    from urllib.parse import quote as _quote
+    response = HttpResponse(
+        buffer.read(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = (
+        f"attachment; filename*=UTF-8''{_quote(filename.encode('utf-8'), safe='')}"
+    )
+    return response
+
+
+@role_required(GROUP_ANALYST)
+def export_analytics_excel(request):
+    """Export one analytics subsection with the same filters as the page."""
+    qs = VehicleRecord.objects.select_related('report', 'report__section', 'section').all()
+    date_from = request.GET.get('date_from', '')
+    date_to = request.GET.get('date_to', '')
+    if not date_from and not date_to:
+        today = datetime.date.today()
+        date_from = (today - datetime.timedelta(days=30)).isoformat()
+        date_to = today.isoformat()
+
+    section_id = request.GET.get('section', '')
+    group_filters = request.GET.getlist('group')
+    vehicle_search = request.GET.get('vehicle_search', request.GET.get('vehicle', '')).strip()
+    shift_filter = request.GET.get('shift', '')
+
+    if date_from:
+        try:
+            qs = qs.filter(record_date__gte=datetime.date.fromisoformat(date_from))
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            qs = qs.filter(record_date__lte=datetime.date.fromisoformat(date_to))
+        except ValueError:
+            pass
+    if section_id:
+        qs = qs.filter(
+            Q(section_id=section_id) |
+            Q(section__isnull=True, report__section_id=section_id)
+        )
+    if group_filters:
+        qs = qs.filter(group__in=group_filters)
+    if vehicle_search:
+        qs = _filter_vehicle_search(qs, vehicle_search)
+    if shift_filter in ('1', '2'):
+        qs = qs.filter(shift=int(shift_filter))
+
+    dataset_key = request.GET.get('dataset', 'fuel')
+    if dataset_key not in ANALYTICS_EXPORT_DATASETS:
+        dataset_key = 'fuel'
+    records = list(qs.order_by('group', 'name', 'record_date', 'shift'))
+    if dataset_key == 'mileage':
+        records = [record for record in records if record.mileage is not None]
+    return _export_analytics_excel(
+        records,
+        dataset_key,
+        request.GET.getlist('columns'),
+        date_from,
+        date_to,
+    )
 
 
 @staff_required

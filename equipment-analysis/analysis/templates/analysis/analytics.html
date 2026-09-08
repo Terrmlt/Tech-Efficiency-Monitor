@@ -53,18 +53,15 @@
             </div>
             <div class="row g-2 align-items-end border-top pt-2">
                 <div class="col-md-5">
-                    <label class="form-label small fw-semibold mb-1">Единица техники</label>
-                    {% regroup all_vehicles by group as vehicle_groups %}
-                    <select name="vehicle" class="form-select form-select-sm">
-                        <option value="">Все машины</option>
-                        {% for vg in vehicle_groups %}
-                        <optgroup label="{{ vg.grouper }}">
-                            {% for v in vg.list %}
-                            <option value="{{ v.name }}" {% if vehicle_filter == v.name %}selected{% endif %}>{{ v.name }}</option>
-                            {% endfor %}
-                        </optgroup>
-                        {% endfor %}
-                    </select>
+                    <label class="form-label small fw-semibold mb-1">Поиск техники</label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="search" name="vehicle_search" value="{{ vehicle_search }}"
+                               class="form-control"
+                               placeholder="Например: Volvo или 352"
+                               aria-label="Поиск по наименованию или бортовому номеру">
+                    </div>
+                    <div class="form-text">Поиск по любой части наименования или номера после знака №</div>
                 </div>
                 <div class="col-md-2">
                     <label class="form-label small fw-semibold mb-1">Смена</label>
@@ -78,6 +75,193 @@
         </form>
     </div>
 </div>
+
+<!-- Специализированные подразделы -->
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <span class="small fw-semibold text-muted me-1">Подразделы:</span>
+    <a href="#fuel-analytics" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-fuel-pump me-1"></i>Аналитика топлива
+    </a>
+    <a href="#mileage-analytics" class="btn btn-sm btn-outline-success">
+        <i class="bi bi-signpost-split me-1"></i>Аналитика пробега
+    </a>
+</div>
+
+<section id="fuel-analytics" class="card mb-4 border-primary-subtle">
+    <div class="card-header bg-primary-subtle d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+            <div class="fw-bold"><i class="bi bi-fuel-pump me-2"></i>Аналитика топлива</div>
+            <div class="small text-muted">Расход, нормы и заправки по выбранным фильтрам</div>
+        </div>
+        <button class="btn btn-sm btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#fuelExport">
+            <i class="bi bi-file-earmark-excel me-1"></i>Настроить выгрузку
+        </button>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 mb-3">
+            <div class="col-sm-4">
+                <div class="p-3 rounded bg-light h-100">
+                    <div class="text-muted small">Расход топлива</div>
+                    <div class="fs-4 fw-bold text-primary">{{ total_fuel }} л</div>
+                </div>
+            </div>
+            <div class="col-sm-4">
+                <div class="p-3 rounded bg-light h-100">
+                    <div class="text-muted small">Заправлено</div>
+                    <div class="fs-4 fw-bold">{% if total_refueling is not None %}{{ total_refueling }} л{% else %}—{% endif %}</div>
+                </div>
+            </div>
+            <div class="col-sm-4">
+                <div class="p-3 rounded bg-light h-100">
+                    <div class="text-muted small">Техники с данными</div>
+                    <div class="fs-4 fw-bold">{{ fuel_vehicle_stats|length }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="collapse mb-3" id="fuelExport">
+            <form method="get" action="{% url 'export_analytics_excel' %}" class="border rounded p-3 bg-light">
+                <input type="hidden" name="dataset" value="fuel">
+                <input type="hidden" name="date_from" value="{{ date_from }}">
+                <input type="hidden" name="date_to" value="{{ date_to }}">
+                <input type="hidden" name="section" value="{{ section_id }}">
+                <input type="hidden" name="shift" value="{{ shift_filter }}">
+                <input type="hidden" name="vehicle_search" value="{{ vehicle_search }}">
+                {% for g in group_filters %}<input type="hidden" name="group" value="{{ g }}">{% endfor %}
+                <div class="small fw-semibold mb-2">Столбцы Excel</div>
+                <div class="row row-cols-2 row-cols-md-3 g-2 mb-3">
+                    <div class="col"><label class="form-check"><input class="form-check-input" type="checkbox" name="columns" value="date" checked> Дата</label></div>
+                    <div class="col"><label class="form-check"><input class="form-check-input" type="checkbox" name="columns" value="shift" checked> Смена</label></div>
+                    <div class="col"><label class="form-check"><input class="form-check-input" type="checkbox" name="columns" value="section" checked> Участок</label></div>
+                    <div class="col"><label class="form-check"><input class="form-check-input" type="checkbox" name="columns" value="vehicle" checked> Техника</label></div>
+                    <div class="col"><label class="form-check"><input class="form-check-input" type="checkbox" name="columns" value="group" checked> Группа</label></div>
+                    <div class="col"><label class="form-check"><input class="form-check-input" type="checkbox" name="columns" value="engine_hours" checked> Время работы</label></div>
+                    <div class="col"><label class="form-check"><input class="form-check-input" type="checkbox" name="columns" value="fuel_actual" checked> Расход</label></div>
+                    <div class="col"><label class="form-check"><input class="form-check-input" type="checkbox" name="columns" value="fuel_norm" checked> Норма</label></div>
+                    <div class="col"><label class="form-check"><input class="form-check-input" type="checkbox" name="columns" value="fuel_efficiency" checked> Расход к норме</label></div>
+                    <div class="col"><label class="form-check"><input class="form-check-input" type="checkbox" name="columns" value="refueling" checked> Заправка</label></div>
+                </div>
+                <button type="submit" class="btn btn-sm btn-success">
+                    <i class="bi bi-download me-1"></i>Скачать Excel
+                </button>
+            </form>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Техника</th><th>Группа</th>
+                        <th class="text-end">Часов работы</th>
+                        <th class="text-end">Расход, л</th>
+                        <th class="text-center">К норме</th>
+                        <th class="text-end">Заправка, л</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for v in fuel_vehicle_stats %}
+                    <tr>
+                        <td class="fw-semibold">{{ v.name }}</td>
+                        <td><span class="badge bg-light text-dark border">{{ v.group }}</span></td>
+                        <td class="text-end">{{ v.total_hours }}</td>
+                        <td class="text-end">{{ v.total_fuel }}</td>
+                        <td class="text-center">{% if v.avg_fuel_eff is not None %}{{ v.avg_fuel_eff }}%{% else %}—{% endif %}</td>
+                        <td class="text-end">{% if v.total_refueling is not None %}{{ v.total_refueling }}{% else %}—{% endif %}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="text-center text-muted py-4">Нет данных по топливу за выбранный период</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<section id="mileage-analytics" class="card mb-4 border-success-subtle">
+    <div class="card-header bg-success-subtle d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+            <div class="fw-bold"><i class="bi bi-signpost-split me-2"></i>Аналитика пробега</div>
+            <div class="small text-muted">Только записи, в которых пробег действительно указан</div>
+        </div>
+        <button class="btn btn-sm btn-success" type="button" data-bs-toggle="collapse" data-bs-target="#mileageExport">
+            <i class="bi bi-file-earmark-excel me-1"></i>Настроить выгрузку
+        </button>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 mb-3">
+            <div class="col-sm-4">
+                <div class="p-3 rounded bg-light h-100">
+                    <div class="text-muted small">Общий пробег</div>
+                    <div class="fs-4 fw-bold text-success">{% if total_mileage is not None %}{{ total_mileage }} км{% else %}—{% endif %}</div>
+                </div>
+            </div>
+            <div class="col-sm-4">
+                <div class="p-3 rounded bg-light h-100">
+                    <div class="text-muted small">Средний пробег записи</div>
+                    <div class="fs-4 fw-bold">{% if avg_mileage is not None %}{{ avg_mileage }} км{% else %}—{% endif %}</div>
+                </div>
+            </div>
+            <div class="col-sm-4">
+                <div class="p-3 rounded bg-light h-100">
+                    <div class="text-muted small">Записей с пробегом</div>
+                    <div class="fs-4 fw-bold">{{ mileage_entries }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="collapse mb-3" id="mileageExport">
+            <form method="get" action="{% url 'export_analytics_excel' %}" class="border rounded p-3 bg-light">
+                <input type="hidden" name="dataset" value="mileage">
+                <input type="hidden" name="date_from" value="{{ date_from }}">
+                <input type="hidden" name="date_to" value="{{ date_to }}">
+                <input type="hidden" name="section" value="{{ section_id }}">
+                <input type="hidden" name="shift" value="{{ shift_filter }}">
+                <input type="hidden" name="vehicle_search" value="{{ vehicle_search }}">
+                {% for g in group_filters %}<input type="hidden" name="group" value="{{ g }}">{% endfor %}
+                <div class="small fw-semibold mb-2">Столбцы Excel</div>
+                <div class="row row-cols-2 row-cols-md-3 g-2 mb-3">
+                    <div class="col"><label class="form-check"><input class="form-check-input" type="checkbox" name="columns" value="date" checked> Дата</label></div>
+                    <div class="col"><label class="form-check"><input class="form-check-input" type="checkbox" name="columns" value="shift" checked> Смена</label></div>
+                    <div class="col"><label class="form-check"><input class="form-check-input" type="checkbox" name="columns" value="section" checked> Участок</label></div>
+                    <div class="col"><label class="form-check"><input class="form-check-input" type="checkbox" name="columns" value="vehicle" checked> Техника</label></div>
+                    <div class="col"><label class="form-check"><input class="form-check-input" type="checkbox" name="columns" value="group" checked> Группа</label></div>
+                    <div class="col"><label class="form-check"><input class="form-check-input" type="checkbox" name="columns" value="mileage" checked> Пробег</label></div>
+                </div>
+                <button type="submit" class="btn btn-sm btn-success">
+                    <i class="bi bi-download me-1"></i>Скачать Excel
+                </button>
+            </form>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Техника</th><th>Группа</th>
+                        <th class="text-end">Записей</th>
+                        <th class="text-end">Общий пробег, км</th>
+                        <th class="text-end">Средний пробег, км</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for v in mileage_vehicle_stats %}
+                    <tr>
+                        <td class="fw-semibold">{{ v.name }}</td>
+                        <td><span class="badge bg-light text-dark border">{{ v.group }}</span></td>
+                        <td class="text-end">{{ v.entries }}</td>
+                        <td class="text-end">{{ v.total_mileage }}</td>
+                        <td class="text-end">{{ v.avg_mileage }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="text-center text-muted py-4">Нет данных по пробегу за выбранный период</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<h5 class="fw-bold mb-3">Общая аналитика эффективности</h5>
 
 <!-- Итоговые карточки -->
 <div class="row g-3 mb-4">

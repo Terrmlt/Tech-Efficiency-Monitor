@@ -11,6 +11,7 @@ urlpatterns = [
     path('records/', views.records, name='records'),
     path('records/export/', views.export_records_excel, name='export_records_excel'),
     path('analytics/', views.analytics, name='analytics'),
+    path('analytics/export/', views.export_analytics_excel, name='export_analytics_excel'),
     path('analytics/compare/', views.analytics_compare, name='analytics_compare'),
     path('analytics/efficiency/', views.analytics_efficiency, name='analytics_efficiency'),
     path('records/bulk-section/', views.bulk_section_reassign, name='bulk_section_reassign'),
