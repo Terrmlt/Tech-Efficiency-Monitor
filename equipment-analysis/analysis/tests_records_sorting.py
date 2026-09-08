@@ -44,7 +44,7 @@ class RecordsBoardSortingTests(TestCase):
         self.assertIsNone(_extract_board_number('Техника без номера'))
 
     def test_board_sort_is_numeric_and_places_missing_last(self):
-        response = self.client.get('/records/', {'sort': 'board'})
+        response = self.client.get('/records/', {'sort': 'board_asc'})
         names = [
             row['obj'].name
             for row in response.context['daily_view']
@@ -52,16 +52,18 @@ class RecordsBoardSortingTests(TestCase):
         ]
 
         self.assertEqual(names, ['Volvo №9', 'Volvo №80', 'Без бортового номера'])
-        self.assertEqual(response.context['sort_filter'], 'board')
-        self.assertIn('sort=board', response.context['filter_qs'])
+        self.assertEqual(response.context['sort_filter'], 'board_asc')
+        self.assertIn('sort=board_asc', response.context['filter_qs'])
 
     def test_rendered_page_keeps_sort_control_and_block_boundaries(self):
-        response = self.client.get('/records/', {'sort': 'board'})
+        response = self.client.get('/records/', {'sort': 'board_asc'})
         html = response.content.decode()
 
-        self.assertIn('value="board" selected', html)
+        self.assertIn('value="board_asc" selected', html)
         self.assertIn('equipment-block-start', html)
-        self.assertIn('Борт № 9', html)
+        self.assertIn('<th class="board-col text-center">Борт №</th>', html)
+        self.assertNotIn('Борт № 9', html)
+        self.assertIn('>9</td>', html)
         self.assertIn('comment-saving', html)
 
     def test_board_sort_uses_primary_key_as_final_tie_breaker(self):
@@ -78,7 +80,7 @@ class RecordsBoardSortingTests(TestCase):
             fuel_norm=original.fuel_norm,
         )
 
-        response = self.client.get('/records/', {'sort': 'board'})
+        response = self.client.get('/records/', {'sort': 'board_asc'})
         matching_ids = [
             row['obj'].pk
             for row in response.context['daily_view']
@@ -86,3 +88,20 @@ class RecordsBoardSortingTests(TestCase):
         ]
 
         self.assertEqual(matching_ids, [original.pk, duplicate.pk])
+
+    def test_board_sort_descending_keeps_missing_numbers_last(self):
+        response = self.client.get('/records/', {'sort': 'board_desc'})
+        names = [
+            row['obj'].name
+            for row in response.context['daily_view']
+            if row['type'] == 'record'
+        ]
+
+        self.assertEqual(names, ['Volvo №80', 'Volvo №9', 'Без бортового номера'])
+        self.assertEqual(response.context['sort_filter'], 'board_desc')
+        self.assertIn('sort=board_desc', response.context['filter_qs'])
+
+    def test_legacy_board_sort_parameter_maps_to_ascending(self):
+        response = self.client.get('/records/', {'sort': 'board'})
+
+        self.assertEqual(response.context['sort_filter'], 'board_asc')

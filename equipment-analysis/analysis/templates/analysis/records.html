@@ -42,7 +42,7 @@
         scrollbar-color: #b4c3d2 #eef2f6;
     }
     .records-page .records-table {
-        min-width: 1510px;
+        min-width: 1590px;
         border-collapse: separate;
         border-spacing: 0;
         color: var(--records-ink);
@@ -82,25 +82,37 @@
         width: 172px;
         min-width: 172px;
         background: var(--records-surface);
+    }
+    .records-page .records-table .board-col {
+        position: sticky;
+        left: 216px;
+        z-index: 3;
+        width: 76px;
+        min-width: 76px;
+        background: var(--records-surface);
         box-shadow: var(--records-sticky-shadow);
     }
     .records-page .records-table thead .identity-col,
-    .records-page .records-table thead .vehicle-col {
+    .records-page .records-table thead .vehicle-col,
+    .records-page .records-table thead .board-col {
         z-index: 7;
         background: var(--records-header);
     }
     .records-page .records-table tbody tr:hover .identity-col,
-    .records-page .records-table tbody tr:hover .vehicle-col { background-color: #f3f7fb; }
+    .records-page .records-table tbody tr:hover .vehicle-col,
+    .records-page .records-table tbody tr:hover .board-col { background-color: #f3f7fb; }
     .records-page .records-table .equipment-block-start td {
         border-top: 3px solid var(--records-line-strong);
     }
     .records-page .records-table .equipment-block-start .identity-col,
-    .records-page .records-table .equipment-block-start .vehicle-col {
+    .records-page .records-table .equipment-block-start .vehicle-col,
+    .records-page .records-table .equipment-block-start .board-col {
         border-top: 3px solid var(--records-line-strong);
     }
     .records-page .records-table .daily-total-row td { border-top-width: 2px; }
     .records-page .records-table .daily-total-row .identity-col,
-    .records-page .records-table .daily-total-row .vehicle-col {
+    .records-page .records-table .daily-total-row .vehicle-col,
+    .records-page .records-table .daily-total-row .board-col {
         background: #e8f4fd !important;
     }
     .records-page .comment-cell { min-width: 245px; width: 245px; }
@@ -133,6 +145,7 @@
         .records-page .records-toolbar .btn { font-size: .75rem; }
         .records-page .records-scroll { max-height: 68vh; }
         .records-page .records-table .vehicle-col { width: 150px; min-width: 150px; }
+        .records-page .records-table .board-col { left: 194px; }
         .records-page .comment-cell { min-width: 210px; width: 210px; }
     }
 </style>
@@ -266,7 +279,8 @@
                 <label class="form-label small fw-semibold mb-1">Сортировка</label>
                 <select name="sort" class="form-select form-select-sm" title="Порядок техники">
                     <option value="date" {% if sort_filter == 'date' %}selected{% endif %}>По дате</option>
-                    <option value="board" {% if sort_filter == 'board' %}selected{% endif %}>По борт. №</option>
+                    <option value="board_asc" {% if sort_filter == 'board_asc' %}selected{% endif %}>Борт № ↑</option>
+                    <option value="board_desc" {% if sort_filter == 'board_desc' %}selected{% endif %}>Борт № ↓</option>
                 </select>
             </div>
             <div class="col-md-1 d-flex gap-1">
@@ -310,6 +324,7 @@
                     <tr>
                         <th class="ps-3 identity-col">№</th>
                         <th class="vehicle-col">Техника</th>
+                        <th class="board-col text-center">Борт №</th>
                         <th>Группа</th>
                         <th>Дата</th>
                         <th>Смена</th>
@@ -332,7 +347,8 @@
                     {% with rec=row.obj %}
                     <tr class="{% if rec.has_anomaly %}anomaly-row{% endif %}{% if row.equipment_block_start %} equipment-block-start{% endif %}">
                         <td class="ps-3 text-muted identity-col">{{ rec.row_number }}</td>
-                        <td class="vehicle-col"><div class="fw-semibold">{{ rec.name }}</div>{% if rec.board_number %}<div class="small text-muted">Борт № {{ rec.board_number }}</div>{% endif %}</td>
+                        <td class="vehicle-col"><div class="fw-semibold">{{ rec.name }}</div></td>
+                        <td class="board-col text-center fw-semibold">{% if rec.board_number is not None %}{{ rec.board_number }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
                         <td>
                             {% if rec.group == 'Бульдозеры' %}
                             <span class="badge bg-warning text-dark group-badge">{{ rec.group }}</span>
@@ -432,7 +448,8 @@
                     {# ── Daily total row ── #}
                     <tr class="daily-total-row{% if row.has_anomaly %} anomaly-row{% endif %}{% if row.equipment_block_start %} equipment-block-start{% endif %}">
                         <td class="ps-3 text-muted identity-col">—</td>
-                        <td class="vehicle-col"><div class="fw-bold text-primary small">{{ row.name }}</div>{% if row.board_number %}<div class="small text-muted">Борт № {{ row.board_number }}</div>{% endif %}</td>
+                        <td class="vehicle-col"><div class="fw-bold text-primary small">{{ row.name }}</div></td>
+                        <td class="board-col text-center fw-bold">{% if row.board_number is not None %}{{ row.board_number }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
                         <td>
                             {% if row.group == 'Бульдозеры' %}
                             <span class="badge bg-warning text-dark group-badge">{{ row.group }}</span>
@@ -497,7 +514,7 @@
 
                     {% empty %}
                     <tr>
-                        <td colspan="15" class="text-center text-muted py-5">
+                        <td colspan="16" class="text-center text-muted py-5">
                             <i class="bi bi-inbox display-6 d-block mb-2"></i>
                             Нет записей по выбранным фильтрам
                         </td>

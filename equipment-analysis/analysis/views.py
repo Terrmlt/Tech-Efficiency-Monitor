@@ -636,11 +636,11 @@ def _extract_board_number(vehicle_name):
     return int(match.group(1)) if match else None
 
 
-def _board_number_sort_key(record):
+def _board_number_sort_key(record, descending=False):
     board_number = _extract_board_number(record.name)
     return (
         board_number is None,
-        board_number if board_number is not None else 0,
+        -board_number if descending and board_number is not None else (board_number or 0),
         (record.name or '').casefold(),
         record.record_date or datetime.date.max,
         record.report_id,
@@ -815,7 +815,9 @@ def records(request):
     anomaly_filter = request.GET.get('anomaly', '')
     shift_filter = request.GET.get('shift', '')
     sort_filter = request.GET.get('sort', 'date')
-    if sort_filter not in ('date', 'board'):
+    if sort_filter == 'board':
+        sort_filter = 'board_asc'
+    if sort_filter not in ('date', 'board_asc', 'board_desc'):
         sort_filter = 'date'
 
     # Default to last 30 days when neither date filter is set (first load without params)
@@ -854,8 +856,13 @@ def records(request):
     total_count = qs.count()
     anomaly_count = qs.filter(has_anomaly=True).count()
 
-    if sort_filter == 'board':
-        ordered = sorted(qs, key=_board_number_sort_key)
+    if sort_filter in ('board_asc', 'board_desc'):
+        ordered = sorted(
+            qs,
+            key=lambda record: _board_number_sort_key(
+                record, descending=sort_filter == 'board_desc'
+            ),
+        )
     else:
         ordered = qs.order_by(
             'record_date', 'name', 'report_id', 'shift', 'row_number', 'pk'
