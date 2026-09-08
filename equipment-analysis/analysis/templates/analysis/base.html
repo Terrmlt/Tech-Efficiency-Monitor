@@ -70,13 +70,25 @@
                 </li>
                 {% endif %}
                 {% if user_is_staff %}
-                <li class="nav-item">
-                    <a class="nav-link {% if request.resolver_match.url_name == 'sections' %}active{% endif %}"
-                       href="{% url 'sections' %}"><i class="bi bi-geo-alt me-1"></i>Участки</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if request.resolver_match.url_name|slice:':5' == 'user_' or request.resolver_match.url_name == 'users_list' %}active{% endif %}"
-                       href="{% url 'users_list' %}"><i class="bi bi-people me-1"></i>Пользователи</a>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle {% if request.resolver_match.url_name == 'sections' or request.resolver_match.url_name|slice:':8' == 'section_' or request.resolver_match.url_name == 'users_list' or request.resolver_match.url_name|slice:':5' == 'user_' %}active{% endif %}"
+                       href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-gear me-1"></i>Администрирование
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li>
+                            <a class="dropdown-item {% if request.resolver_match.url_name == 'users_list' or request.resolver_match.url_name|slice:':5' == 'user_' %}active{% endif %}"
+                               href="{% url 'users_list' %}">
+                                <i class="bi bi-people me-2"></i>Пользователи
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item {% if request.resolver_match.url_name == 'sections' or request.resolver_match.url_name|slice:':8' == 'section_' %}active{% endif %}"
+                               href="{% url 'sections' %}">
+                                <i class="bi bi-geo-alt me-2"></i>Участки
+                            </a>
+                        </li>
+                    </ul>
                 </li>
                 {% endif %}
             </ul>
