@@ -627,6 +627,29 @@ def save_record_section(request, pk):
 
 # ─── Unified records view ─────────────────────────────────────────────────────
 
+_BOARD_NUMBER_RE = re.compile(r'№\s*[-:]?\s*(\d+)', re.IGNORECASE)
+
+
+def _extract_board_number(vehicle_name):
+    """Return the first numeric board number following №, or None."""
+    match = _BOARD_NUMBER_RE.search(vehicle_name or '')
+    return int(match.group(1)) if match else None
+
+
+def _board_number_sort_key(record):
+    board_number = _extract_board_number(record.name)
+    return (
+        board_number is None,
+        board_number if board_number is not None else 0,
+        (record.name or '').casefold(),
+        record.record_date or datetime.date.max,
+        record.report_id,
+        record.shift if record.shift else 99,
+        record.row_number,
+        record.pk,
+    )
+
+
 def _build_daily_view_records(records):
     """
     Like _build_daily_view but works across multiple reports.
@@ -641,6 +664,7 @@ def _build_daily_view_records(records):
     report_ids = set()
     rec_list = list(records)
     for rec in rec_list:
+        rec.board_number = _extract_board_number(rec.name)
         report_ids.add(rec.report_id)
 
     # Load per-day per-shift norms for dump trucks: (report_id, vehicle_name, shift, date)
@@ -659,12 +683,14 @@ def _build_daily_view_records(records):
         groups[key].append(rec)
 
     rows = []
+    previous_name = None
     for key in order:
         name, date, report_id = key
         recs = sorted(groups[key], key=lambda r: r.shift if r.shift else 99)
         report = recs[0].report
+        is_equipment_start = name != previous_name
 
-        for rec in recs:
+        for rec_index, rec in enumerate(recs):
             ov = 0
             if rec.group in ('Бульдозеры', 'Погрузчики') and report.bulldozer_norm_sec > 0:
                 ov = (rec.engine_idle_sec or 0) - report.bulldozer_norm_sec
@@ -675,7 +701,12 @@ def _build_daily_view_records(records):
                 vn_sec = dt_norms.get((report_id, rec.name, rec.shift, rec.date))
                 if vn_sec:
                     ov = (rec.engine_no_move_sec or 0) - vn_sec
-            rows.append({'type': 'record', 'obj': rec, 'over_str': secs_to_hhmmss(ov) if ov > 0 else ''})
+            rows.append({
+                'type': 'record',
+                'obj': rec,
+                'over_str': secs_to_hhmmss(ov) if ov > 0 else '',
+                'equipment_block_start': is_equipment_start and rec_index == 0,
+            })
 
         if len(recs) > 1:
             n = len(recs)
@@ -739,6 +770,7 @@ def _build_daily_view_records(records):
             rows.append({
                 'type':                   'daily_total',
                 'name':                   name,
+                'board_number':           _extract_board_number(name),
                 'date':                   date,
                 'record_date':            recs[0].record_date,
                 'group':                  group,
@@ -764,6 +796,7 @@ def _build_daily_view_records(records):
                 'is_excavator':         group == 'Экскаваторы',
                 'is_dumptruck':         group == 'Самосвалы',
             })
+        previous_name = name
 
     return rows
 
@@ -781,6 +814,9 @@ def records(request):
     group_filter = request.GET.get('group', '')
     anomaly_filter = request.GET.get('anomaly', '')
     shift_filter = request.GET.get('shift', '')
+    sort_filter = request.GET.get('sort', 'date')
+    if sort_filter not in ('date', 'board'):
+        sort_filter = 'date'
 
     # Default to last 30 days when neither date filter is set (first load without params)
     if not date_from and not date_to:
@@ -818,7 +854,12 @@ def records(request):
     total_count = qs.count()
     anomaly_count = qs.filter(has_anomaly=True).count()
 
-    ordered = qs.order_by('record_date', 'name', 'report_id', 'shift', 'row_number')
+    if sort_filter == 'board':
+        ordered = sorted(qs, key=_board_number_sort_key)
+    else:
+        ordered = qs.order_by(
+            'record_date', 'name', 'report_id', 'shift', 'row_number', 'pk'
+        )
     daily_view_full = _build_daily_view_records(ordered)
 
     # ── Pagination ────────────────────────────────────────────────────────────
@@ -842,6 +883,7 @@ def records(request):
     if group_filter:   filter_params['group'] = group_filter
     if anomaly_filter: filter_params['anomaly'] = anomaly_filter
     if shift_filter:   filter_params['shift'] = shift_filter
+    if sort_filter:    filter_params['sort'] = sort_filter
     filter_qs = urlencode(filter_params)
 
     sections = Section.objects.all()
@@ -861,6 +903,7 @@ def records(request):
         'group_filter':   group_filter,
         'anomaly_filter': anomaly_filter,
         'shift_filter':   shift_filter,
+        'sort_filter':    sort_filter,
         'total_count':    total_count,
         'anomaly_count':  anomaly_count,
     }

@@ -2,7 +2,144 @@
 
 {% block title %}Все записи — Анализ техники{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* Records workbook: a calm, high-density surface for long review sessions. */
+    .records-page {
+        --records-ink: #243247;
+        --records-muted: #6f7c8f;
+        --records-line: #dbe3ec;
+        --records-line-strong: #b8c7d8;
+        --records-surface: #fbfcfe;
+        --records-header: #edf2f7;
+        --records-accent: #245b8f;
+        --records-sticky-shadow: 8px 0 14px -14px rgba(27, 47, 70, .9);
+        color: var(--records-ink);
+    }
+    .records-page .records-toolbar {
+        border-left: 4px solid var(--records-accent);
+        padding-left: .85rem;
+    }
+    .records-page .records-toolbar h4 { letter-spacing: -.02em; }
+    .records-page .records-filters {
+        background: #f8fafc;
+        border: 1px solid var(--records-line);
+        box-shadow: 0 2px 7px rgba(35, 53, 73, .05);
+    }
+    .records-page .records-legend {
+        background: #f1f6fa;
+        border: 1px solid #d9e5ef;
+    }
+    .records-page .records-shell {
+        border: 1px solid var(--records-line);
+        border-radius: 10px;
+        background: var(--records-surface);
+        box-shadow: 0 3px 12px rgba(35, 53, 73, .07);
+    }
+    .records-page .records-scroll {
+        max-height: min(72vh, 860px);
+        overflow: auto;
+        scrollbar-color: #b4c3d2 #eef2f6;
+    }
+    .records-page .records-table {
+        min-width: 1510px;
+        border-collapse: separate;
+        border-spacing: 0;
+        color: var(--records-ink);
+    }
+    .records-page .records-table th {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        height: 48px;
+        background: var(--records-header);
+        color: #526275;
+        border-bottom: 2px solid var(--records-line-strong);
+        border-right: 1px solid #e1e7ee;
+        vertical-align: middle;
+        letter-spacing: .025em;
+        box-shadow: 0 2px 4px rgba(36, 50, 71, .08);
+    }
+    .records-page .records-table td {
+        border-right: 1px solid #e5ebf1;
+        border-bottom: 1px solid #e4eaf0;
+        line-height: 1.25;
+    }
+    .records-page .records-table tbody tr:hover td { background-color: #f3f7fb; }
+    .records-page .records-table .identity-col {
+        position: sticky;
+        left: 0;
+        z-index: 3;
+        width: 44px;
+        min-width: 44px;
+        background: var(--records-surface);
+        box-shadow: var(--records-sticky-shadow);
+    }
+    .records-page .records-table .vehicle-col {
+        position: sticky;
+        left: 44px;
+        z-index: 3;
+        width: 172px;
+        min-width: 172px;
+        background: var(--records-surface);
+        box-shadow: var(--records-sticky-shadow);
+    }
+    .records-page .records-table thead .identity-col,
+    .records-page .records-table thead .vehicle-col {
+        z-index: 7;
+        background: var(--records-header);
+    }
+    .records-page .records-table tbody tr:hover .identity-col,
+    .records-page .records-table tbody tr:hover .vehicle-col { background-color: #f3f7fb; }
+    .records-page .records-table .equipment-block-start td {
+        border-top: 3px solid var(--records-line-strong);
+    }
+    .records-page .records-table .equipment-block-start .identity-col,
+    .records-page .records-table .equipment-block-start .vehicle-col {
+        border-top: 3px solid var(--records-line-strong);
+    }
+    .records-page .records-table .daily-total-row td { border-top-width: 2px; }
+    .records-page .records-table .daily-total-row .identity-col,
+    .records-page .records-table .daily-total-row .vehicle-col {
+        background: #e8f4fd !important;
+    }
+    .records-page .comment-cell { min-width: 245px; width: 245px; }
+    .records-page .comment-input {
+        display: block;
+        width: 100%;
+        min-height: 32px;
+        padding: .34rem .5rem;
+        border: 1px solid #c9d4df;
+        border-radius: 5px;
+        background: #fff;
+        color: var(--records-ink);
+        font-size: .8rem;
+        line-height: 1.35;
+        transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
+    }
+    .records-page .comment-input::placeholder { color: #9aa7b6; }
+    .records-page .comment-input:focus {
+        outline: 0;
+        border-color: #6b9bc4;
+        box-shadow: 0 0 0 3px rgba(36, 91, 143, .12);
+    }
+    .records-page .comment-input.comment-saving { background: #fffaf0; }
+    .records-page .comment-input.comment-saved { background: #f1fbf5; }
+    .records-page .comment-input.comment-error { background: #fff5f5; }
+    .records-page .group-badge { font-weight: 600; letter-spacing: .01em; }
+    .records-page .metrics-summary { color: var(--records-muted); }
+    @media (max-width: 767.98px) {
+        .records-page .records-toolbar { align-items: flex-start !important; gap: .75rem; }
+        .records-page .records-toolbar .btn { font-size: .75rem; }
+        .records-page .records-scroll { max-height: 68vh; }
+        .records-page .records-table .vehicle-col { width: 150px; min-width: 150px; }
+        .records-page .comment-cell { min-width: 210px; width: 210px; }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
+<div class="records-page">
 <datalist id="comment-presets">
   <option value="Отсутствие экипажа">
   <option value="Ремонт">
@@ -11,7 +148,7 @@
   <option value="ГВР">
   <option value="Погодные условия">
 </datalist>
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="records-toolbar d-flex justify-content-between align-items-center mb-4">
     <h4 class="mb-0 fw-bold"><i class="bi bi-table me-2"></i>Все записи</h4>
     <div class="d-flex gap-2">
         {% if user.is_staff %}
@@ -19,7 +156,7 @@
             <i class="bi bi-geo-alt me-1"></i>Сменить участок
         </button>
         {% endif %}
-        <a href="{% url 'export_records_excel' %}?date_from={{ date_from }}&date_to={{ date_to }}&section={{ section_id }}&group={{ group_filter }}&anomaly={{ anomaly_filter }}&shift={{ shift_filter }}"
+        <a href="{% url 'export_records_excel' %}?date_from={{ date_from }}&date_to={{ date_to }}&section={{ section_id }}&group={{ group_filter }}&anomaly={{ anomaly_filter }}&shift={{ shift_filter }}&sort={{ sort_filter }}"
            class="btn btn-success">
             <i class="bi bi-file-earmark-excel me-1"></i>Скачать Excel
         </a>
@@ -80,7 +217,7 @@
 {% endif %}
 
 <!-- Фильтры -->
-<div class="card mb-4">
+<div class="card records-filters mb-4">
     <div class="card-body">
         <form method="get" class="row g-2 align-items-end">
             <div class="col-md-2">
@@ -109,7 +246,7 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-2">
+            <div class="col-md-1">
                 <label class="form-label small fw-semibold mb-1">Смена</label>
                 <select name="shift" class="form-select form-select-sm">
                     <option value="">Все смены</option>
@@ -125,6 +262,13 @@
                     <option value="no" {% if anomaly_filter == 'no' %}selected{% endif %}>Нет</option>
                 </select>
             </div>
+            <div class="col-md-1">
+                <label class="form-label small fw-semibold mb-1">Сортировка</label>
+                <select name="sort" class="form-select form-select-sm" title="Порядок техники">
+                    <option value="date" {% if sort_filter == 'date' %}selected{% endif %}>По дате</option>
+                    <option value="board" {% if sort_filter == 'board' %}selected{% endif %}>По борт. №</option>
+                </select>
+            </div>
             <div class="col-md-1 d-flex gap-1">
                 <button type="submit" class="btn btn-sm btn-primary">
                     <i class="bi bi-funnel"></i>
@@ -138,7 +282,7 @@
 </div>
 
 <!-- Легенда -->
-<div class="card mb-3">
+<div class="card records-legend mb-3">
     <div class="card-body py-2">
         <div class="small text-muted d-flex flex-wrap gap-3">
             <span><i class="bi bi-table me-1"></i>Строки <strong>«День итого»</strong> — сумма смен 1+2 за день.</span>
@@ -146,8 +290,8 @@
     </div>
 </div>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div class="small text-muted">
+<div class="d-flex justify-content-between align-items-center mb-3 metrics-summary">
+    <div class="small">
         Записей: <strong>{{ total_count }}</strong>
         {% if anomaly_count > 0 %}
         · <span class="text-warning fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i>{{ anomaly_count }} аномалий</span>
@@ -158,14 +302,14 @@
     </div>
 </div>
 
-<div class="card">
+<div class="card records-shell">
     <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-hover mb-0">
+        <div class="table-responsive records-scroll">
+            <table class="table table-hover mb-0 records-table">
                 <thead>
                     <tr>
-                        <th class="ps-3">№</th>
-                        <th>Техника</th>
+                        <th class="ps-3 identity-col">№</th>
+                        <th class="vehicle-col">Техника</th>
                         <th>Группа</th>
                         <th>Дата</th>
                         <th>Смена</th>
@@ -186,9 +330,9 @@
 
                     {% if row.type == 'record' %}
                     {% with rec=row.obj %}
-                    <tr class="{% if rec.has_anomaly %}anomaly-row{% endif %}">
-                        <td class="ps-3 text-muted">{{ rec.row_number }}</td>
-                        <td><div class="fw-semibold">{{ rec.name }}</div></td>
+                    <tr class="{% if rec.has_anomaly %}anomaly-row{% endif %}{% if row.equipment_block_start %} equipment-block-start{% endif %}">
+                        <td class="ps-3 text-muted identity-col">{{ rec.row_number }}</td>
+                        <td class="vehicle-col"><div class="fw-semibold">{{ rec.name }}</div>{% if rec.board_number %}<div class="small text-muted">Борт № {{ rec.board_number }}</div>{% endif %}</td>
                         <td>
                             {% if rec.group == 'Бульдозеры' %}
                             <span class="badge bg-warning text-dark group-badge">{{ rec.group }}</span>
@@ -275,9 +419,10 @@
                             {% endwith %}
                         </td>
                         <td class="comment-cell">
-                            <input type="text" class="comment-input" list="comment-presets"
+                             <input type="text" class="comment-input" list="comment-presets"
                                    data-rec-id="{{ rec.pk }}"
                                    value="{{ rec.comment }}"
+                                    aria-label="Комментарий к записи {{ rec.name }}"
                                    placeholder="Комментарий…">
                         </td>
                     </tr>
@@ -285,9 +430,9 @@
 
                     {% else %}
                     {# ── Daily total row ── #}
-                    <tr class="daily-total-row{% if row.has_anomaly %} anomaly-row{% endif %}">
-                        <td class="ps-3 text-muted">—</td>
-                        <td><div class="fw-bold text-primary small">{{ row.name }}</div></td>
+                    <tr class="daily-total-row{% if row.has_anomaly %} anomaly-row{% endif %}{% if row.equipment_block_start %} equipment-block-start{% endif %}">
+                        <td class="ps-3 text-muted identity-col">—</td>
+                        <td class="vehicle-col"><div class="fw-bold text-primary small">{{ row.name }}</div>{% if row.board_number %}<div class="small text-muted">Борт № {{ row.board_number }}</div>{% endif %}</td>
                         <td>
                             {% if row.group == 'Бульдозеры' %}
                             <span class="badge bg-warning text-dark group-badge">{{ row.group }}</span>
@@ -397,6 +542,7 @@
     </ul>
 </nav>
 {% endif %}
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -503,6 +649,8 @@ document.querySelectorAll('.comment-input').forEach(function(input) {
         var recId = this.dataset.recId;
         var comment = this.value;
         var el = this;
+        el.classList.remove('comment-saved', 'comment-error');
+        el.classList.add('comment-saving');
         timer = setTimeout(function() {
             fetch('/records/' + recId + '/comment/', {
                 method: 'POST',
@@ -512,8 +660,15 @@ document.querySelectorAll('.comment-input').forEach(function(input) {
                 },
                 body: JSON.stringify({comment: comment})
             }).then(function(r) {
-                el.style.borderColor = r.ok ? '#198754' : '#dc3545';
-                setTimeout(function() { el.style.borderColor = ''; }, 1500);
+                el.classList.remove('comment-saving');
+                el.classList.add(r.ok ? 'comment-saved' : 'comment-error');
+                setTimeout(function() {
+                    el.classList.remove('comment-saved', 'comment-error');
+                }, 1500);
+            }).catch(function() {
+                el.classList.remove('comment-saving');
+                el.classList.add('comment-error');
+                setTimeout(function() { el.classList.remove('comment-error'); }, 1500);
             });
         }, 600);
     });
