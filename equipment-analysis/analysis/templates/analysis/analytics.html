@@ -21,13 +21,25 @@
                     <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm">
                 </div>
                 <div class="col-md-2">
-                    <label class="form-label small fw-semibold mb-1">Участок</label>
-                    <select name="section" class="form-select form-select-sm">
-                        <option value="">Все участки</option>
-                        {% for s in sections %}
-                        <option value="{{ s.pk }}" {% if section_id == s.pk|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
-                        {% endfor %}
-                    </select>
+                    <label class="form-label small fw-semibold mb-1">Участки</label>
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start"
+                                type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+                            {% if section_ids %}Выбрано: {{ section_ids|length }}{% else %}Все участки{% endif %}
+                        </button>
+                        <div class="dropdown-menu p-3 w-100" style="min-width: 230px;">
+                            {% for s in sections %}
+                            <div class="form-check mb-1">
+                                <input class="form-check-input" type="checkbox" name="section"
+                                       value="{{ s.pk }}" id="section_{{ s.pk }}"
+                                       {% if s.pk|stringformat:"s" in section_ids %}checked{% endif %}>
+                                <label class="form-check-label small" for="section_{{ s.pk }}">{{ s.name }}</label>
+                            </div>
+                            {% empty %}
+                            <span class="small text-muted">Нет участков</span>
+                            {% endfor %}
+                        </div>
+                    </div>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label small fw-semibold mb-1">Группы техники</label>
@@ -52,16 +64,30 @@
                 </div>
             </div>
             <div class="row g-2 align-items-end border-top pt-2">
-                <div class="col-md-5">
+                <div class="col-md-7">
                     <label class="form-label small fw-semibold mb-1">Поиск техники</label>
-                    <div class="input-group input-group-sm">
+                    <div class="input-group input-group-sm position-relative">
                         <span class="input-group-text"><i class="bi bi-search"></i></span>
-                        <input type="search" name="vehicle_search" value="{{ vehicle_search }}"
+                        <input type="search" id="vehicleSearchInput" name="vehicle_search" value="{{ vehicle_search }}"
                                class="form-control"
-                               placeholder="Например: Volvo или 352"
+                               placeholder="Например: №305"
+                               autocomplete="off"
                                aria-label="Поиск по наименованию или бортовому номеру">
+                        <div id="vehicleSuggestions"
+                             class="list-group position-absolute top-100 start-0 end-0 shadow-sm d-none"
+                             style="z-index: 1050; margin-top: 2px;"></div>
                     </div>
-                    <div class="form-text">Поиск по любой части наименования или номера после знака №</div>
+                    <div id="selectedVehicles" class="d-flex flex-wrap gap-1 mt-2">
+                        {% for vehicle_name in vehicle_names %}
+                        <span class="badge rounded-pill text-bg-primary d-inline-flex align-items-center gap-1">
+                            <span>{{ vehicle_name }}</span>
+                            <button type="button" class="btn-close btn-close-white vehicle-remove"
+                                    style="font-size:.55rem" aria-label="Удалить {{ vehicle_name }}"></button>
+                            <input type="hidden" name="vehicle_name" value="{{ vehicle_name }}">
+                        </span>
+                        {% endfor %}
+                    </div>
+                    <div class="form-text">Введите часть названия или номера и выберите одну или несколько машин</div>
                 </div>
                 <div class="col-md-2">
                     <label class="form-label small fw-semibold mb-1">Смена</label>
@@ -114,9 +140,10 @@
                 <input type="hidden" name="dataset" value="fuel">
                 <input type="hidden" name="date_from" value="{{ date_from }}">
                 <input type="hidden" name="date_to" value="{{ date_to }}">
-                <input type="hidden" name="section" value="{{ section_id }}">
+                {% for selected_section in section_ids %}<input type="hidden" name="section" value="{{ selected_section }}">{% endfor %}
                 <input type="hidden" name="shift" value="{{ shift_filter }}">
                 <input type="hidden" name="vehicle_search" value="{{ vehicle_search }}">
+                {% for vehicle_name in vehicle_names %}<input type="hidden" name="vehicle_name" value="{{ vehicle_name }}">{% endfor %}
                 {% for g in group_filters %}<input type="hidden" name="group" value="{{ g }}">{% endfor %}
                 <div class="small fw-semibold mb-2">Тип отчёта</div>
                 <div class="d-flex gap-3 mb-3">
@@ -209,9 +236,10 @@
                 <input type="hidden" name="dataset" value="mileage">
                 <input type="hidden" name="date_from" value="{{ date_from }}">
                 <input type="hidden" name="date_to" value="{{ date_to }}">
-                <input type="hidden" name="section" value="{{ section_id }}">
+                {% for selected_section in section_ids %}<input type="hidden" name="section" value="{{ selected_section }}">{% endfor %}
                 <input type="hidden" name="shift" value="{{ shift_filter }}">
                 <input type="hidden" name="vehicle_search" value="{{ vehicle_search }}">
+                {% for vehicle_name in vehicle_names %}<input type="hidden" name="vehicle_name" value="{{ vehicle_name }}">{% endfor %}
                 {% for g in group_filters %}<input type="hidden" name="group" value="{{ g }}">{% endfor %}
                 <div class="small fw-semibold mb-2">Тип отчёта</div>
                 <div class="d-flex gap-3 mb-3">
@@ -541,7 +569,22 @@
 
 {% if vehicle_stats %}
 <!-- ══ ДЕТАЛЬНАЯ ТАБЛИЦА ПО ЕДИНИЦАМ ТЕХНИКИ ══ -->
-<h5 class="fw-bold mb-3 mt-2">По единицам техники</h5>
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 mt-2">
+    <h5 class="fw-bold mb-0">По единицам техники</h5>
+    <form method="get" action="{% url 'export_analytics_excel' %}">
+        <input type="hidden" name="dataset" value="general">
+        <input type="hidden" name="date_from" value="{{ date_from }}">
+        <input type="hidden" name="date_to" value="{{ date_to }}">
+        <input type="hidden" name="shift" value="{{ shift_filter }}">
+        <input type="hidden" name="vehicle_search" value="{{ vehicle_search }}">
+        {% for selected_section in section_ids %}<input type="hidden" name="section" value="{{ selected_section }}">{% endfor %}
+        {% for group in group_filters %}<input type="hidden" name="group" value="{{ group }}">{% endfor %}
+        {% for vehicle_name in vehicle_names %}<input type="hidden" name="vehicle_name" value="{{ vehicle_name }}">{% endfor %}
+        <button type="submit" class="btn btn-sm btn-success">
+            <i class="bi bi-file-earmark-excel me-1"></i>Выгрузить в Excel
+        </button>
+    </form>
+</div>
 <div class="card mb-4">
     <div class="card-body p-0">
         <div class="table-responsive">
@@ -550,9 +593,9 @@
                     <tr>
                         <th class="ps-3">Единица техники</th>
                         <th class="text-end">Часов работы</th>
-                        <th class="text-end">Расход топлива, л</th>
-                        <th class="text-center">Расход к норме, %</th>
                         <th class="text-center">Выход техники, %</th>
+                        <th class="text-center">Расход к норме, %</th>
+                        <th class="text-end">Расход топлива, л</th>
                         <th class="text-center">Эффективность, %</th>
                     </tr>
                 </thead>
@@ -566,17 +609,17 @@
                     <tr>
                         <td class="ps-4 small">{{ v.name }}</td>
                         <td class="text-end small">{{ v.total_hours }} ч</td>
-                        <td class="text-end small">{{ v.total_fuel }} л</td>
-                        <td class="text-center small">
-                            {% if v.avg_fuel_eff is not None %}
-                            <span class="{% if v.avg_fuel_eff <= 100 %}efficiency-good{% elif v.avg_fuel_eff <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ v.avg_fuel_eff }}%</span>
-                            {% else %}<span class="text-muted">—</span>{% endif %}
-                        </td>
                         <td class="text-center small">
                             {% if v.avg_output is not None %}
                             <span class="{% if v.avg_output >= 80 %}output-good{% else %}output-bad{% endif %}">{{ v.avg_output }}%</span>
                             {% else %}<span class="text-muted">—</span>{% endif %}
                         </td>
+                        <td class="text-center small">
+                            {% if v.avg_fuel_eff is not None %}
+                            <span class="{% if v.avg_fuel_eff <= 100 %}efficiency-good{% elif v.avg_fuel_eff <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ v.avg_fuel_eff }}%</span>
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-end small">{{ v.total_fuel }} л</td>
                         <td class="text-center small">
                             {% if v.avg_type_eff is not None %}
                             <span class="{% if v.avg_type_eff >= 90 %}efficiency-good{% elif v.avg_type_eff >= 70 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ v.avg_type_eff }}%</span>
@@ -622,6 +665,80 @@
 {% endblock %}
 
 {% block extra_js %}
+{{ vehicle_suggestions|json_script:"vehicle-suggestions-data" }}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const input = document.getElementById('vehicleSearchInput');
+    const suggestionsBox = document.getElementById('vehicleSuggestions');
+    const selectedBox = document.getElementById('selectedVehicles');
+    const dataElement = document.getElementById('vehicle-suggestions-data');
+    if (!input || !suggestionsBox || !selectedBox || !dataElement) return;
+
+    const allVehicles = JSON.parse(dataElement.textContent);
+
+    function selectedNames() {
+        return Array.from(selectedBox.querySelectorAll('input[name="vehicle_name"]'))
+            .map(element => element.value);
+    }
+
+    function addVehicle(name) {
+        if (selectedNames().includes(name)) return;
+        const badge = document.createElement('span');
+        badge.className = 'badge rounded-pill text-bg-primary d-inline-flex align-items-center gap-1';
+
+        const label = document.createElement('span');
+        label.textContent = name;
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'btn-close btn-close-white vehicle-remove';
+        remove.style.fontSize = '.55rem';
+        remove.setAttribute('aria-label', `Удалить ${name}`);
+        const hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.name = 'vehicle_name';
+        hidden.value = name;
+
+        badge.append(label, remove, hidden);
+        selectedBox.appendChild(badge);
+        input.value = '';
+        suggestionsBox.classList.add('d-none');
+    }
+
+    function renderSuggestions() {
+        const query = input.value.trim().toLocaleLowerCase('ru');
+        suggestionsBox.replaceChildren();
+        if (!query) {
+            suggestionsBox.classList.add('d-none');
+            return;
+        }
+        const selected = selectedNames();
+        const matches = allVehicles
+            .filter(name => name.toLocaleLowerCase('ru').includes(query) && !selected.includes(name))
+            .slice(0, 8);
+        for (const name of matches) {
+            const option = document.createElement('button');
+            option.type = 'button';
+            option.className = 'list-group-item list-group-item-action py-2';
+            option.textContent = name;
+            option.addEventListener('click', () => addVehicle(name));
+            suggestionsBox.appendChild(option);
+        }
+        suggestionsBox.classList.toggle('d-none', matches.length === 0);
+    }
+
+    input.addEventListener('input', renderSuggestions);
+    input.addEventListener('focus', renderSuggestions);
+    selectedBox.addEventListener('click', event => {
+        const remove = event.target.closest('.vehicle-remove');
+        if (remove) remove.closest('.badge').remove();
+    });
+    document.addEventListener('click', event => {
+        if (!event.target.closest('#vehicleSearchInput') && !event.target.closest('#vehicleSuggestions')) {
+            suggestionsBox.classList.add('d-none');
+        }
+    });
+});
+</script>
 {% if analytics_page == 'general' and has_trend %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>

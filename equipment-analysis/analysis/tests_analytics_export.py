@@ -87,6 +87,113 @@ class AnalyticsExportTests(TestCase):
 
         self.assertEqual(response.context['total_count'], 1)
 
+    def test_vehicle_suggestions_include_full_name_for_board_number(self):
+        VehicleRecord.objects.create(
+            report=self.report,
+            row_number=2,
+            name='CAT 730 №305',
+            group='Самосвалы',
+            date='08.09',
+            record_date=datetime.date.today(),
+            shift=1,
+            engine_time_sec=3600,
+            fuel_norm=30,
+        )
+
+        response = self.client.get('/analytics/')
+
+        self.assertIn('CAT 730 №305', response.context['vehicle_suggestions'])
+        self.assertContains(response, 'vehicle-suggestions-data')
+
+    def test_multiple_sections_are_combined(self):
+        second_section = Section.objects.create(name='Отвал')
+        second_report = Report.objects.create(name='Второй отчёт', section=second_section)
+        VehicleRecord.objects.create(
+            report=second_report,
+            row_number=1,
+            name='CAT 730 №305',
+            group='Самосвалы',
+            date='08.09',
+            record_date=datetime.date.today(),
+            shift=1,
+            engine_time_sec=3600,
+            fuel_norm=30,
+        )
+        excluded_section = Section.objects.create(name='Исключённый')
+        excluded_report = Report.objects.create(name='Третий отчёт', section=excluded_section)
+        VehicleRecord.objects.create(
+            report=excluded_report,
+            row_number=1,
+            name='БелАЗ №999',
+            group='Самосвалы',
+            date='08.09',
+            record_date=datetime.date.today(),
+            shift=1,
+            engine_time_sec=3600,
+            fuel_norm=30,
+        )
+
+        response = self.client.get('/analytics/', {
+            'section': [str(self.section.pk), str(second_section.pk)],
+        })
+
+        self.assertEqual(response.context['total_count'], 2)
+        self.assertEqual(
+            response.context['section_ids'],
+            [str(self.section.pk), str(second_section.pk)],
+        )
+
+    def test_multiple_exact_vehicles_are_combined(self):
+        for row_number, name in enumerate(('CAT 730 №305', 'БелАЗ №999'), 2):
+            VehicleRecord.objects.create(
+                report=self.report,
+                row_number=row_number,
+                name=name,
+                group='Самосвалы',
+                date='08.09',
+                record_date=datetime.date.today(),
+                shift=1,
+                engine_time_sec=3600,
+                fuel_norm=30,
+            )
+
+        response = self.client.get('/analytics/', {
+            'vehicle_name': ['Volvo A40F №352', 'CAT 730 №305'],
+        })
+
+        self.assertEqual(response.context['total_count'], 2)
+        self.assertEqual(
+            response.context['vehicle_names'],
+            ['Volvo A40F №352', 'CAT 730 №305'],
+        )
+
+    def test_group_count_is_unique_vehicle_count(self):
+        VehicleRecord.objects.create(
+            report=self.report,
+            row_number=2,
+            name=self.record.name,
+            group=self.record.group,
+            date=self.record.date,
+            record_date=self.record.record_date,
+            shift=2,
+            engine_time_sec=3600,
+            fuel_norm=30,
+        )
+
+        response = self.client.get('/analytics/')
+
+        self.assertEqual(response.context['group_stats'][0]['count'], 1)
+
+    def test_general_table_has_requested_column_order(self):
+        response = self.client.get('/analytics/')
+        content = response.content.decode()
+
+        output_position = content.index('Выход техники, %')
+        fuel_efficiency_position = content.index('Расход к норме, %')
+        fuel_position = content.index('Расход топлива, л')
+        self.assertLess(output_position, fuel_efficiency_position)
+        self.assertLess(fuel_efficiency_position, fuel_position)
+
     def test_export_uses_allowlisted_selected_columns(self):
         response = self.client.get('/analytics/export/', {
             'dataset': 'fuel',
@@ -184,6 +291,59 @@ class AnalyticsExportTests(TestCase):
         value = workbook.active.cell(row=2, column=1).value
 
         self.assertEqual(value, '\'=HYPERLINK(\"https://example.test\")')
+
+    def test_general_export_matches_aggregated_vehicle_table_and_filters(self):
+        VehicleRecord.objects.create(
+            report=self.report,
+            row_number=2,
+            name=self.record.name,
+            group=self.record.group,
+            date=self.record.date,
+            record_date=self.record.record_date,
+            shift=2,
+            engine_time_sec=7200,
+            fuel_actual=80,
+            fuel_norm=30,
+            fuel_efficiency=1.2,
+            equipment_output=0.9,
+            type_efficiency=2,
+        )
+
+        response = self.client.get('/analytics/export/', {
+            'dataset': 'general',
+            'vehicle_name': [self.record.name],
+        })
+        workbook = openpyxl.load_workbook(io.BytesIO(response.content))
+        rows = list(workbook.active.iter_rows(values_only=True))
+
+        self.assertEqual(rows[0], (
+            'Группа техники',
+            'Единица техники',
+            'Часов работы',
+            'Выход техники, %',
+            'Расход к норме, %',
+            'Расход топлива, л',
+            'Эффективность, %',
+        ))
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[1][1], self.record.name)
+        self.assertEqual(rows[1][2], 3)
+        self.assertEqual(rows[1][3], 90)
+        self.assertEqual(rows[1][4], 100)
+        self.assertEqual(rows[1][5], 200)
+        self.assertEqual(rows[1][6], 50)
+
+    def test_general_export_escapes_formula_leading_vehicle(self):
+        self.record.name = '=HYPERLINK(\"https://example.test\")'
+        self.record.save(update_fields=['name'])
+
+        response = self.client.get('/analytics/export/', {'dataset': 'general'})
+        workbook = openpyxl.load_workbook(io.BytesIO(response.content), data_only=False)
+
+        self.assertEqual(
+            workbook.active.cell(row=2, column=2).value,
+            '\'=HYPERLINK(\"https://example.test\")',
+        )
 
     def test_summary_export_combines_shifts_per_vehicle_and_day(self):
         VehicleRecord.objects.create(
