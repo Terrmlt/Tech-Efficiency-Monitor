@@ -1979,6 +1979,17 @@ def user_set_section(request, pk):
 
 # ─── Export Excel ─────────────────────────────────────────────────────────────
 
+def _apply_excel_number_formats(workbook):
+    """Keep cells numeric while displaying them with grouped Russian-style values."""
+    for sheet in workbook.worksheets:
+        for row in sheet.iter_rows():
+            for cell in row:
+                value = cell.value
+                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                    continue
+                cell.number_format = '# ##0' if float(value).is_integer() else '# ##0.00##########'
+
+
 @staff_required
 def export_excel(request, pk):
     import openpyxl
@@ -1991,6 +2002,7 @@ def export_excel(request, pk):
     summary = build_summary(all_records, report)
 
     wb = _build_excel_workbook(report, all_records, summary)
+    _apply_excel_number_formats(wb)
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -2086,6 +2098,7 @@ def _export_general_analytics_excel(vehicle_stats, date_from, date_to):
     safe_period = re.sub(r'[^\w\-]', '_', period)[:35]
     filename = f'analytics_vehicles_{safe_period}.xlsx'
     buffer = io.BytesIO()
+    _apply_excel_number_formats(workbook)
     workbook.save(buffer)
     buffer.seek(0)
     response = HttpResponse(
@@ -2148,6 +2161,7 @@ def _export_analytics_excel(records, dataset_key, requested_columns, date_from, 
     safe_period = re.sub(r'[^\w\-]', '_', period)[:35]
     filename = f'{dataset_key}_{export_mode}_{safe_period}.xlsx'
     buffer = io.BytesIO()
+    _apply_excel_number_formats(wb)
     wb.save(buffer)
     buffer.seek(0)
 
@@ -2585,6 +2599,7 @@ def export_records_excel(request):
         ws.column_dimensions[get_column_letter(i)].width = w
 
     buf = io.BytesIO()
+    _apply_excel_number_formats(wb)
     wb.save(buf)
     buf.seek(0)
 

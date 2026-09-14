@@ -118,13 +118,13 @@
             <div class="col-sm-4">
                 <div class="p-3 rounded bg-light h-100">
                     <div class="text-muted small">Расход топлива</div>
-                    <div class="fs-4 fw-bold text-primary">{{ total_fuel }} л</div>
+                    <div class="fs-4 fw-bold text-primary">{{ total_fuel|ru_number }} л</div>
                 </div>
             </div>
             <div class="col-sm-4">
                 <div class="p-3 rounded bg-light h-100">
                     <div class="text-muted small">Заправлено</div>
-                    <div class="fs-4 fw-bold">{% if total_refueling is not None %}{{ total_refueling }} л{% else %}—{% endif %}</div>
+                    <div class="fs-4 fw-bold">{% if total_refueling is not None %}{{ total_refueling|ru_number }} л{% else %}—{% endif %}</div>
                 </div>
             </div>
             <div class="col-sm-4">
@@ -185,10 +185,10 @@
                     <tr>
                         <td class="fw-semibold">{{ v.name }}</td>
                         <td><span class="badge bg-light text-dark border">{{ v.group }}</span></td>
-                        <td class="text-end">{{ v.total_hours }}</td>
-                        <td class="text-end">{{ v.total_fuel }}</td>
-                        <td class="text-center">{% if v.avg_fuel_eff is not None %}{{ v.avg_fuel_eff }}%{% else %}—{% endif %}</td>
-                        <td class="text-end">{% if v.total_refueling is not None %}{{ v.total_refueling }}{% else %}—{% endif %}</td>
+                        <td class="text-end">{{ v.total_hours|ru_number }}</td>
+                        <td class="text-end">{{ v.total_fuel|ru_number }}</td>
+                        <td class="text-center">{% if v.avg_fuel_eff is not None %}{{ v.avg_fuel_eff|ru_number }}%{% else %}—{% endif %}</td>
+                        <td class="text-end">{% if v.total_refueling is not None %}{{ v.total_refueling|ru_number }}{% else %}—{% endif %}</td>
                     </tr>
                     {% empty %}
                     <tr><td colspan="6" class="text-center text-muted py-4">Нет данных по топливу за выбранный период</td></tr>
@@ -214,19 +214,19 @@
             <div class="col-sm-4">
                 <div class="p-3 rounded bg-light h-100">
                     <div class="text-muted small">Общий пробег</div>
-                    <div class="fs-4 fw-bold text-success">{% if total_mileage is not None %}{{ total_mileage }} км{% else %}—{% endif %}</div>
+                    <div class="fs-4 fw-bold text-success">{% if total_mileage is not None %}{{ total_mileage|ru_number }} км{% else %}—{% endif %}</div>
                 </div>
             </div>
             <div class="col-sm-4">
                 <div class="p-3 rounded bg-light h-100">
                     <div class="text-muted small">Средний пробег записи</div>
-                    <div class="fs-4 fw-bold">{% if avg_mileage is not None %}{{ avg_mileage }} км{% else %}—{% endif %}</div>
+                    <div class="fs-4 fw-bold">{% if avg_mileage is not None %}{{ avg_mileage|ru_number }} км{% else %}—{% endif %}</div>
                 </div>
             </div>
             <div class="col-sm-4">
                 <div class="p-3 rounded bg-light h-100">
                     <div class="text-muted small">Записей с пробегом</div>
-                    <div class="fs-4 fw-bold">{{ mileage_entries }}</div>
+                    <div class="fs-4 fw-bold">{{ mileage_entries|ru_number }}</div>
                 </div>
             </div>
         </div>
@@ -276,9 +276,9 @@
                     <tr>
                         <td class="fw-semibold">{{ v.name }}</td>
                         <td><span class="badge bg-light text-dark border">{{ v.group }}</span></td>
-                        <td class="text-end">{{ v.entries }}</td>
-                        <td class="text-end">{{ v.total_mileage }}</td>
-                        <td class="text-end">{{ v.avg_mileage }}</td>
+                        <td class="text-end">{{ v.entries|ru_number }}</td>
+                        <td class="text-end">{{ v.total_mileage|ru_number }}</td>
+                        <td class="text-end">{{ v.avg_mileage|ru_number }}</td>
                     </tr>
                     {% empty %}
                     <tr><td colspan="5" class="text-center text-muted py-4">Нет данных по пробегу за выбранный период</td></tr>
@@ -296,7 +296,7 @@
     <div class="col-6 col-md-4">
         <div class="card text-center h-100">
             <div class="card-body py-3">
-                <div class="stat-value text-primary">{{ total_count }}</div>
+                <div class="stat-value text-primary">{{ total_count|ru_number }}</div>
                 <div class="stat-label">Всего записей</div>
             </div>
         </div>
@@ -304,7 +304,7 @@
     <div class="col-6 col-md-4">
         <div class="card text-center h-100">
             <div class="card-body py-3">
-                <div class="stat-value text-success">{{ total_hours }} ч</div>
+                <div class="stat-value text-success">{{ total_hours|ru_number }} ч</div>
                 <div class="stat-label">Часов работы</div>
             </div>
         </div>
@@ -312,7 +312,7 @@
     <div class="col-6 col-md-4">
         <div class="card text-center h-100">
             <div class="card-body py-3">
-                <div class="stat-value text-info">{{ total_fuel }} л</div>
+                <div class="stat-value text-info">{{ total_fuel|ru_number }} л</div>
                 <div class="stat-label">Расход топлива</div>
             </div>
         </div>
@@ -532,11 +532,11 @@
                 <div class="row g-2 small">
                     <div class="col-6">
                         <div class="text-muted">Часов работы</div>
-                        <div class="fw-semibold">{{ s.total_hours }} ч</div>
+                        <div class="fw-semibold">{{ s.total_hours|ru_number }} ч</div>
                     </div>
                     <div class="col-6">
                         <div class="text-muted">Расход топлива</div>
-                        <div class="fw-semibold">{{ s.total_fuel }} л</div>
+                        <div class="fw-semibold">{{ s.total_fuel|ru_number }} л</div>
                     </div>
                 </div>
                 <hr class="my-2">
@@ -608,7 +608,7 @@
                     {% for v in vg.list %}
                     <tr>
                         <td class="ps-4 small">{{ v.name }}</td>
-                        <td class="text-end small">{{ v.total_hours }} ч</td>
+                        <td class="text-end small">{{ v.total_hours|ru_number }} ч</td>
                         <td class="text-center small">
                             {% if v.avg_output is not None %}
                             <span class="{% if v.avg_output >= 80 %}output-good{% else %}output-bad{% endif %}">{{ v.avg_output }}%</span>
@@ -619,7 +619,7 @@
                             <span class="{% if v.avg_fuel_eff <= 100 %}efficiency-good{% elif v.avg_fuel_eff <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ v.avg_fuel_eff }}%</span>
                             {% else %}<span class="text-muted">—</span>{% endif %}
                         </td>
-                        <td class="text-end small">{{ v.total_fuel }} л</td>
+                        <td class="text-end small">{{ v.total_fuel|ru_number }} л</td>
                         <td class="text-center small">
                             {% if v.avg_type_eff is not None %}
                             <span class="{% if v.avg_type_eff >= 90 %}efficiency-good{% elif v.avg_type_eff >= 70 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ v.avg_type_eff }}%</span>
@@ -767,12 +767,12 @@ document.addEventListener('DOMContentLoaded', () => {
                           labels: { boxWidth: 12, padding: 10, font: { size: fontSize } } },
                 tooltip: { callbacks: { label: function(ctx) {
                     var v = ctx.parsed.y;
-                    return ctx.dataset.label + ': ' + (v !== null ? v + '%' : '—');
+                    return ctx.dataset.label + ': ' + (v !== null ? formatRuNumber(v) + '%' : '—');
                 }}}
             },
             scales: {
                 x: { ticks: { font: { size: fontSize } } },
-                y: { beginAtZero: false, ticks: { callback: function(v){ return v+'%'; }, font: { size: fontSize } } }
+                y: { beginAtZero: false, ticks: { callback: function(v){ return formatRuNumber(v)+'%'; }, font: { size: fontSize } } }
             }
         };
     }
@@ -783,7 +783,7 @@ document.addEventListener('DOMContentLoaded', () => {
             responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false } },
             scales: {
-                y: { beginAtZero: true, ticks: { callback: function(v){ return v+'%'; }, font: { size: fontSize } } },
+                y: { beginAtZero: true, ticks: { callback: function(v){ return formatRuNumber(v)+'%'; }, font: { size: fontSize } } },
                 x: { ticks: { font: { size: fontSize } } }
             }
         };

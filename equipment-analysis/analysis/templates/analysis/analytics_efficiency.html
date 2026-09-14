@@ -147,7 +147,7 @@
             <div class="donut-wrap">
                 {{ group_donut_svg|safe }}
                 <div class="donut-center">
-                    <div class="n">{{ affected_equip_count }}/{{ equip_count }}</div>
+                     <div class="n">{{ affected_equip_count|ru_number }}/{{ equip_count|ru_number }}</div>
                     <div class="l">ед. простаивает</div>
                 </div>
             </div>
@@ -155,7 +155,7 @@
                 {% for g in group_chart %}
                 <div class="group-row">
                     <span class="dot" style="background:{{ g.color }}"></span>
-                    <span class="name">{{ g.name }} <span class="muted-cell">({{ g.units }})</span></span>
+                     <span class="name">{{ g.name }} <span class="muted-cell">({{ g.units|ru_number }})</span></span>
                     <span class="val">{{ g.over_hm }}</span>
                     <span class="pct">{{ g.share_pct }}%</span>
                 </div>
@@ -189,7 +189,7 @@
             <h3>Простой техники <span class="tile-h-note">(&gt; 30 мин сверх нормы)</span></h3>
             <div class="ring sm">{{ ring_idle_svg|safe }}<div class="ring-inner">{{ idle_pct }}%</div></div>
         </div>
-        <div class="big">{{ idle_count }}</div>
+             <div class="big">{{ idle_count|ru_number }}</div>
         <div class="sub">случаев простоя сверх нормы за период</div>
     </div>
     <div class="tile amber compact" id="blk-tile-low-s1">
@@ -197,28 +197,28 @@
             <h3>Низкий выход техники<br>(&lt; 80%) · Смена 1</h3>
             <div class="ring sm">{{ ring_low_s1_svg|safe }}<div class="ring-inner">{{ low_s1_pct }}%</div></div>
         </div>
-        <div class="big">{{ low_s1 }}</div>
+         <div class="big">{{ low_s1|ru_number }}</div>
     </div>
     <div class="tile amber compact" id="blk-tile-low-s2">
         <div class="tile-top">
             <h3>Низкий выход техники<br>(&lt; 80%) · Смена 2</h3>
             <div class="ring sm">{{ ring_low_s2_svg|safe }}<div class="ring-inner">{{ low_s2_pct }}%</div></div>
         </div>
-        <div class="big">{{ low_s2 }}</div>
+         <div class="big">{{ low_s2|ru_number }}</div>
     </div>
     <div class="tile green compact" id="blk-tile-good-s1">
         <div class="tile-top">
             <h3>Техника работает в рамках<br>нормы выхода · Смена 1</h3>
             <div class="ring sm">{{ ring_good_s1_svg|safe }}<div class="ring-inner">{{ good_s1_pct }}%</div></div>
         </div>
-        <div class="big">{{ good_s1 }}</div>
+         <div class="big">{{ good_s1|ru_number }}</div>
     </div>
     <div class="tile green compact" id="blk-tile-good-s2">
         <div class="tile-top">
             <h3>Техника работает в рамках<br>нормы выхода · Смена 2</h3>
             <div class="ring sm">{{ ring_good_s2_svg|safe }}<div class="ring-inner">{{ good_s2_pct }}%</div></div>
         </div>
-        <div class="big">{{ good_s2 }}</div>
+         <div class="big">{{ good_s2|ru_number }}</div>
     </div>
 </div>
 
@@ -420,10 +420,10 @@
                 {% for g in group_secondary %}
                 <tr>
                     <td><span class="group-tag">{{ g.name }}</span></td>
-                    <td>{{ g.units }}</td>
-                    <td>{{ g.mileage }} км</td>
-                    <td class="muted-cell">{{ g.avg_mileage }} км</td>
-                    <td>{{ g.refueling }} л</td>
+                     <td>{{ g.units|ru_number }}</td>
+                     <td>{{ g.mileage|ru_number }} км</td>
+                     <td class="muted-cell">{{ g.avg_mileage|ru_number }} км</td>
+                     <td>{{ g.refueling|ru_number }} л</td>
                 </tr>
                 {% empty %}
                 <tr><td colspan="5" class="empty-note">Нет данных</td></tr>
@@ -638,7 +638,7 @@
         data: { labels: raw.dates, datasets: [{ label: 'Простой свыше нормы (ч)', data: raw.over_hours, backgroundColor: barColors, borderColor: borderColors, borderWidth: 1, borderRadius: 3 }] },
         options: {
             responsive: true,
-            plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(ctx) { return ' ' + ctx.parsed.y + ' ч'; } } } },
+            plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(ctx) { return ' ' + formatRuNumber(ctx.parsed.y) + ' ч'; } } } },
             scales: {
                 x: { grid: { display: false }, ticks: { font: { size: 11 }, maxRotation: 45 } },
                 y: { beginAtZero: true, title: { display: true, text: 'часов', font: { size: 11 } }, ticks: { font: { size: 11 } } }

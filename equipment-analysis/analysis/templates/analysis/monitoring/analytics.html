@@ -115,7 +115,7 @@
     <div class="col-6 col-md-3">
         <div class="card text-center">
             <div class="card-body py-3">
-                <div class="stat-value text-primary">{{ total_records }}</div>
+                <div class="stat-value text-primary">{{ total_records|ru_number }}</div>
                 <div class="stat-label">Всего записей</div>
             </div>
         </div>
@@ -123,7 +123,7 @@
     <div class="col-6 col-md-3">
         <div class="card text-center">
             <div class="card-body py-3">
-                <div class="stat-value text-danger">{{ total_faults }}</div>
+                <div class="stat-value text-danger">{{ total_faults|ru_number }}</div>
                 <div class="stat-label">Записей с неисправностью</div>
             </div>
         </div>
@@ -131,7 +131,7 @@
     <div class="col-6 col-md-3">
         <div class="card text-center">
             <div class="card-body py-3">
-                <div class="stat-value text-success">{{ total_records|add:"-"|add:total_faults }}</div>
+                <div class="stat-value text-success">{{ total_records|add:"-"|add:total_faults|ru_number }}</div>
                 <div class="stat-label">Без неисправностей</div>
             </div>
         </div>
@@ -208,14 +208,14 @@
                 {% for row in chart_table %}
                 <tr>
                     <td class="ps-4">{{ row.name }}</td>
-                    <td class="text-end pe-4 fw-semibold">{{ row.count }}</td>
+                    <td class="text-end pe-4 fw-semibold">{{ row.count|ru_number }}</td>
                     <td class="text-end pe-4 text-muted">
-                        {% if total_faults > 0 %}{{ row.count }}/{{ total_faults }}{% endif %}
+                        {% if total_faults > 0 %}{{ row.count|ru_number }}/{{ total_faults|ru_number }}{% endif %}
                     </td>
                     <td class="text-end pe-4">
                         <a href="{% url 'monitoring_fault_drill' %}?metric={{ metric }}&item_id={{ row.id }}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if group_filter %}&group={{ group_filter }}{% endif %}{% if selected_vehicle_id %}&vehicle_id={{ selected_vehicle_id }}{% endif %}"
                            class="btn btn-sm btn-outline-primary py-0 px-2" title="Посмотреть список техники">
-                            <i class="bi bi-truck me-1"></i>{{ row.vehicle_count }}
+                            <i class="bi bi-truck me-1"></i>{{ row.vehicle_count|ru_number }}
                         </a>
                     </td>
                 </tr>
@@ -256,12 +256,12 @@
                         {{ row.group }}
                         <span class="badge bg-secondary ms-1 fw-normal small">{{ row.vehicles|length }}</span>
                     </td>
-                    <td class="text-center fw-bold">{{ row.total }}</td>
-                    <td class="text-center text-success fw-bold">{{ row.ok }}</td>
-                    <td class="text-center text-danger fw-bold">{{ row.faults }}</td>
+                    <td class="text-center fw-bold">{{ row.total|ru_number }}</td>
+                    <td class="text-center text-success fw-bold">{{ row.ok|ru_number }}</td>
+                    <td class="text-center text-danger fw-bold">{{ row.faults|ru_number }}</td>
                     <td class="text-center">
                         <span class="badge {% if row.fault_pct == 0 %}bg-success{% elif row.fault_pct < 20 %}bg-warning text-dark{% else %}bg-danger{% endif %}">
-                            {{ row.fault_pct }}%
+                            {{ row.fault_pct|ru_number }}%
                         </span>
                     </td>
                 </tr>
@@ -270,13 +270,13 @@
                     <td class="ps-5 text-muted small">
                         <i class="bi bi-truck me-1"></i>{{ v.name }}
                     </td>
-                    <td class="text-center small">{{ v.total }}</td>
-                    <td class="text-center small text-success">{{ v.ok }}</td>
-                    <td class="text-center small {% if v.faults > 0 %}text-danger fw-semibold{% else %}text-muted{% endif %}">{{ v.faults }}</td>
+                    <td class="text-center small">{{ v.total|ru_number }}</td>
+                    <td class="text-center small text-success">{{ v.ok|ru_number }}</td>
+                    <td class="text-center small {% if v.faults > 0 %}text-danger fw-semibold{% else %}text-muted{% endif %}">{{ v.faults|ru_number }}</td>
                     <td class="text-center">
                         {% if v.total > 0 %}
                         <span class="badge {% if v.fault_pct == 0 %}bg-success{% elif v.fault_pct < 20 %}bg-warning text-dark{% else %}bg-danger{% endif %} opacity-75" style="font-size:.7rem">
-                            {{ v.fault_pct }}%
+                            {{ v.fault_pct|ru_number }}%
                         </span>
                         {% else %}
                         <span class="text-muted small">—</span>
@@ -446,7 +446,7 @@ function toggleAllVehicles(btn) {
                 tooltip: {
                     callbacks: {
                         title: function(items) { return items[0].label; },
-                        label: function(item) { return 'Неисправностей: ' + item.raw; }
+                        label: function(item) { return 'Неисправностей: ' + formatRuNumber(item.raw); }
                     }
                 }
             },
