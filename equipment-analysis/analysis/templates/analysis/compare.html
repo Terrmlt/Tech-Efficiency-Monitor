@@ -79,35 +79,35 @@
                 <div class="row g-2 text-center mb-3">
                     <div class="col-6">
                         <div class="small text-muted">Записей</div>
-                         <div class="fw-bold text-primary">{{ d.count|ru_number }}</div>
+                        <div class="fw-bold text-primary">{{ d.count }}</div>
                     </div>
                     <div class="col-6">
                         <div class="small text-muted">Часов</div>
-                         <div class="fw-bold text-success">{{ d.total_hours|ru_number }}</div>
+                        <div class="fw-bold text-success">{{ d.total_hours }}</div>
                     </div>
                 </div>
                 <hr class="my-2">
                 <div class="small">
                     <div class="d-flex justify-content-between mb-1">
                         <span class="text-muted">Расход топлива:</span>
-                         <span class="fw-semibold">{{ d.total_fuel|ru_number }} л</span>
+                        <span class="fw-semibold">{{ d.total_fuel }} л</span>
                     </div>
                     {% if d.avg_fuel_eff is not None %}
                     <div class="d-flex justify-content-between mb-1">
                         <span class="text-muted">Расход к норме:</span>
-                         <span class="{% if d.avg_fuel_eff <= 100 %}efficiency-good{% elif d.avg_fuel_eff <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ d.avg_fuel_eff|ru_number }}%</span>
+                        <span class="{% if d.avg_fuel_eff <= 100 %}efficiency-good{% elif d.avg_fuel_eff <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ d.avg_fuel_eff }}%</span>
                     </div>
                     {% endif %}
                     {% if d.avg_output is not None %}
                     <div class="d-flex justify-content-between mb-1">
                         <span class="text-muted">Выход техники:</span>
-                         <span class="{% if d.avg_output >= 80 %}output-good{% else %}output-bad{% endif %}">{{ d.avg_output|ru_number }}%</span>
+                        <span class="{% if d.avg_output >= 80 %}output-good{% else %}output-bad{% endif %}">{{ d.avg_output }}%</span>
                     </div>
                     {% endif %}
                     {% if d.avg_type_eff is not None %}
                     <div class="d-flex justify-content-between">
                         <span class="text-muted">Эффективность:</span>
-                         <span class="{% if d.avg_type_eff >= 90 %}efficiency-good{% elif d.avg_type_eff >= 70 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ d.avg_type_eff|ru_number }}%</span>
+                        <span class="{% if d.avg_type_eff >= 90 %}efficiency-good{% elif d.avg_type_eff >= 70 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ d.avg_type_eff }}%</span>
                     </div>
                     {% endif %}
                 </div>
@@ -210,15 +210,15 @@
                 <tbody>
                     <tr>
                         <td class="ps-3 text-muted small">Записей (смен)</td>
-                         {% for d in comparison_data %}<td class="text-center fw-semibold">{{ d.count|ru_number }}</td>{% endfor %}
+                        {% for d in comparison_data %}<td class="text-center fw-semibold">{{ d.count }}</td>{% endfor %}
                     </tr>
                     <tr>
                         <td class="ps-3 text-muted small">Часов работы</td>
-                         {% for d in comparison_data %}<td class="text-center fw-semibold">{{ d.total_hours|ru_number }} ч</td>{% endfor %}
+                        {% for d in comparison_data %}<td class="text-center fw-semibold">{{ d.total_hours }} ч</td>{% endfor %}
                     </tr>
                     <tr>
                         <td class="ps-3 text-muted small">Расход топлива</td>
-                         {% for d in comparison_data %}<td class="text-center fw-semibold">{{ d.total_fuel|ru_number }} л</td>{% endfor %}
+                        {% for d in comparison_data %}<td class="text-center fw-semibold">{{ d.total_fuel }} л</td>{% endfor %}
                     </tr>
                     <tr class="table-light">
                         <td class="ps-3 text-muted small fw-semibold">Расход к норме (ср.)</td>
@@ -361,7 +361,7 @@
             responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false } },
             scales: {
-                 y: { beginAtZero: true, ticks: { callback: function(v){ return formatRuNumber(v)+'%'; }, font: { size: fs } } },
+                y: { beginAtZero: true, ticks: { callback: function(v){ return v+'%'; }, font: { size: fs } } },
                 x: { ticks: { font: { size: fs } } }
             }
         };
@@ -377,12 +377,12 @@
                           labels: { boxWidth: 12, padding: 10, font: { size: fs } } },
                 tooltip: { callbacks: { label: function(ctx) {
                     var v = ctx.parsed.y;
-                     return ctx.dataset.label + ': ' + (v !== null ? formatRuNumber(v) + '%' : '—');
+                    return ctx.dataset.label + ': ' + (v !== null ? v + '%' : '—');
                 }}}
             },
             scales: {
                 x: { ticks: { font: { size: fs } } },
-                 y: { beginAtZero: false, ticks: { callback: function(v){ return formatRuNumber(v)+'%'; }, font: { size: fs } } }
+                y: { beginAtZero: false, ticks: { callback: function(v){ return v+'%'; }, font: { size: fs } } }
             }
         };
     }

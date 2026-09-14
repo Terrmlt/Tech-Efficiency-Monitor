@@ -306,9 +306,9 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3 metrics-summary">
     <div class="small">
-        Записей: <strong>{{ total_count|ru_number }}</strong>
+        Записей: <strong>{{ total_count }}</strong>
         {% if anomaly_count > 0 %}
-        · <span class="text-warning fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i>{{ anomaly_count|ru_number }} аномалий</span>
+        · <span class="text-warning fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i>{{ anomaly_count }} аномалий</span>
         {% endif %}
         {% if paginator.num_pages > 1 %}
         · Страница <strong>{{ page_obj.number }}</strong> из <strong>{{ paginator.num_pages }}</strong>
@@ -384,33 +384,33 @@
                         <td>
                             {% if rec.fuel_actual is not None %}
                                 {% if rec.fuel_actual < 0 %}
-                                 <span class="text-danger fw-bold">{{ rec.fuel_actual|ru_number }}</span>
+                                <span class="text-danger fw-bold">{{ rec.fuel_actual }}</span>
                                 {% else %}
-                                 <span class="fw-semibold">{{ rec.fuel_actual|ru_number }}</span>
+                                <span class="fw-semibold">{{ rec.fuel_actual }}</span>
                                 {% endif %}
                             {% else %}
                             <span class="text-muted">—</span>
                             {% endif %}
-                             <div class="text-muted small">норма {{ rec.fuel_norm|ru_number }} л/ч</div>
+                            <div class="text-muted small">норма {{ rec.fuel_norm }} л/ч</div>
                         </td>
                         <td>
                             {% with pct=rec.fuel_efficiency_pct %}
                             {% if pct is not None %}
-                                 <span class="{% if pct <= 100 %}efficiency-good{% elif pct <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ pct|ru_number }}%</span>
+                                <span class="{% if pct <= 100 %}efficiency-good{% elif pct <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ pct }}%</span>
                             {% else %}<span class="text-muted">—</span>{% endif %}
                             {% endwith %}
                         </td>
                         <td>
                             {% with pct=rec.equipment_output_pct %}
                             {% if pct is not None %}
-                                 <span class="{% if pct >= 80 %}output-good{% else %}output-bad{% endif %}">{{ pct|ru_number }}%</span>
+                                <span class="{% if pct >= 80 %}output-good{% else %}output-bad{% endif %}">{{ pct }}%</span>
                             {% else %}<span class="text-muted">—</span>{% endif %}
                             {% endwith %}
                         </td>
                         <td>
                             {% with pct=rec.type_efficiency_pct %}
                             {% if pct is not None %}
-                                 <span class="{% if pct >= 90 %}efficiency-good{% elif pct >= 70 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ pct|ru_number }}%</span>
+                                <span class="{% if pct >= 90 %}efficiency-good{% elif pct >= 70 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ pct }}%</span>
                                 {% if rec.is_bulldozer_or_loader %}<div class="text-muted small">хол.ход</div>
                                 {% elif rec.is_excavator %}<div class="text-muted small">прост.стрелы</div>
                                 {% elif rec.is_dumptruck %}<div class="text-muted small">без движения</div>{% endif %}
@@ -418,8 +418,8 @@
                             {% else %}<span class="text-muted">—</span>{% endif %}
                             {% endwith %}
                         </td>
-                        <td class="text-muted small">{% if rec.mileage is not None %}{{ rec.mileage|ru_number }}{% else %}—{% endif %}</td>
-                        <td class="text-muted small">{% if rec.refueling is not None %}{{ rec.refueling|ru_number }}{% else %}—{% endif %}</td>
+                        <td class="text-muted small">{% if rec.mileage is not None %}{{ rec.mileage }}{% else %}—{% endif %}</td>
+                        <td class="text-muted small">{% if rec.refueling is not None %}{{ rec.refueling }}{% else %}—{% endif %}</td>
                         <td>
                             {% if rec.has_anomaly %}
                                 {% for anomaly in rec.anomaly_details %}
@@ -476,23 +476,23 @@
                         </td>
                         <td>
                             {% if row.fuel_actual is not None %}
-                             <span class="fw-bold">{{ row.fuel_actual|ru_number }}</span>
+                            <span class="fw-bold">{{ row.fuel_actual }}</span>
                             {% else %}<span class="text-muted">—</span>{% endif %}
-                             <div class="text-muted small">норма {{ row.fuel_norm|ru_number }} л/ч</div>
+                            <div class="text-muted small">норма {{ row.fuel_norm }} л/ч</div>
                         </td>
                         <td>
                             {% if row.fuel_efficiency_pct is not None %}
-                             <span class="fw-bold {% if row.fuel_efficiency_pct <= 100 %}efficiency-good{% elif row.fuel_efficiency_pct <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ row.fuel_efficiency_pct|ru_number }}%</span>
+                            <span class="fw-bold {% if row.fuel_efficiency_pct <= 100 %}efficiency-good{% elif row.fuel_efficiency_pct <= 115 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ row.fuel_efficiency_pct }}%</span>
                             {% else %}<span class="text-muted">—</span>{% endif %}
                         </td>
                         <td>
                             {% if row.equipment_output_pct is not None %}
-                             <span class="fw-bold {% if row.equipment_output_pct >= 80 %}output-good{% else %}output-bad{% endif %}">{{ row.equipment_output_pct|ru_number }}%</span>
+                            <span class="fw-bold {% if row.equipment_output_pct >= 80 %}output-good{% else %}output-bad{% endif %}">{{ row.equipment_output_pct }}%</span>
                             {% else %}<span class="text-muted">—</span>{% endif %}
                         </td>
                         <td>
                             {% if row.type_efficiency_pct is not None %}
-                             <span class="fw-bold {% if row.type_efficiency_pct >= 90 %}efficiency-good{% elif row.type_efficiency_pct >= 70 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ row.type_efficiency_pct|ru_number }}%</span>
+                            <span class="fw-bold {% if row.type_efficiency_pct >= 90 %}efficiency-good{% elif row.type_efficiency_pct >= 70 %}efficiency-warn{% else %}efficiency-bad{% endif %}">{{ row.type_efficiency_pct }}%</span>
                             {% if row.is_bulldozer_or_loader %}<div class="text-muted small">хол.ход</div>
                             {% elif row.is_excavator %}<div class="text-muted small">прост.стрелы</div>
                             {% elif row.is_dumptruck %}<div class="text-muted small">без движения</div>{% endif %}

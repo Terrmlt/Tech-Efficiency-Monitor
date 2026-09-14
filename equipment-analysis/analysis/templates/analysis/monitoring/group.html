@@ -222,7 +222,7 @@
     <div class="d-flex justify-content-between align-items-center mt-3">
         <div class="text-muted small">
             <i class="bi bi-info-circle me-1"></i>
-             Данные за <strong>{{ selected_date|date:'d.m.Y' }}</strong> — {{ vehicles|length|ru_number }} ед. техники
+            Данные за <strong>{{ selected_date|date:'d.m.Y' }}</strong> — {{ vehicles|length }} ед. техники
         </div>
         <div class="d-flex gap-2">
             <a href="{% url 'monitoring_index' %}" class="btn btn-outline-secondary">
